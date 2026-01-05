@@ -2,6 +2,8 @@ import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/hooks/useCompany';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -14,11 +16,78 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useState } from 'react';
 
 const Settings = () => {
   const { t, language, setLanguage, direction } = useLanguage();
   const { theme, setTheme } = useTheme();
+  const { profile } = useAuth();
+  const { data: company, isLoading } = useCompany();
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!company) return;
+
+    setSaving(true);
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          name: formData.get('company-name') as string,
+          timezone: formData.get('timezone') as string,
+        })
+        .eq('id', company.id);
+
+      if (error) throw error;
+      toast.success('Company settings saved');
+    } catch (error) {
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveWorkHours = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!company) return;
+
+    setSaving(true);
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          work_start_time: formData.get('work-start') as string,
+          work_end_time: formData.get('work-end') as string,
+          break_duration_minutes: parseInt(formData.get('break-duration') as string),
+        })
+        .eq('id', company.id);
+
+      if (error) throw error;
+      toast.success('Working hours saved');
+    } catch (error) {
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -130,28 +199,37 @@ const Settings = () => {
                 Update your company details
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="company-name">Company Name</Label>
-                  <Input id="company-name" defaultValue="Acme Inc." />
+            <CardContent>
+              <form onSubmit={handleSaveCompany} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="company-name">Company Name</Label>
+                    <Input 
+                      id="company-name" 
+                      name="company-name"
+                      defaultValue={company?.name || ''} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="timezone">Timezone</Label>
+                    <Select name="timezone" defaultValue={company?.timezone || 'UTC+0'}>
+                      <SelectTrigger id="timezone">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UTC+0">UTC +0 (London)</SelectItem>
+                        <SelectItem value="UTC+3">UTC +3 (Riyadh, Kuwait)</SelectItem>
+                        <SelectItem value="UTC+4">UTC +4 (Dubai)</SelectItem>
+                        <SelectItem value="UTC+5">UTC +5 (Karachi)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="timezone">Timezone</Label>
-                  <Select defaultValue="utc+3">
-                    <SelectTrigger id="timezone">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="utc+0">UTC +0 (London)</SelectItem>
-                      <SelectItem value="utc+3">UTC +3 (Riyadh, Kuwait)</SelectItem>
-                      <SelectItem value="utc+4">UTC +4 (Dubai)</SelectItem>
-                      <SelectItem value="utc+5">UTC +5 (Karachi)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button className="btn-primary-gradient">{t('common.save')}</Button>
+                <Button type="submit" className="btn-primary-gradient" disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                  {t('common.save')}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </motion.div>
@@ -172,22 +250,42 @@ const Settings = () => {
                 Set default working hours and break duration
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="work-start">Work Start</Label>
-                  <Input id="work-start" type="time" defaultValue="09:00" />
+            <CardContent>
+              <form onSubmit={handleSaveWorkHours} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="work-start">Work Start</Label>
+                    <Input 
+                      id="work-start" 
+                      name="work-start"
+                      type="time" 
+                      defaultValue={company?.work_start_time?.slice(0, 5) || '09:00'} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="work-end">Work End</Label>
+                    <Input 
+                      id="work-end" 
+                      name="work-end"
+                      type="time" 
+                      defaultValue={company?.work_end_time?.slice(0, 5) || '17:00'} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="break-duration">Break Duration (min)</Label>
+                    <Input 
+                      id="break-duration" 
+                      name="break-duration"
+                      type="number" 
+                      defaultValue={company?.break_duration_minutes || 60} 
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="work-end">Work End</Label>
-                  <Input id="work-end" type="time" defaultValue="17:00" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="break-duration">Break Duration (min)</Label>
-                  <Input id="break-duration" type="number" defaultValue="60" />
-                </div>
-              </div>
-              <Button className="btn-primary-gradient">{t('common.save')}</Button>
+                <Button type="submit" className="btn-primary-gradient" disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                  {t('common.save')}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </motion.div>

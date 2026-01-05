@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useLeaveRequests, useUpdateLeaveRequest } from '@/hooks/useLeaveRequests';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,29 +13,13 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Calendar, Check, X } from 'lucide-react';
-import { toast } from 'sonner';
-
-interface LeaveRequest {
-  id: string;
-  name: string;
-  type: 'vacation' | 'sick' | 'personal';
-  startDate: string;
-  endDate: string;
-  days: number;
-  status: 'pending' | 'approved' | 'rejected';
-  reason: string;
-}
-
-const mockLeaves: LeaveRequest[] = [
-  { id: '1', name: 'Sarah Johnson', type: 'vacation', startDate: 'Jan 15', endDate: 'Jan 20', days: 5, status: 'pending', reason: 'Family vacation' },
-  { id: '2', name: 'Ahmed Hassan', type: 'sick', startDate: 'Jan 12', endDate: 'Jan 12', days: 1, status: 'approved', reason: 'Doctor appointment' },
-  { id: '3', name: 'Emily Chen', type: 'personal', startDate: 'Jan 18', endDate: 'Jan 18', days: 1, status: 'pending', reason: 'Personal matters' },
-  { id: '4', name: 'Michael Brown', type: 'vacation', startDate: 'Jan 25', endDate: 'Jan 30', days: 5, status: 'rejected', reason: 'Travel abroad' },
-];
+import { Calendar, Check, X, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 const Leaves = () => {
   const { t } = useLanguage();
+  const { data: leaveRequests = [], isLoading } = useLeaveRequests();
+  const updateLeave = useUpdateLeaveRequest();
 
   const getTypeBadge = (type: string) => {
     switch (type) {
@@ -62,15 +47,17 @@ const Leaves = () => {
     }
   };
 
-  const handleApprove = (id: string, name: string) => {
-    toast.success(`Leave request for ${name} approved`);
+  const handleApprove = async (id: string) => {
+    await updateLeave.mutateAsync({ id, status: 'approved' });
   };
 
-  const handleReject = (id: string, name: string) => {
-    toast.error(`Leave request for ${name} rejected`);
+  const handleReject = async (id: string) => {
+    await updateLeave.mutateAsync({ id, status: 'rejected' });
   };
 
-  const pendingCount = mockLeaves.filter(l => l.status === 'pending').length;
+  const pendingCount = leaveRequests.filter(l => l.status === 'pending').length;
+  const approvedCount = leaveRequests.filter(l => l.status === 'approved').length;
+  const rejectedCount = leaveRequests.filter(l => l.status === 'rejected').length;
 
   return (
     <DashboardLayout>
@@ -99,8 +86,8 @@ const Leaves = () => {
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { label: 'Pending', value: pendingCount, color: 'text-warning' },
-            { label: 'Approved', value: mockLeaves.filter(l => l.status === 'approved').length, color: 'text-success' },
-            { label: 'Rejected', value: mockLeaves.filter(l => l.status === 'rejected').length, color: 'text-destructive' },
+            { label: 'Approved', value: approvedCount, color: 'text-success' },
+            { label: 'Rejected', value: rejectedCount, color: 'text-destructive' },
           ].map((stat, index) => (
             <motion.div
               key={stat.label}
@@ -134,67 +121,87 @@ const Leaves = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mockLeaves.map((leave) => (
-                    <TableRow key={leave.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
-                            <span className="text-xs font-medium text-accent-foreground">
-                              {leave.name.split(' ').map(n => n[0]).join('')}
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : leaveRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-1">No leave requests</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Leave requests from employees will appear here
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {leaveRequests.map((leave) => (
+                      <TableRow key={leave.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                              <span className="text-xs font-medium text-accent-foreground">
+                                {leave.employees?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'U'}
+                              </span>
+                            </div>
+                            <span className="font-medium text-foreground">
+                              {leave.employees?.full_name || 'Unknown'}
                             </span>
                           </div>
-                          <span className="font-medium text-foreground">{leave.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getTypeBadge(leave.type)}</TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="text-foreground">{leave.startDate} - {leave.endDate}</p>
-                          <p className="text-xs text-muted-foreground">{leave.days} day{leave.days > 1 ? 's' : ''}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                        {leave.reason}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(leave.status)}</TableCell>
-                      <TableCell className="text-right">
-                        {leave.status === 'pending' && (
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-success hover:text-success hover:bg-success/10"
-                              onClick={() => handleApprove(leave.id, leave.name)}
-                            >
-                              <Check className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleReject(leave.id, leave.name)}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
+                        </TableCell>
+                        <TableCell>{getTypeBadge(leave.leave_type)}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-foreground">
+                              {format(new Date(leave.start_date), 'MMM d')} - {format(new Date(leave.end_date), 'MMM d')}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{leave.days} day{leave.days > 1 ? 's' : ''}</p>
                           </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                          {leave.reason || '—'}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(leave.status)}</TableCell>
+                        <TableCell className="text-right">
+                          {leave.status === 'pending' && (
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-success hover:text-success hover:bg-success/10"
+                                onClick={() => handleApprove(leave.id)}
+                                disabled={updateLeave.isPending}
+                              >
+                                <Check className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleReject(leave.id)}
+                                disabled={updateLeave.isPending}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </motion.div>
