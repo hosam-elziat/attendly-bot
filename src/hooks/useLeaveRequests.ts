@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { z } from 'zod';
 
 export interface LeaveRequest {
   id: string;
@@ -21,6 +22,14 @@ export interface LeaveRequest {
     email: string;
   };
 }
+
+// Validation schema for status update
+const LeaveStatusUpdateSchema = z.object({
+  id: z.string().uuid('Invalid leave request ID'),
+  status: z.enum(['approved', 'rejected'], {
+    errorMap: () => ({ message: 'Status must be approved or rejected' }),
+  }),
+});
 
 export const useLeaveRequests = () => {
   const { profile } = useAuth();
@@ -55,14 +64,22 @@ export const useUpdateLeaveRequest = () => {
 
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
+      // Validate input
+      const validationResult = LeaveStatusUpdateSchema.safeParse({ id, status });
+      
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        throw new Error(firstError.message);
+      }
+
       const { data, error } = await supabase
         .from('leave_requests')
         .update({
-          status,
+          status: validationResult.data.status,
           reviewed_by: user?.id,
           reviewed_at: new Date().toISOString(),
         })
-        .eq('id', id)
+        .eq('id', validationResult.data.id)
         .select()
         .single();
 

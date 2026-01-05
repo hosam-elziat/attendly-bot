@@ -111,7 +111,6 @@ export type Database = {
           name: string
           owner_id: string
           telegram_bot_connected: boolean | null
-          telegram_bot_token: string | null
           timezone: string | null
           updated_at: string
           work_end_time: string | null
@@ -124,7 +123,6 @@ export type Database = {
           name: string
           owner_id: string
           telegram_bot_connected?: boolean | null
-          telegram_bot_token?: string | null
           timezone?: string | null
           updated_at?: string
           work_end_time?: string | null
@@ -137,7 +135,6 @@ export type Database = {
           name?: string
           owner_id?: string
           telegram_bot_connected?: boolean | null
-          telegram_bot_token?: string | null
           timezone?: string | null
           updated_at?: string
           work_end_time?: string | null

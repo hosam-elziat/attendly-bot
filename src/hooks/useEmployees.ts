@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { EmployeeSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export interface Employee {
   id: string;
@@ -63,12 +65,35 @@ export const useCreateEmployee = () => {
     mutationFn: async (employeeData: CreateEmployeeData) => {
       if (!profile?.company_id) throw new Error('No company found');
 
+      // Validate input with zod
+      const validationResult = EmployeeSchema.safeParse({
+        ...employeeData,
+        base_salary: employeeData.base_salary || 0,
+      });
+
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        throw new Error(firstError.message);
+      }
+
+      const validatedData = validationResult.data;
+
       // Format time fields
       const formattedData = {
-        ...employeeData,
+        full_name: validatedData.full_name,
+        email: validatedData.email,
+        department: validatedData.department || null,
+        salary_type: validatedData.salary_type,
+        base_salary: validatedData.base_salary,
         company_id: profile.company_id,
-        work_start_time: employeeData.work_start_time ? employeeData.work_start_time + ':00' : '09:00:00',
-        work_end_time: employeeData.work_end_time ? employeeData.work_end_time + ':00' : '17:00:00',
+        work_start_time: validatedData.work_start_time 
+          ? (validatedData.work_start_time.length === 5 ? validatedData.work_start_time + ':00' : validatedData.work_start_time)
+          : '09:00:00',
+        work_end_time: validatedData.work_end_time 
+          ? (validatedData.work_end_time.length === 5 ? validatedData.work_end_time + ':00' : validatedData.work_end_time)
+          : '17:00:00',
+        break_duration_minutes: validatedData.break_duration_minutes ?? 60,
+        weekend_days: validatedData.weekend_days ?? ['friday', 'saturday'],
       };
 
       const { data, error } = await supabase
@@ -95,9 +120,18 @@ export const useUpdateEmployee = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Employee> & { id: string }) => {
+      // Validate partial data
+      const partialSchema = EmployeeSchema.partial();
+      const validationResult = partialSchema.safeParse(data);
+
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        throw new Error(firstError.message);
+      }
+
       const { data: result, error } = await supabase
         .from('employees')
-        .update(data)
+        .update(validationResult.data)
         .eq('id', id)
         .select()
         .single();
@@ -120,6 +154,10 @@ export const useDeleteEmployee = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Validate ID is a valid UUID
+      const uuidSchema = z.string().uuid('Invalid employee ID');
+      uuidSchema.parse(id);
+
       const { error } = await supabase
         .from('employees')
         .delete()

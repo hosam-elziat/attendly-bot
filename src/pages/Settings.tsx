@@ -22,6 +22,7 @@ import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar } from 'lucide-rea
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { CompanySchema } from '@/lib/validations';
 
 const WEEKDAYS = [
   { id: 'sunday', label: 'Sunday' },
@@ -47,6 +48,7 @@ const Settings = () => {
   const [workEnd, setWorkEnd] = useState('17:00');
   const [breakDuration, setBreakDuration] = useState(60);
   const [weekendDays, setWeekendDays] = useState<string[]>(['friday', 'saturday']);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Update form when company data loads
   useEffect(() => {
@@ -73,14 +75,31 @@ const Settings = () => {
       return;
     }
 
+    // Validate input
+    const validationResult = CompanySchema.safeParse({
+      name: companyName,
+      timezone: timezone,
+    });
+
+    if (!validationResult.success) {
+      const newErrors: Record<string, string> = {};
+      validationResult.error.errors.forEach((err) => {
+        newErrors[err.path.join('.')] = err.message;
+      });
+      setErrors(newErrors);
+      toast.error(validationResult.error.errors[0].message);
+      return;
+    }
+
     setSaving(true);
+    setErrors({});
     
     try {
       const { error } = await supabase
         .from('companies')
         .update({
-          name: companyName,
-          timezone: timezone,
+          name: validationResult.data.name,
+          timezone: validationResult.data.timezone,
         })
         .eq('id', company.id);
 
@@ -99,6 +118,19 @@ const Settings = () => {
   const handleSaveWorkHours = async () => {
     if (!company?.id) {
       toast.error('No company found');
+      return;
+    }
+
+    // Validate input
+    const validationResult = CompanySchema.safeParse({
+      name: company.name,
+      work_start_time: workStart + ':00',
+      work_end_time: workEnd + ':00',
+      break_duration_minutes: breakDuration,
+    });
+
+    if (!validationResult.success) {
+      toast.error(validationResult.error.errors[0].message);
       return;
     }
 
@@ -254,7 +286,10 @@ const Settings = () => {
                     id="company-name" 
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
+                    maxLength={100}
+                    className={errors.name ? 'border-destructive' : ''}
                   />
+                  {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
@@ -323,8 +358,10 @@ const Settings = () => {
                   <Input 
                     id="break-duration" 
                     type="number" 
+                    min={0}
+                    max={480}
                     value={breakDuration}
-                    onChange={(e) => setBreakDuration(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setBreakDuration(Math.min(480, Math.max(0, parseInt(e.target.value) || 0)))}
                   />
                 </div>
               </div>

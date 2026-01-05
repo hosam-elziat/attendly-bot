@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { SignUpSchema, SignInSchema, validateWithErrors } from '@/lib/validations';
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -33,32 +34,17 @@ const Auth = () => {
     }
   }, [user, authLoading, navigate]);
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
+  const validateForm = (): boolean => {
+    const schema = isSignup ? SignUpSchema : SignInSchema;
+    const result = validateWithErrors(schema, formData);
+    
+    if (result.success === false) {
+      setErrors(result.errors);
+      return false;
     }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-
-    if (isSignup) {
-      if (!formData.fullName) {
-        newErrors.fullName = 'Full name is required';
-      }
-      if (!formData.companyName) {
-        newErrors.companyName = 'Company name is required';
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    setErrors({});
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,10 +57,10 @@ const Auth = () => {
     try {
       if (isSignup) {
         const { error } = await signUp(
-          formData.email, 
+          formData.email.trim(), 
           formData.password, 
-          formData.fullName, 
-          formData.companyName
+          formData.fullName.trim(), 
+          formData.companyName.trim()
         );
         
         if (error) {
@@ -88,7 +74,7 @@ const Auth = () => {
           navigate('/dashboard');
         }
       } else {
-        const { error } = await signIn(formData.email, formData.password);
+        const { error } = await signIn(formData.email.trim(), formData.password);
         
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
@@ -165,6 +151,7 @@ const Auth = () => {
                       value={formData.fullName}
                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                       className={`h-12 ${errors.fullName ? 'border-destructive' : ''}`}
+                      maxLength={100}
                     />
                     {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
                   </div>
@@ -177,6 +164,7 @@ const Auth = () => {
                       value={formData.companyName}
                       onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                       className={`h-12 ${errors.companyName ? 'border-destructive' : ''}`}
+                      maxLength={100}
                     />
                     {errors.companyName && <p className="text-xs text-destructive">{errors.companyName}</p>}
                   </div>
@@ -192,6 +180,7 @@ const Auth = () => {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className={`h-12 ${errors.email ? 'border-destructive' : ''}`}
+                  maxLength={255}
                 />
                 {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
               </div>
@@ -212,6 +201,7 @@ const Auth = () => {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className={`h-12 ${errors.password ? 'border-destructive' : ''}`}
+                  maxLength={72}
                 />
                 {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
               </div>
