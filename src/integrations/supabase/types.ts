@@ -148,6 +148,7 @@ export type Database = {
       employees: {
         Row: {
           base_salary: number | null
+          break_duration_minutes: number | null
           company_id: string
           created_at: string
           department: string | null
@@ -159,9 +160,13 @@ export type Database = {
           telegram_chat_id: string | null
           updated_at: string
           user_id: string | null
+          weekend_days: string[] | null
+          work_end_time: string | null
+          work_start_time: string | null
         }
         Insert: {
           base_salary?: number | null
+          break_duration_minutes?: number | null
           company_id: string
           created_at?: string
           department?: string | null
@@ -173,9 +178,13 @@ export type Database = {
           telegram_chat_id?: string | null
           updated_at?: string
           user_id?: string | null
+          weekend_days?: string[] | null
+          work_end_time?: string | null
+          work_start_time?: string | null
         }
         Update: {
           base_salary?: number | null
+          break_duration_minutes?: number | null
           company_id?: string
           created_at?: string
           department?: string | null
@@ -187,6 +196,9 @@ export type Database = {
           telegram_chat_id?: string | null
           updated_at?: string
           user_id?: string | null
+          weekend_days?: string[] | null
+          work_end_time?: string | null
+          work_start_time?: string | null
         }
         Relationships: [
           {
