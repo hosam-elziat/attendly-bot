@@ -65,12 +65,12 @@ const Auth = () => {
         
         if (error) {
           if (error.message.includes('already registered')) {
-            toast.error('This email is already registered. Please sign in instead.');
+            toast.error('هذا البريد الإلكتروني مسجل بالفعل. الرجاء تسجيل الدخول.');
           } else {
             toast.error(error.message);
           }
         } else {
-          toast.success('Account created successfully! Welcome to AttendEase.');
+          toast.success('تم إنشاء الحساب بنجاح! مرحباً بك في AttendEase.');
           navigate('/dashboard');
         }
       } else {
@@ -78,17 +78,17 @@ const Auth = () => {
         
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
-            toast.error('Invalid email or password. Please try again.');
+            toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة. حاول مرة أخرى.');
           } else {
             toast.error(error.message);
           }
         } else {
-          toast.success('Welcome back!');
+          toast.success('مرحباً بعودتك!');
           navigate('/dashboard');
         }
       }
     } catch (error) {
-      toast.error('An unexpected error occurred. Please try again.');
+      toast.error('حدث خطأ غير متوقع. حاول مرة أخرى.');
     } finally {
       setLoading(false);
     }
@@ -114,7 +114,7 @@ const Auth = () => {
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 transition-colors"
           >
             <BackArrow className="w-4 h-4" />
-            <span>Back to home</span>
+            <span>{t('auth.backToHome')}</span>
           </Link>
 
           <motion.div
@@ -135,19 +135,19 @@ const Auth = () => {
             </h1>
             <p className="text-muted-foreground mb-8">
               {isSignup 
-                ? 'Create your company workspace' 
-                : 'Sign in to your workspace'}
+                ? t('auth.createWorkspace')
+                : t('auth.signInWorkspace')}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {isSignup && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="fullName">{t('auth.fullName')}</Label>
                     <Input
                       id="fullName"
                       type="text"
-                      placeholder="John Doe"
+                      placeholder="محمد أحمد"
                       value={formData.fullName}
                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                       className={`h-12 ${errors.fullName ? 'border-destructive' : ''}`}
@@ -160,7 +160,7 @@ const Auth = () => {
                     <Input
                       id="company"
                       type="text"
-                      placeholder="Your Company"
+                      placeholder="شركتك"
                       value={formData.companyName}
                       onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                       className={`h-12 ${errors.companyName ? 'border-destructive' : ''}`}
@@ -242,11 +242,10 @@ const Auth = () => {
             </div>
           </div>
           <h2 className="text-2xl font-bold text-foreground mb-4">
-            Manage your team with ease
+            {t('auth.manageTeam')}
           </h2>
           <p className="text-muted-foreground">
-            Track attendance, approve leaves, and calculate salaries — all in one simple dashboard. 
-            Your team uses Telegram, no apps to install.
+            {t('auth.manageTeamDesc')}
           </p>
         </div>
       </div>

@@ -19,13 +19,7 @@ const TelegramBot = () => {
 
   const handleConnect = async () => {
     setIsConnecting(true);
-    
-    // Simulating bot connection - in production this would:
-    // 1. Open OAuth flow or webhook setup
-    // 2. Store token securely in Supabase secrets (not in database)
-    // 3. Set up webhook endpoint via Edge Function
-    
-    toast.info('Telegram bot integration requires backend setup. Contact support for assistance.');
+    toast.info('تكامل بوت تيليجرام يتطلب إعداد الخادم. تواصل مع الدعم للمساعدة.');
     setIsConnecting(false);
   };
 
@@ -41,9 +35,9 @@ const TelegramBot = () => {
       if (error) throw error;
       
       await refetch();
-      toast.success('Telegram bot disconnected');
+      toast.success('تم فصل بوت تيليجرام');
     } catch (error: any) {
-      toast.error('Failed to disconnect: ' + error.message);
+      toast.error('فشل في الفصل: ' + error.message);
     }
   };
 
@@ -58,7 +52,7 @@ const TelegramBot = () => {
         >
           <h1 className="text-2xl font-bold text-foreground">{t('nav.telegram')}</h1>
           <p className="text-muted-foreground mt-1">
-            Connect your Telegram bot to enable employee check-ins via Telegram
+            {t('telegram.description')}
           </p>
         </motion.div>
 
@@ -73,10 +67,9 @@ const TelegramBot = () => {
               <div className="flex items-start gap-3">
                 <Shield className="w-5 h-5 text-primary mt-0.5" />
                 <div>
-                  <p className="font-medium text-foreground">Secure Token Storage</p>
+                  <p className="font-medium text-foreground">{t('telegram.secureStorage')}</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Your Telegram bot token is stored securely using encrypted secrets management. 
-                    Tokens are never exposed in the database or client-side code.
+                    {t('telegram.secureDesc')}
                   </p>
                 </div>
               </div>
@@ -98,9 +91,9 @@ const TelegramBot = () => {
                     <Send className="w-6 h-6 text-[#0088cc]" />
                   </div>
                   <div>
-                    <CardTitle>Telegram Bot</CardTitle>
+                    <CardTitle>{t('telegram.botTitle')}</CardTitle>
                     <CardDescription>
-                      Your company's dedicated attendance bot
+                      {t('telegram.botDesc')}
                     </CardDescription>
                   </div>
                 </div>
@@ -109,9 +102,9 @@ const TelegramBot = () => {
                   className={isConnected ? 'bg-success hover:bg-success/90' : ''}
                 >
                   {isConnected ? (
-                    <><CheckCircle className="w-3 h-3 me-1" /> Connected</>
+                    <><CheckCircle className="w-3 h-3 me-1" /> {t('telegram.connected')}</>
                   ) : (
-                    <><AlertCircle className="w-3 h-3 me-1" /> Not Connected</>
+                    <><AlertCircle className="w-3 h-3 me-1" /> {t('telegram.notConnected')}</>
                   )}
                 </Badge>
               </div>
@@ -122,27 +115,27 @@ const TelegramBot = () => {
                   <div className="p-4 rounded-lg bg-success/10 border border-success/20">
                     <div className="flex items-center gap-2 text-success mb-2">
                       <CheckCircle className="w-5 h-5" />
-                      <span className="font-medium">Bot is active and ready!</span>
+                      <span className="font-medium">{t('telegram.active')}</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Your employees can now check in/out, start/end breaks, and request leave via Telegram.
+                      {t('telegram.activeDesc')}
                     </p>
                   </div>
 
                   <Button variant="destructive" onClick={handleDisconnect}>
-                    Disconnect Bot
+                    {t('telegram.disconnect')}
                   </Button>
                 </>
               ) : (
                 <>
                   <div className="space-y-4">
                     <div className="p-4 rounded-lg bg-muted">
-                      <h4 className="font-medium text-foreground mb-2">Setup Instructions</h4>
+                      <h4 className="font-medium text-foreground mb-2">{t('telegram.setupTitle')}</h4>
                       <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                        <li>Create a bot on Telegram via <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@BotFather</a></li>
-                        <li>Copy your bot token (keep it secret!)</li>
-                        <li>Contact our support to securely connect your bot</li>
-                        <li>Share the bot link with your employees</li>
+                        <li>{t('telegram.step1')} <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@BotFather</a></li>
+                        <li>{t('telegram.step2')}</li>
+                        <li>{t('telegram.step3')}</li>
+                        <li>{t('telegram.step4')}</li>
                       </ol>
                     </div>
 
@@ -152,7 +145,7 @@ const TelegramBot = () => {
                       disabled={isConnecting}
                     >
                       <ExternalLink className="w-4 h-4 me-2" />
-                      Request Bot Setup
+                      {t('telegram.requestSetup')}
                     </Button>
                   </div>
                 </>
@@ -169,28 +162,28 @@ const TelegramBot = () => {
         >
           <Card>
             <CardHeader>
-              <CardTitle>How it works</CardTitle>
+              <CardTitle>{t('telegram.howItWorks')}</CardTitle>
               <CardDescription>
-                Simple button-based interactions for your employees
+                {t('telegram.howItWorksDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
                 <FeatureItem 
-                  title="Check In / Out"
-                  description="Employees tap a button to clock in or out"
+                  title={t('telegram.checkInOut')}
+                  description={t('telegram.checkInOutDesc')}
                 />
                 <FeatureItem 
-                  title="Break Management"
-                  description="Start and end breaks with a single tap"
+                  title={t('telegram.breakManagement')}
+                  description={t('telegram.breakManagementDesc')}
                 />
                 <FeatureItem 
-                  title="Leave Requests"
-                  description="Request time off directly through the bot"
+                  title={t('telegram.leaveRequests')}
+                  description={t('telegram.leaveRequestsDesc')}
                 />
                 <FeatureItem 
-                  title="Admin Notifications"
-                  description="Get notified of attendance events instantly"
+                  title={t('telegram.adminNotifications')}
+                  description={t('telegram.adminNotificationsDesc')}
                 />
               </div>
             </CardContent>
@@ -205,9 +198,9 @@ const TelegramBot = () => {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Employee Bot Preview</CardTitle>
+              <CardTitle>{t('telegram.preview')}</CardTitle>
               <CardDescription>
-                What your employees will see in Telegram
+                {t('telegram.previewDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -219,22 +212,22 @@ const TelegramBot = () => {
                     </div>
                     <div>
                       <p className="font-medium">AttendEase Bot</p>
-                      <p className="text-xs text-white/60">Online</p>
+                      <p className="text-xs text-white/60">متصل</p>
                     </div>
                   </div>
                   
                   <div className="space-y-3 mb-4">
                     <div className="bg-[#0088cc] rounded-lg rounded-bl-none p-3 max-w-[80%]">
-                      <p className="text-sm">👋 Good morning! Ready to start your day?</p>
+                      <p className="text-sm">👋 {t('telegram.greeting')}</p>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2">
-                    <BotButton>✅ Check In</BotButton>
-                    <BotButton>🚪 Check Out</BotButton>
-                    <BotButton>☕ Start Break</BotButton>
-                    <BotButton>💼 End Break</BotButton>
-                    <BotButton className="col-span-2">📅 Request Leave</BotButton>
+                    <BotButton>{t('telegram.btnCheckIn')}</BotButton>
+                    <BotButton>{t('telegram.btnCheckOut')}</BotButton>
+                    <BotButton>{t('telegram.btnStartBreak')}</BotButton>
+                    <BotButton>{t('telegram.btnEndBreak')}</BotButton>
+                    <BotButton className="col-span-2">{t('telegram.btnRequestLeave')}</BotButton>
                   </div>
                 </div>
               </div>
