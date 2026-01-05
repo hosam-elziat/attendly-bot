@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,28 +13,110 @@ const Auth = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t, direction } = useLanguage();
+  const { user, signIn, signUp, loading: authLoading } = useAuth();
   const [isSignup, setIsSignup] = useState(searchParams.get('mode') === 'signup');
   const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    fullName: '',
     companyName: '',
   });
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email';
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (isSignup) {
+      if (!formData.fullName) {
+        newErrors.fullName = 'Full name is required';
+      }
+      if (!formData.companyName) {
+        newErrors.companyName = 'Company name is required';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) return;
+    
     setLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success(isSignup ? 'Account created successfully!' : 'Welcome back!');
-    setLoading(false);
-    navigate('/dashboard');
+    try {
+      if (isSignup) {
+        const { error } = await signUp(
+          formData.email, 
+          formData.password, 
+          formData.fullName, 
+          formData.companyName
+        );
+        
+        if (error) {
+          if (error.message.includes('already registered')) {
+            toast.error('This email is already registered. Please sign in instead.');
+          } else {
+            toast.error(error.message);
+          }
+        } else {
+          toast.success('Account created successfully! Welcome to AttendEase.');
+          navigate('/dashboard');
+        }
+      } else {
+        const { error } = await signIn(formData.email, formData.password);
+        
+        if (error) {
+          if (error.message.includes('Invalid login credentials')) {
+            toast.error('Invalid email or password. Please try again.');
+          } else {
+            toast.error(error.message);
+          }
+        } else {
+          toast.success('Welcome back!');
+          navigate('/dashboard');
+        }
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const BackArrow = direction === 'rtl' ? ArrowRight : ArrowLeft;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex" dir={direction}>
@@ -72,18 +155,32 @@ const Auth = () => {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {isSignup && (
-                <div className="space-y-2">
-                  <Label htmlFor="company">{t('auth.company')}</Label>
-                  <Input
-                    id="company"
-                    type="text"
-                    placeholder="Your Company"
-                    value={formData.companyName}
-                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                    required
-                    className="h-12"
-                  />
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder="John Doe"
+                      value={formData.fullName}
+                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      className={`h-12 ${errors.fullName ? 'border-destructive' : ''}`}
+                    />
+                    {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company">{t('auth.company')}</Label>
+                    <Input
+                      id="company"
+                      type="text"
+                      placeholder="Your Company"
+                      value={formData.companyName}
+                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                      className={`h-12 ${errors.companyName ? 'border-destructive' : ''}`}
+                    />
+                    {errors.companyName && <p className="text-xs text-destructive">{errors.companyName}</p>}
+                  </div>
+                </>
               )}
               
               <div className="space-y-2">
@@ -94,9 +191,9 @@ const Auth = () => {
                   placeholder="you@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                  className="h-12"
+                  className={`h-12 ${errors.email ? 'border-destructive' : ''}`}
                 />
+                {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
               </div>
               
               <div className="space-y-2">
@@ -114,9 +211,9 @@ const Auth = () => {
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                  className="h-12"
+                  className={`h-12 ${errors.password ? 'border-destructive' : ''}`}
                 />
+                {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
               </div>
 
               <Button 
@@ -133,7 +230,10 @@ const Auth = () => {
               {isSignup ? t('auth.has_account') : t('auth.no_account')}{' '}
               <button
                 type="button"
-                onClick={() => setIsSignup(!isSignup)}
+                onClick={() => {
+                  setIsSignup(!isSignup);
+                  setErrors({});
+                }}
                 className="text-primary hover:underline font-medium"
               >
                 {isSignup ? t('auth.login') : t('auth.signup')}

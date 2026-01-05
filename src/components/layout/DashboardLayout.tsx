@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -27,6 +28,7 @@ interface DashboardLayoutProps {
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { t, direction, language, setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
+  const { profile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -41,10 +43,17 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: Settings, label: t('nav.settings'), path: '/dashboard/settings' },
   ];
 
-  const handleLogout = () => {
-    // TODO: Implement actual logout
+  const handleLogout = async () => {
+    await signOut();
     navigate('/');
   };
+
+  const initials = profile?.full_name
+    ?.split(' ')
+    .map(n => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U';
 
   return (
     <div className="min-h-screen bg-background" dir={direction}>
@@ -154,8 +163,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </Button>
             
             <div className="flex items-center gap-4 ms-auto">
+              <div className="hidden sm:block text-sm text-muted-foreground">
+                {profile?.full_name}
+              </div>
               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-primary font-medium text-sm">JD</span>
+                <span className="text-primary font-medium text-sm">{initials}</span>
               </div>
             </div>
           </div>

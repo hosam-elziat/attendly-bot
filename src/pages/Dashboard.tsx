@@ -1,50 +1,49 @@
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAttendanceStats } from '@/hooks/useAttendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Clock, Calendar, AlertCircle } from 'lucide-react';
+import { Users, Clock, Calendar, AlertCircle, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
   const { t } = useLanguage();
+  const { profile } = useAuth();
+  const { data: stats, isLoading } = useAttendanceStats();
 
-  const stats = [
+  const statCards = [
     { 
       icon: Users, 
       label: t('dashboard.present'), 
-      value: '24', 
-      change: '+2 from yesterday',
+      value: stats?.present ?? 0, 
+      change: `${stats?.totalEmployees ?? 0} total employees`,
       color: 'text-success' 
     },
     { 
       icon: Users, 
       label: t('dashboard.absent'), 
-      value: '3', 
-      change: 'Same as yesterday',
+      value: stats?.absent ?? 0, 
+      change: 'Not checked in today',
       color: 'text-destructive' 
     },
     { 
       icon: Calendar, 
       label: t('dashboard.on_leave'), 
-      value: '5', 
-      change: '2 ending today',
+      value: stats?.onBreak ?? 0, 
+      change: 'Currently on break',
       color: 'text-warning' 
     },
     { 
       icon: AlertCircle, 
       label: t('dashboard.pending'), 
-      value: '7', 
-      change: 'Needs attention',
+      value: stats?.pendingLeaves ?? 0, 
+      change: 'Leave requests',
       color: 'text-primary' 
     },
   ];
 
-  const recentActivity = [
-    { name: 'Sarah Johnson', action: 'Checked in', time: '08:32 AM', status: 'success' },
-    { name: 'Ahmed Hassan', action: 'Started break', time: '10:15 AM', status: 'warning' },
-    { name: 'Emily Chen', action: 'Requested leave', time: '09:45 AM', status: 'info' },
-    { name: 'Michael Brown', action: 'Checked out', time: '05:00 PM', status: 'muted' },
-    { name: 'Fatima Al-Rashid', action: 'Checked in', time: '08:45 AM', status: 'success' },
-  ];
+  const firstName = profile?.full_name?.split(' ')[0] || 'there';
 
   return (
     <DashboardLayout>
@@ -56,7 +55,7 @@ const Dashboard = () => {
           transition={{ duration: 0.4 }}
         >
           <h1 className="text-2xl font-bold text-foreground">
-            {t('dashboard.welcome')}, John 👋
+            {t('dashboard.welcome')}, {firstName} 👋
           </h1>
           <p className="text-muted-foreground mt-1">
             Here's what's happening with your team today.
@@ -64,105 +63,115 @@ const Dashboard = () => {
         </motion.div>
 
         {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
-            >
-              <Card className="card-hover">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {stat.label}
-                  </CardTitle>
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-foreground">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {statCards.map((stat, index) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
+              >
+                <Card className="card-hover">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {stat.label}
+                    </CardTitle>
+                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-foreground">{stat.value}</div>
+                    <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
 
-        {/* Main Content Grid */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Recent Activity */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-primary" />
-                  {t('dashboard.today')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between py-3 border-b border-border last:border-0"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
-                          <span className="text-xs font-medium text-accent-foreground">
-                            {activity.name.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{activity.name}</p>
-                          <p className="text-xs text-muted-foreground">{activity.action}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs text-muted-foreground">{activity.time}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+        {/* Quick Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <QuickActionCard 
+                title="Manage Employees" 
+                count={stats?.totalEmployees ?? 0}
+                description="Add, edit, or remove team members"
+                actionLabel="View"
+                link="/dashboard/employees"
+              />
+              <QuickActionCard 
+                title="Pending Leave Requests" 
+                count={stats?.pendingLeaves ?? 0}
+                description="Review and approve leave requests"
+                actionLabel="Review"
+                link="/dashboard/leaves"
+              />
+              <QuickActionCard 
+                title="View Attendance" 
+                count={stats?.present ?? 0}
+                description="Today's check-ins and check-outs"
+                actionLabel="View"
+                link="/dashboard/attendance"
+              />
+              <QuickActionCard 
+                title="Telegram Bot" 
+                count={0}
+                description="Connect your bot for employee check-ins"
+                actionLabel="Setup"
+                link="/dashboard/telegram"
+                isSuccess
+              />
+            </CardContent>
+          </Card>
+        </motion.div>
 
-          {/* Quick Actions */}
+        {/* Getting Started */}
+        {(stats?.totalEmployees ?? 0) === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.5 }}
           >
-            <Card>
+            <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  🚀 Getting Started
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <QuickActionCard 
-                  title="Pending Leave Requests" 
-                  count={3}
-                  description="Review and approve leave requests"
-                  actionLabel="Review"
-                />
-                <QuickActionCard 
-                  title="Late Arrivals Today" 
-                  count={2}
-                  description="Employees who arrived after 9:00 AM"
-                  actionLabel="View"
-                />
-                <QuickActionCard 
-                  title="Telegram Bot Status" 
-                  count={0}
-                  description="Connected and active"
-                  actionLabel="Settings"
-                  isSuccess
-                />
+              <CardContent>
+                <p className="text-muted-foreground mb-4">
+                  Welcome to AttendEase! Here's how to get started:
+                </p>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                  <li>
+                    <Link to="/dashboard/employees" className="text-primary hover:underline">
+                      Add your first employees
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/dashboard/telegram" className="text-primary hover:underline">
+                      Connect your Telegram bot
+                    </Link>
+                  </li>
+                  <li>Share the bot link with your team</li>
+                  <li>Start tracking attendance!</li>
+                </ol>
               </CardContent>
             </Card>
           </motion.div>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   );
@@ -173,10 +182,11 @@ interface QuickActionCardProps {
   count: number;
   description: string;
   actionLabel: string;
+  link: string;
   isSuccess?: boolean;
 }
 
-const QuickActionCard = ({ title, count, description, actionLabel, isSuccess }: QuickActionCardProps) => (
+const QuickActionCard = ({ title, count, description, actionLabel, link, isSuccess }: QuickActionCardProps) => (
   <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
     <div className="flex items-center gap-3">
       {!isSuccess && count > 0 && (
@@ -189,14 +199,19 @@ const QuickActionCard = ({ title, count, description, actionLabel, isSuccess }: 
           ✓
         </span>
       )}
+      {!isSuccess && count === 0 && (
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-muted-foreground/20 text-muted-foreground text-xs">
+          0
+        </span>
+      )}
       <div>
         <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </div>
-    <button className="text-sm text-primary hover:underline font-medium">
+    <Link to={link} className="text-sm text-primary hover:underline font-medium">
       {actionLabel}
-    </button>
+    </Link>
   </div>
 );
 
