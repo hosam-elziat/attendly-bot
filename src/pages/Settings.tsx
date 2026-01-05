@@ -24,16 +24,6 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { CompanySchema } from '@/lib/validations';
 
-const WEEKDAYS = [
-  { id: 'sunday', label: 'Sunday' },
-  { id: 'monday', label: 'Monday' },
-  { id: 'tuesday', label: 'Tuesday' },
-  { id: 'wednesday', label: 'Wednesday' },
-  { id: 'thursday', label: 'Thursday' },
-  { id: 'friday', label: 'Friday' },
-  { id: 'saturday', label: 'Saturday' },
-];
-
 const Settings = () => {
   const { t, language, setLanguage, direction } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -49,6 +39,16 @@ const Settings = () => {
   const [breakDuration, setBreakDuration] = useState(60);
   const [weekendDays, setWeekendDays] = useState<string[]>(['friday', 'saturday']);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const WEEKDAYS = [
+    { id: 'sunday', label: t('common.sunday') },
+    { id: 'monday', label: t('common.monday') },
+    { id: 'tuesday', label: t('common.tuesday') },
+    { id: 'wednesday', label: t('common.wednesday') },
+    { id: 'thursday', label: t('common.thursday') },
+    { id: 'friday', label: t('common.friday') },
+    { id: 'saturday', label: t('common.saturday') },
+  ];
 
   // Update form when company data loads
   useEffect(() => {
@@ -71,7 +71,7 @@ const Settings = () => {
 
   const handleSaveCompany = async () => {
     if (!company?.id) {
-      toast.error('No company found');
+      toast.error('لم يتم العثور على الشركة');
       return;
     }
 
@@ -106,10 +106,10 @@ const Settings = () => {
       if (error) throw error;
       
       await refetch();
-      toast.success('Company settings saved');
+      toast.success('تم حفظ إعدادات الشركة');
     } catch (error: any) {
       console.error('Save error:', error);
-      toast.error('Failed to save: ' + error.message);
+      toast.error('فشل في الحفظ: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -117,7 +117,7 @@ const Settings = () => {
 
   const handleSaveWorkHours = async () => {
     if (!company?.id) {
-      toast.error('No company found');
+      toast.error('لم يتم العثور على الشركة');
       return;
     }
 
@@ -149,10 +149,10 @@ const Settings = () => {
       if (error) throw error;
       
       await refetch();
-      toast.success('Working hours saved');
+      toast.success('تم حفظ ساعات العمل');
     } catch (error: any) {
       console.error('Save error:', error);
-      toast.error('Failed to save: ' + error.message);
+      toast.error('فشل في الحفظ: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -179,7 +179,7 @@ const Settings = () => {
         >
           <h1 className="text-2xl font-bold text-foreground">{t('settings.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your workspace preferences
+            {t('settings.managePreferences')}
           </p>
         </motion.div>
 
@@ -196,15 +196,15 @@ const Settings = () => {
                 {t('settings.language')}
               </CardTitle>
               <CardDescription>
-                Choose your preferred language. Arabic will enable RTL layout.
+                {t('settings.languageDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <Label className="text-foreground">Display Language</Label>
+                  <Label className="text-foreground">{t('settings.displayLanguage')}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Current direction: {direction.toUpperCase()}
+                    {t('settings.currentDirection')}: {direction.toUpperCase()}
                   </p>
                 </div>
                 <Select value={language} onValueChange={(value: 'en' | 'ar') => setLanguage(value)}>
@@ -213,7 +213,7 @@ const Settings = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="en">🇬🇧 English</SelectItem>
-                    <SelectItem value="ar">🇸🇦 العربية (Arabic)</SelectItem>
+                    <SelectItem value="ar">🇸🇦 العربية</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -238,15 +238,15 @@ const Settings = () => {
                 {t('settings.theme')}
               </CardTitle>
               <CardDescription>
-                Customize the appearance of the application
+                {t('settings.themeDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <Label className="text-foreground">Dark Mode</Label>
+                  <Label className="text-foreground">{t('settings.darkMode')}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Switch between light and dark themes
+                    {t('settings.switchTheme')}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -272,16 +272,16 @@ const Settings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Building className="w-5 h-5 text-primary" />
-                Company Information
+                {t('settings.companyInfo')}
               </CardTitle>
               <CardDescription>
-                Update your company details
+                {t('settings.updateCompany')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="company-name">Company Name</Label>
+                  <Label htmlFor="company-name">{t('settings.companyName')}</Label>
                   <Input 
                     id="company-name" 
                     value={companyName}
@@ -292,19 +292,19 @@ const Settings = () => {
                   {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="timezone">Timezone</Label>
+                  <Label htmlFor="timezone">{t('settings.timezone')}</Label>
                   <Select value={timezone} onValueChange={setTimezone}>
                     <SelectTrigger id="timezone">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="UTC+0">UTC +0 (London)</SelectItem>
-                      <SelectItem value="UTC+2">UTC +2 (Cairo)</SelectItem>
-                      <SelectItem value="UTC+3">UTC +3 (Riyadh, Kuwait)</SelectItem>
-                      <SelectItem value="UTC+4">UTC +4 (Dubai)</SelectItem>
-                      <SelectItem value="UTC+5">UTC +5 (Karachi)</SelectItem>
-                      <SelectItem value="UTC+5.5">UTC +5:30 (Mumbai)</SelectItem>
-                      <SelectItem value="UTC+8">UTC +8 (Singapore)</SelectItem>
+                      <SelectItem value="UTC+0">UTC +0 (لندن)</SelectItem>
+                      <SelectItem value="UTC+2">UTC +2 (القاهرة)</SelectItem>
+                      <SelectItem value="UTC+3">UTC +3 (الرياض، الكويت)</SelectItem>
+                      <SelectItem value="UTC+4">UTC +4 (دبي)</SelectItem>
+                      <SelectItem value="UTC+5">UTC +5 (كراتشي)</SelectItem>
+                      <SelectItem value="UTC+5.5">UTC +5:30 (مومباي)</SelectItem>
+                      <SelectItem value="UTC+8">UTC +8 (سنغافورة)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -327,16 +327,16 @@ const Settings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-primary" />
-                Default Working Hours
+                {t('settings.workingHours')}
               </CardTitle>
               <CardDescription>
-                Set default working hours for all employees. You can override these for individual employees.
+                {t('settings.workingHoursDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="work-start">Work Start</Label>
+                  <Label htmlFor="work-start">{t('settings.workStart')}</Label>
                   <Input 
                     id="work-start" 
                     type="time" 
@@ -345,7 +345,7 @@ const Settings = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="work-end">Work End</Label>
+                  <Label htmlFor="work-end">{t('settings.workEnd')}</Label>
                   <Input 
                     id="work-end" 
                     type="time" 
@@ -354,7 +354,7 @@ const Settings = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="break-duration">Break Duration (min)</Label>
+                  <Label htmlFor="break-duration">{t('settings.breakDuration')}</Label>
                   <Input 
                     id="break-duration" 
                     type="number" 
@@ -383,16 +383,16 @@ const Settings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary" />
-                Default Weekend Days
+                {t('settings.weekendDays')}
               </CardTitle>
               <CardDescription>
-                Select which days are considered weekends. These can be customized per employee.
+                {t('settings.weekendDaysDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {WEEKDAYS.map((day) => (
-                  <div key={day.id} className="flex items-center space-x-2">
+                  <div key={day.id} className="flex items-center space-x-2 rtl:space-x-reverse">
                     <Checkbox 
                       id={day.id}
                       checked={weekendDays.includes(day.id)}
@@ -405,7 +405,7 @@ const Settings = () => {
                 ))}
               </div>
               <p className="text-sm text-muted-foreground mt-4">
-                Note: Weekend settings are saved per employee when you edit them individually.
+                {t('settings.weekendNote')}
               </p>
             </CardContent>
           </Card>

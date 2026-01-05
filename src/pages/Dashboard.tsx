@@ -17,33 +17,33 @@ const Dashboard = () => {
       icon: Users, 
       label: t('dashboard.present'), 
       value: stats?.present ?? 0, 
-      change: `${stats?.totalEmployees ?? 0} total employees`,
+      change: `${stats?.totalEmployees ?? 0} ${t('dashboard.totalEmployees')}`,
       color: 'text-success' 
     },
     { 
       icon: Users, 
       label: t('dashboard.absent'), 
       value: stats?.absent ?? 0, 
-      change: 'Not checked in today',
+      change: t('dashboard.notCheckedIn'),
       color: 'text-destructive' 
     },
     { 
       icon: Calendar, 
       label: t('dashboard.on_leave'), 
       value: stats?.onBreak ?? 0, 
-      change: 'Currently on break',
+      change: t('dashboard.currentlyOnBreak'),
       color: 'text-warning' 
     },
     { 
       icon: AlertCircle, 
       label: t('dashboard.pending'), 
       value: stats?.pendingLeaves ?? 0, 
-      change: 'Leave requests',
+      change: t('dashboard.leaveRequests'),
       color: 'text-primary' 
     },
   ];
 
-  const firstName = profile?.full_name?.split(' ')[0] || 'there';
+  const firstName = profile?.full_name?.split(' ')[0] || 'هناك';
 
   return (
     <DashboardLayout>
@@ -58,7 +58,7 @@ const Dashboard = () => {
             {t('dashboard.welcome')}, {firstName} 👋
           </h1>
           <p className="text-muted-foreground mt-1">
-            Here's what's happening with your team today.
+            {t('dashboard.whatsHappening')}
           </p>
         </motion.div>
 
@@ -101,35 +101,35 @@ const Dashboard = () => {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle>{t('dashboard.quickActions')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <QuickActionCard 
-                title="Manage Employees" 
+                title={t('dashboard.manageEmployees')}
                 count={stats?.totalEmployees ?? 0}
-                description="Add, edit, or remove team members"
-                actionLabel="View"
+                description={t('dashboard.manageEmployeesDesc')}
+                actionLabel={t('dashboard.view')}
                 link="/dashboard/employees"
               />
               <QuickActionCard 
-                title="Pending Leave Requests" 
+                title={t('dashboard.pendingLeaves')}
                 count={stats?.pendingLeaves ?? 0}
-                description="Review and approve leave requests"
-                actionLabel="Review"
+                description={t('dashboard.pendingLeavesDesc')}
+                actionLabel={t('dashboard.review')}
                 link="/dashboard/leaves"
               />
               <QuickActionCard 
-                title="View Attendance" 
+                title={t('dashboard.viewAttendance')}
                 count={stats?.present ?? 0}
-                description="Today's check-ins and check-outs"
-                actionLabel="View"
+                description={t('dashboard.viewAttendanceDesc')}
+                actionLabel={t('dashboard.view')}
                 link="/dashboard/attendance"
               />
               <QuickActionCard 
-                title="Telegram Bot" 
+                title={t('dashboard.telegramBot')}
                 count={0}
-                description="Connect your bot for employee check-ins"
-                actionLabel="Setup"
+                description={t('dashboard.telegramBotDesc')}
+                actionLabel={t('dashboard.setup')}
                 link="/dashboard/telegram"
                 isSuccess
               />
@@ -147,26 +147,26 @@ const Dashboard = () => {
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  🚀 Getting Started
+                  🚀 {t('dashboard.gettingStarted')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-4">
-                  Welcome to AttendEase! Here's how to get started:
+                  {t('dashboard.welcomeMessage')}
                 </p>
                 <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                   <li>
                     <Link to="/dashboard/employees" className="text-primary hover:underline">
-                      Add your first employees
+                      {t('dashboard.step1')}
                     </Link>
                   </li>
                   <li>
                     <Link to="/dashboard/telegram" className="text-primary hover:underline">
-                      Connect your Telegram bot
+                      {t('dashboard.step2')}
                     </Link>
                   </li>
-                  <li>Share the bot link with your team</li>
-                  <li>Start tracking attendance!</li>
+                  <li>{t('dashboard.step3')}</li>
+                  <li>{t('dashboard.step4')}</li>
                 </ol>
               </CardContent>
             </Card>

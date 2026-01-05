@@ -34,11 +34,11 @@ interface SalaryRecord {
 }
 
 const mockSalaries: SalaryRecord[] = [
-  { id: '1', name: 'Sarah Johnson', baseSalary: 5000, bonus: 500, deductions: 200, netSalary: 5300, status: 'paid', workDays: 22, totalDays: 22 },
-  { id: '2', name: 'Ahmed Hassan', baseSalary: 3500, bonus: 0, deductions: 100, netSalary: 3400, status: 'pending', workDays: 20, totalDays: 22 },
-  { id: '3', name: 'Emily Chen', baseSalary: 3800, bonus: 200, deductions: 0, netSalary: 4000, status: 'processing', workDays: 22, totalDays: 22 },
-  { id: '4', name: 'Michael Brown', baseSalary: 3200, bonus: 0, deductions: 500, netSalary: 2700, status: 'pending', workDays: 18, totalDays: 22 },
-  { id: '5', name: 'Fatima Al-Rashid', baseSalary: 4500, bonus: 300, deductions: 0, netSalary: 4800, status: 'paid', workDays: 22, totalDays: 22 },
+  { id: '1', name: 'سارة جونسون', baseSalary: 5000, bonus: 500, deductions: 200, netSalary: 5300, status: 'paid', workDays: 22, totalDays: 22 },
+  { id: '2', name: 'أحمد حسن', baseSalary: 3500, bonus: 0, deductions: 100, netSalary: 3400, status: 'pending', workDays: 20, totalDays: 22 },
+  { id: '3', name: 'إميلي تشين', baseSalary: 3800, bonus: 200, deductions: 0, netSalary: 4000, status: 'processing', workDays: 22, totalDays: 22 },
+  { id: '4', name: 'مايكل براون', baseSalary: 3200, bonus: 0, deductions: 500, netSalary: 2700, status: 'pending', workDays: 18, totalDays: 22 },
+  { id: '5', name: 'فاطمة الرشيد', baseSalary: 4500, bonus: 300, deductions: 0, netSalary: 4800, status: 'paid', workDays: 22, totalDays: 22 },
 ];
 
 const Salaries = () => {
@@ -51,11 +51,11 @@ const Salaries = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
-        return <Badge className="bg-success hover:bg-success/90">Paid</Badge>;
+        return <Badge className="bg-success hover:bg-success/90">{t('salaries.paid')}</Badge>;
       case 'pending':
-        return <Badge variant="outline">Pending</Badge>;
+        return <Badge variant="outline">{t('salaries.pending')}</Badge>;
       case 'processing':
-        return <Badge className="bg-warning hover:bg-warning/90">Processing</Badge>;
+        return <Badge className="bg-warning hover:bg-warning/90">{t('salaries.processing')}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -74,12 +74,12 @@ const Salaries = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground">{t('nav.salaries')}</h1>
             <p className="text-muted-foreground mt-1">
-              View and manage monthly salary calculations
+              {t('salaries.manage')}
             </p>
           </div>
           <Button variant="outline">
             <Download className="w-4 h-4 me-2" />
-            Export Report
+            {t('salaries.exportReport')}
           </Button>
         </motion.div>
 
@@ -97,7 +97,7 @@ const Salaries = () => {
                     <DollarSign className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Payroll</p>
+                    <p className="text-sm text-muted-foreground">{t('salaries.totalPayroll')}</p>
                     <p className="text-2xl font-bold text-foreground">${totalPayroll.toLocaleString()}</p>
                   </div>
                 </div>
@@ -117,7 +117,7 @@ const Salaries = () => {
                     <TrendingUp className="w-6 h-6 text-success" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Bonuses</p>
+                    <p className="text-sm text-muted-foreground">{t('salaries.totalBonuses')}</p>
                     <p className="text-2xl font-bold text-success">+${totalBonuses.toLocaleString()}</p>
                   </div>
                 </div>
@@ -137,7 +137,7 @@ const Salaries = () => {
                     <TrendingDown className="w-6 h-6 text-destructive" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Deductions</p>
+                    <p className="text-sm text-muted-foreground">{t('salaries.totalDeductions')}</p>
                     <p className="text-2xl font-bold text-destructive">-${totalDeductions.toLocaleString()}</p>
                   </div>
                 </div>
@@ -157,23 +157,23 @@ const Salaries = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Select defaultValue="january">
                   <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Select month" />
+                    <SelectValue placeholder={t('salaries.selectMonth')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="january">January 2025</SelectItem>
-                    <SelectItem value="december">December 2024</SelectItem>
-                    <SelectItem value="november">November 2024</SelectItem>
+                    <SelectItem value="january">يناير 2025</SelectItem>
+                    <SelectItem value="december">ديسمبر 2024</SelectItem>
+                    <SelectItem value="november">نوفمبر 2024</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select defaultValue="all">
                   <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Filter status" />
+                    <SelectValue placeholder={t('salaries.filterStatus')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="all">{t('salaries.allStatus')}</SelectItem>
+                    <SelectItem value="paid">{t('salaries.paid')}</SelectItem>
+                    <SelectItem value="pending">{t('salaries.pending')}</SelectItem>
+                    <SelectItem value="processing">{t('salaries.processing')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -191,20 +191,20 @@ const Salaries = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-primary" />
-                Salary Breakdown
+                {t('salaries.breakdown')}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Work Days</TableHead>
-                    <TableHead>Base Salary</TableHead>
-                    <TableHead>Bonus</TableHead>
-                    <TableHead>Deductions</TableHead>
-                    <TableHead>Net Salary</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t('salaries.employee')}</TableHead>
+                    <TableHead>{t('salaries.workDays')}</TableHead>
+                    <TableHead>{t('salaries.baseSalary')}</TableHead>
+                    <TableHead>{t('salaries.bonus')}</TableHead>
+                    <TableHead>{t('salaries.deductions')}</TableHead>
+                    <TableHead>{t('salaries.netSalary')}</TableHead>
+                    <TableHead>{t('employees.status')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

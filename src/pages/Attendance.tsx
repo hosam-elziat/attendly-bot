@@ -30,11 +30,11 @@ const Attendance = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'checked_in':
-        return <Badge className="bg-success hover:bg-success/90">Present</Badge>;
+        return <Badge className="bg-success hover:bg-success/90">{t('attendance.present')}</Badge>;
       case 'on_break':
-        return <Badge variant="secondary">On Break</Badge>;
+        return <Badge variant="secondary">{t('attendance.onBreak')}</Badge>;
       case 'checked_out':
-        return <Badge variant="outline">Left</Badge>;
+        return <Badge variant="outline">{t('attendance.left')}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -46,10 +46,10 @@ const Attendance = () => {
   };
 
   const statCards = [
-    { icon: LogIn, label: 'Checked In', value: stats?.present ?? 0, color: 'text-success' },
-    { icon: LogOut, label: 'Checked Out', value: stats?.checkedOut ?? 0, color: 'text-muted-foreground' },
-    { icon: Coffee, label: 'On Break', value: stats?.onBreak ?? 0, color: 'text-warning' },
-    { icon: Clock, label: 'Total Employees', value: stats?.totalEmployees ?? 0, color: 'text-primary' },
+    { icon: LogIn, label: t('attendance.checkedIn'), value: stats?.present ?? 0, color: 'text-success' },
+    { icon: LogOut, label: t('attendance.checkedOut'), value: stats?.checkedOut ?? 0, color: 'text-muted-foreground' },
+    { icon: Coffee, label: t('attendance.onBreak'), value: stats?.onBreak ?? 0, color: 'text-warning' },
+    { icon: Clock, label: t('attendance.totalEmployees'), value: stats?.totalEmployees ?? 0, color: 'text-primary' },
   ];
 
   return (
@@ -63,7 +63,7 @@ const Attendance = () => {
         >
           <h1 className="text-2xl font-bold text-foreground">{t('nav.attendance')}</h1>
           <p className="text-muted-foreground mt-1">
-            Track daily check-ins, breaks, and working hours
+            {t('attendance.trackDaily')}
           </p>
         </motion.div>
 
@@ -104,24 +104,24 @@ const Attendance = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Select defaultValue="today">
                   <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Select date" />
+                    <SelectValue placeholder={t('attendance.selectDate')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="yesterday">Yesterday</SelectItem>
-                    <SelectItem value="week">This Week</SelectItem>
-                    <SelectItem value="month">This Month</SelectItem>
+                    <SelectItem value="today">{t('attendance.today')}</SelectItem>
+                    <SelectItem value="yesterday">{t('attendance.yesterday')}</SelectItem>
+                    <SelectItem value="week">{t('attendance.thisWeek')}</SelectItem>
+                    <SelectItem value="month">{t('attendance.thisMonth')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select defaultValue="all">
                   <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Filter status" />
+                    <SelectValue placeholder={t('attendance.filterStatus')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="checked_in">Present</SelectItem>
-                    <SelectItem value="on_break">On Break</SelectItem>
-                    <SelectItem value="checked_out">Left</SelectItem>
+                    <SelectItem value="all">{t('attendance.allStatus')}</SelectItem>
+                    <SelectItem value="checked_in">{t('attendance.present')}</SelectItem>
+                    <SelectItem value="on_break">{t('attendance.onBreak')}</SelectItem>
+                    <SelectItem value="checked_out">{t('attendance.left')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -139,7 +139,7 @@ const Attendance = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-primary" />
-                Today's Attendance
+                {t('attendance.todayAttendance')}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -150,19 +150,19 @@ const Attendance = () => {
               ) : attendance.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Clock className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-1">No attendance records today</h3>
+                  <h3 className="text-lg font-medium text-foreground mb-1">{t('attendance.noRecords')}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Employees will appear here when they check in via Telegram
+                    {t('attendance.noRecordsDesc')}
                   </p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Check In</TableHead>
-                      <TableHead>Check Out</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{t('attendance.employee')}</TableHead>
+                      <TableHead>{t('attendance.checkIn')}</TableHead>
+                      <TableHead>{t('attendance.checkOut')}</TableHead>
+                      <TableHead>{t('employees.status')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -176,7 +176,7 @@ const Attendance = () => {
                               </span>
                             </div>
                             <span className="font-medium text-foreground">
-                              {record.employees?.full_name || 'Unknown'}
+                              {record.employees?.full_name || t('common.unknown')}
                             </span>
                           </div>
                         </TableCell>
