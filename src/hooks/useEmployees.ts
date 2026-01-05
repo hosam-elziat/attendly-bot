@@ -14,6 +14,10 @@ export interface Employee {
   base_salary: number;
   is_active: boolean;
   telegram_chat_id: string | null;
+  work_start_time: string | null;
+  work_end_time: string | null;
+  break_duration_minutes: number | null;
+  weekend_days: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +28,10 @@ export interface CreateEmployeeData {
   department?: string;
   salary_type?: 'monthly' | 'daily';
   base_salary?: number;
+  work_start_time?: string;
+  work_end_time?: string;
+  break_duration_minutes?: number;
+  weekend_days?: string[];
 }
 
 export const useEmployees = () => {
@@ -55,12 +63,17 @@ export const useCreateEmployee = () => {
     mutationFn: async (employeeData: CreateEmployeeData) => {
       if (!profile?.company_id) throw new Error('No company found');
 
+      // Format time fields
+      const formattedData = {
+        ...employeeData,
+        company_id: profile.company_id,
+        work_start_time: employeeData.work_start_time ? employeeData.work_start_time + ':00' : '09:00:00',
+        work_end_time: employeeData.work_end_time ? employeeData.work_end_time + ':00' : '17:00:00',
+      };
+
       const { data, error } = await supabase
         .from('employees')
-        .insert({
-          ...employeeData,
-          company_id: profile.company_id,
-        })
+        .insert(formattedData)
         .select()
         .single();
 

@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useEmployees, useCreateEmployee, useDeleteEmployee, CreateEmployeeData } from '@/hooks/useEmployees';
+import { useEmployees, useCreateEmployee, useDeleteEmployee, useUpdateEmployee, CreateEmployeeData, Employee } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Table, 
   TableBody, 
@@ -30,7 +31,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,17 +49,28 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+const WEEKDAYS = [
+  { id: 'sunday', label: 'Sun' },
+  { id: 'monday', label: 'Mon' },
+  { id: 'tuesday', label: 'Tue' },
+  { id: 'wednesday', label: 'Wed' },
+  { id: 'thursday', label: 'Thu' },
+  { id: 'friday', label: 'Fri' },
+  { id: 'saturday', label: 'Sat' },
+];
+
 const Employees = () => {
   const { t } = useLanguage();
   const { data: employees = [], isLoading } = useEmployees();
   const createEmployee = useCreateEmployee();
   const deleteEmployee = useDeleteEmployee();
+  const updateEmployee = useUpdateEmployee();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState('all');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
 
   const filteredEmployees = employees.filter(emp => {
@@ -76,10 +88,15 @@ const Employees = () => {
 
   const handleDelete = async () => {
     if (selectedEmployee) {
-      await deleteEmployee.mutateAsync(selectedEmployee);
+      await deleteEmployee.mutateAsync(selectedEmployee.id);
       setDeleteDialogOpen(false);
       setSelectedEmployee(null);
     }
+  };
+
+  const handleEdit = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setEditDialogOpen(true);
   };
 
   return (
@@ -95,7 +112,7 @@ const Employees = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground">{t('employees.title')}</h1>
             <p className="text-muted-foreground mt-1">
-              Manage your team members and their roles
+              Manage your team members, roles, and work schedules
             </p>
           </div>
           
@@ -106,7 +123,7 @@ const Employees = () => {
                 {t('employees.add')}
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>{t('employees.add')}</DialogTitle>
               </DialogHeader>
@@ -185,6 +202,7 @@ const Employees = () => {
                     <TableRow>
                       <TableHead>Employee</TableHead>
                       <TableHead>{t('employees.department')}</TableHead>
+                      <TableHead>Work Hours</TableHead>
                       <TableHead>Salary</TableHead>
                       <TableHead>{t('employees.status')}</TableHead>
                       <TableHead className="w-12"></TableHead>
@@ -210,6 +228,14 @@ const Employees = () => {
                           {employee.department || '—'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span className="text-xs">
+                              {employee.work_start_time?.slice(0, 5) || '09:00'} - {employee.work_end_time?.slice(0, 5) || '17:00'}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
                           ${Number(employee.base_salary).toLocaleString()} / {employee.salary_type}
                         </TableCell>
                         <TableCell>
@@ -228,14 +254,14 @@ const Employees = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEdit(employee)}>
                                 <Edit className="w-4 h-4 me-2" />
                                 {t('common.edit')}
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 className="text-destructive"
                                 onClick={() => {
-                                  setSelectedEmployee(employee.id);
+                                  setSelectedEmployee(employee);
                                   setDeleteDialogOpen(true);
                                 }}
                               >
@@ -279,25 +305,70 @@ const Employees = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Employee Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Employee</DialogTitle>
+          </DialogHeader>
+          {selectedEmployee && (
+            <EditEmployeeForm 
+              employee={selectedEmployee}
+              onClose={() => {
+                setEditDialogOpen(false);
+                setSelectedEmployee(null);
+              }} 
+              onSubmit={async (data) => {
+                await updateEmployee.mutateAsync({ id: selectedEmployee.id, ...data });
+                setEditDialogOpen(false);
+                setSelectedEmployee(null);
+              }}
+              isLoading={updateEmployee.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
 
+interface EmployeeFormData extends CreateEmployeeData {
+  work_start_time?: string;
+  work_end_time?: string;
+  break_duration_minutes?: number;
+  weekend_days?: string[];
+  is_active?: boolean;
+}
+
 interface AddEmployeeFormProps {
   onClose: () => void;
-  onSubmit: (data: CreateEmployeeData) => Promise<void>;
+  onSubmit: (data: EmployeeFormData) => Promise<void>;
   isLoading: boolean;
 }
 
 const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps) => {
   const { t } = useLanguage();
-  const [formData, setFormData] = useState<CreateEmployeeData>({
+  const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: '',
     email: '',
     department: '',
     salary_type: 'monthly',
     base_salary: 0,
+    work_start_time: '09:00',
+    work_end_time: '17:00',
+    break_duration_minutes: 60,
+    weekend_days: ['friday', 'saturday'],
   });
+  
+  const handleWeekendToggle = (day: string) => {
+    setFormData(prev => ({
+      ...prev,
+      weekend_days: prev.weekend_days?.includes(day)
+        ? prev.weekend_days.filter(d => d !== day)
+        : [...(prev.weekend_days || []), day]
+    }));
+  };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,27 +377,30 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">Full Name</Label>
-        <Input 
-          id="name" 
-          placeholder="John Doe" 
-          required 
-          value={formData.full_name}
-          onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="name">Full Name</Label>
+          <Input 
+            id="name" 
+            placeholder="John Doe" 
+            required 
+            value={formData.full_name}
+            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input 
+            id="email" 
+            type="email" 
+            placeholder="john@company.com" 
+            required 
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input 
-          id="email" 
-          type="email" 
-          placeholder="john@company.com" 
-          required 
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-        />
-      </div>
+      
       <div className="space-y-2">
         <Label htmlFor="department">{t('employees.department')}</Label>
         <Input 
@@ -336,7 +410,8 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
           onChange={(e) => setFormData({ ...formData, department: e.target.value })}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Salary Type</Label>
           <Select 
@@ -363,6 +438,243 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
           />
         </div>
       </div>
+
+      <div className="border-t pt-4">
+        <Label className="text-base font-medium">Work Schedule</Label>
+        <p className="text-sm text-muted-foreground mb-3">Set individual work hours for this employee</p>
+        
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="work-start">Start Time</Label>
+            <Input 
+              id="work-start" 
+              type="time" 
+              value={formData.work_start_time}
+              onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="work-end">End Time</Label>
+            <Input 
+              id="work-end" 
+              type="time" 
+              value={formData.work_end_time}
+              onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="break">Break (min)</Label>
+            <Input 
+              id="break" 
+              type="number" 
+              value={formData.break_duration_minutes}
+              onChange={(e) => setFormData({ ...formData, break_duration_minutes: parseInt(e.target.value) || 0 })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Weekend Days</Label>
+        <div className="flex flex-wrap gap-3">
+          {WEEKDAYS.map((day) => (
+            <div key={day.id} className="flex items-center space-x-2">
+              <Checkbox 
+                id={`add-${day.id}`}
+                checked={formData.weekend_days?.includes(day.id)}
+                onCheckedChange={() => handleWeekendToggle(day.id)}
+              />
+              <Label htmlFor={`add-${day.id}`} className="text-sm font-normal cursor-pointer">
+                {day.label}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-3 pt-4">
+        <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+          {t('common.cancel')}
+        </Button>
+        <Button type="submit" className="flex-1 btn-primary-gradient" disabled={isLoading}>
+          {isLoading && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+          {t('common.save')}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+interface EditEmployeeFormProps {
+  employee: Employee;
+  onClose: () => void;
+  onSubmit: (data: Partial<EmployeeFormData>) => Promise<void>;
+  isLoading: boolean;
+}
+
+const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmployeeFormProps) => {
+  const { t } = useLanguage();
+  const [formData, setFormData] = useState<EmployeeFormData>({
+    full_name: employee.full_name,
+    email: employee.email,
+    department: employee.department || '',
+    salary_type: employee.salary_type,
+    base_salary: Number(employee.base_salary),
+    work_start_time: employee.work_start_time?.slice(0, 5) || '09:00',
+    work_end_time: employee.work_end_time?.slice(0, 5) || '17:00',
+    break_duration_minutes: employee.break_duration_minutes || 60,
+    weekend_days: employee.weekend_days || ['friday', 'saturday'],
+    is_active: employee.is_active,
+  });
+  
+  const handleWeekendToggle = (day: string) => {
+    setFormData(prev => ({
+      ...prev,
+      weekend_days: prev.weekend_days?.includes(day)
+        ? prev.weekend_days.filter(d => d !== day)
+        : [...(prev.weekend_days || []), day]
+    }));
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSubmit({
+      ...formData,
+      work_start_time: formData.work_start_time + ':00',
+      work_end_time: formData.work_end_time + ':00',
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="edit-name">Full Name</Label>
+          <Input 
+            id="edit-name" 
+            required 
+            value={formData.full_name}
+            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-email">Email</Label>
+          <Input 
+            id="edit-email" 
+            type="email" 
+            required 
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          />
+        </div>
+      </div>
+      
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="edit-department">{t('employees.department')}</Label>
+          <Input 
+            id="edit-department" 
+            value={formData.department}
+            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Status</Label>
+          <Select 
+            value={formData.is_active ? 'active' : 'inactive'} 
+            onValueChange={(value) => setFormData({ ...formData, is_active: value === 'active' })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Salary Type</Label>
+          <Select 
+            value={formData.salary_type} 
+            onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-salary">Salary Amount</Label>
+          <Input 
+            id="edit-salary" 
+            type="number" 
+            value={formData.base_salary || ''}
+            onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+          />
+        </div>
+      </div>
+
+      <div className="border-t pt-4">
+        <Label className="text-base font-medium">Work Schedule</Label>
+        <p className="text-sm text-muted-foreground mb-3">Individual work hours for this employee</p>
+        
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="edit-work-start">Start Time</Label>
+            <Input 
+              id="edit-work-start" 
+              type="time" 
+              value={formData.work_start_time}
+              onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-work-end">End Time</Label>
+            <Input 
+              id="edit-work-end" 
+              type="time" 
+              value={formData.work_end_time}
+              onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-break">Break (min)</Label>
+            <Input 
+              id="edit-break" 
+              type="number" 
+              value={formData.break_duration_minutes}
+              onChange={(e) => setFormData({ ...formData, break_duration_minutes: parseInt(e.target.value) || 0 })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Weekend Days</Label>
+        <div className="flex flex-wrap gap-3">
+          {WEEKDAYS.map((day) => (
+            <div key={day.id} className="flex items-center space-x-2">
+              <Checkbox 
+                id={`edit-${day.id}`}
+                checked={formData.weekend_days?.includes(day.id)}
+                onCheckedChange={() => handleWeekendToggle(day.id)}
+              />
+              <Label htmlFor={`edit-${day.id}`} className="text-sm font-normal cursor-pointer">
+                {day.label}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="flex gap-3 pt-4">
         <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
           {t('common.cancel')}
