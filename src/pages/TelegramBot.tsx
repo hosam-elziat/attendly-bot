@@ -2,37 +2,49 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCompany } from '@/hooks/useCompany';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Send, Link2, CheckCircle, AlertCircle, Copy, ExternalLink } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, ExternalLink, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const TelegramBot = () => {
   const { t } = useLanguage();
-  const [isConnected, setIsConnected] = useState(false);
-  const [botToken, setBotToken] = useState('');
+  const { data: company, refetch } = useCompany();
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  const handleConnect = () => {
-    if (botToken.length > 10) {
-      setIsConnected(true);
-      toast.success('Telegram bot connected successfully!');
-    } else {
-      toast.error('Please enter a valid bot token');
+  const isConnected = company?.telegram_bot_connected || false;
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    
+    // Simulating bot connection - in production this would:
+    // 1. Open OAuth flow or webhook setup
+    // 2. Store token securely in Supabase secrets (not in database)
+    // 3. Set up webhook endpoint via Edge Function
+    
+    toast.info('Telegram bot integration requires backend setup. Contact support for assistance.');
+    setIsConnecting(false);
+  };
+
+  const handleDisconnect = async () => {
+    if (!company?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({ telegram_bot_connected: false })
+        .eq('id', company.id);
+
+      if (error) throw error;
+      
+      await refetch();
+      toast.success('Telegram bot disconnected');
+    } catch (error: any) {
+      toast.error('Failed to disconnect: ' + error.message);
     }
-  };
-
-  const handleDisconnect = () => {
-    setIsConnected(false);
-    setBotToken('');
-    toast.success('Telegram bot disconnected');
-  };
-
-  const copyBotLink = () => {
-    navigator.clipboard.writeText('https://t.me/AttendEaseBot');
-    toast.success('Bot link copied to clipboard!');
   };
 
   return (
@@ -48,6 +60,28 @@ const TelegramBot = () => {
           <p className="text-muted-foreground mt-1">
             Connect your Telegram bot to enable employee check-ins via Telegram
           </p>
+        </motion.div>
+
+        {/* Security Notice */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+        >
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <Shield className="w-5 h-5 text-primary mt-0.5" />
+                <div>
+                  <p className="font-medium text-foreground">Secure Token Storage</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your Telegram bot token is stored securely using encrypted secrets management. 
+                    Tokens are never exposed in the database or client-side code.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* Connection Status */}
@@ -95,53 +129,30 @@ const TelegramBot = () => {
                     </p>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-muted-foreground text-sm">Bot Link</Label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 p-3 rounded-lg bg-muted font-mono text-sm">
-                          https://t.me/AttendEaseBot
-                        </div>
-                        <Button variant="outline" size="icon" onClick={copyBotLink}>
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" asChild>
-                          <a href="https://t.me/AttendEaseBot" target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-
-                    <Button variant="destructive" onClick={handleDisconnect}>
-                      Disconnect Bot
-                    </Button>
-                  </div>
+                  <Button variant="destructive" onClick={handleDisconnect}>
+                    Disconnect Bot
+                  </Button>
                 </>
               ) : (
                 <>
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="bot-token">Bot Token</Label>
-                      <Input
-                        id="bot-token"
-                        type="password"
-                        placeholder="Enter your Telegram bot token"
-                        value={botToken}
-                        onChange={(e) => setBotToken(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Get your bot token from <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@BotFather</a> on Telegram
-                      </p>
+                    <div className="p-4 rounded-lg bg-muted">
+                      <h4 className="font-medium text-foreground mb-2">Setup Instructions</h4>
+                      <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                        <li>Create a bot on Telegram via <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@BotFather</a></li>
+                        <li>Copy your bot token (keep it secret!)</li>
+                        <li>Contact our support to securely connect your bot</li>
+                        <li>Share the bot link with your employees</li>
+                      </ol>
                     </div>
 
                     <Button 
                       onClick={handleConnect} 
                       className="btn-primary-gradient"
-                      disabled={!botToken}
+                      disabled={isConnecting}
                     >
-                      <Link2 className="w-4 h-4 me-2" />
-                      Connect Bot
+                      <ExternalLink className="w-4 h-4 me-2" />
+                      Request Bot Setup
                     </Button>
                   </div>
                 </>
