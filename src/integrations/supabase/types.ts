@@ -151,6 +151,7 @@ export type Database = {
         Row: {
           absence_without_permission_deduction: number | null
           break_duration_minutes: number | null
+          country_code: string | null
           created_at: string
           daily_late_allowance_minutes: number | null
           default_currency: string | null
@@ -161,6 +162,7 @@ export type Database = {
           max_excused_absence_days: number | null
           monthly_late_allowance_minutes: number | null
           name: string
+          overtime_multiplier: number | null
           owner_id: string
           telegram_bot_connected: boolean | null
           timezone: string | null
@@ -171,6 +173,7 @@ export type Database = {
         Insert: {
           absence_without_permission_deduction?: number | null
           break_duration_minutes?: number | null
+          country_code?: string | null
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
@@ -181,6 +184,7 @@ export type Database = {
           max_excused_absence_days?: number | null
           monthly_late_allowance_minutes?: number | null
           name: string
+          overtime_multiplier?: number | null
           owner_id: string
           telegram_bot_connected?: boolean | null
           timezone?: string | null
@@ -191,6 +195,7 @@ export type Database = {
         Update: {
           absence_without_permission_deduction?: number | null
           break_duration_minutes?: number | null
+          country_code?: string | null
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
@@ -201,6 +206,7 @@ export type Database = {
           max_excused_absence_days?: number | null
           monthly_late_allowance_minutes?: number | null
           name?: string
+          overtime_multiplier?: number | null
           owner_id?: string
           telegram_bot_connected?: boolean | null
           timezone?: string | null

@@ -18,12 +18,13 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { CompanySchema } from '@/lib/validations';
 import { CURRENCIES, ARAB_COUNTRIES } from './EmployeeDetails';
+import { COUNTRIES } from '@/hooks/useAdvancedStats';
 
 const Settings = () => {
   const { t, language, setLanguage, direction } = useLanguage();
@@ -50,6 +51,8 @@ const Settings = () => {
   const [lateOver30Deduction, setLateOver30Deduction] = useState(1);
   const [absenceWithoutPermissionDeduction, setAbsenceWithoutPermissionDeduction] = useState(2);
   const [maxExcusedAbsenceDays, setMaxExcusedAbsenceDays] = useState(2);
+  const [overtimeMultiplier, setOvertimeMultiplier] = useState(2);
+  const [countryCode, setCountryCode] = useState('SA');
 
   const WEEKDAYS = [
     { id: 'sunday', label: t('common.sunday') },
@@ -79,6 +82,8 @@ const Settings = () => {
       setLateOver30Deduction((company as any).late_over_30_deduction || 1);
       setAbsenceWithoutPermissionDeduction((company as any).absence_without_permission_deduction || 2);
       setMaxExcusedAbsenceDays((company as any).max_excused_absence_days || 2);
+      setOvertimeMultiplier((company as any).overtime_multiplier || 2);
+      setCountryCode((company as any).country_code || 'SA');
     }
   }, [company]);
 
@@ -209,6 +214,8 @@ const Settings = () => {
           late_over_30_deduction: lateOver30Deduction,
           absence_without_permission_deduction: absenceWithoutPermissionDeduction,
           max_excused_absence_days: maxExcusedAbsenceDays,
+          overtime_multiplier: overtimeMultiplier,
+          country_code: countryCode,
         } as any)
         .eq('id', company.id);
 
@@ -616,6 +623,50 @@ const Settings = () => {
                 </div>
               </div>
 
+              {/* Overtime & Country Settings */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <Timer className="w-4 h-4" />
+                  إعدادات الوقت الإضافي والدولة
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 p-3 border rounded-lg bg-primary/5 border-primary/20">
+                    <Label htmlFor="overtime-multiplier">معدل حساب الوقت الإضافي</Label>
+                    <Input 
+                      id="overtime-multiplier" 
+                      type="number" 
+                      step="0.5"
+                      min={1}
+                      max={5}
+                      value={overtimeMultiplier}
+                      onChange={(e) => setOvertimeMultiplier(Math.min(5, Math.max(1, parseFloat(e.target.value) || 2)))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      ساعة الأوفرتايم = {overtimeMultiplier} × الساعة العادية
+                    </p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label htmlFor="country-code" className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      دولة الشركة
+                    </Label>
+                    <Select value={countryCode} onValueChange={setCountryCode}>
+                      <SelectTrigger id="country-code">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRIES.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {c.flag} {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">لتحديد الإجازات الرسمية</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Policy Summary */}
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <h4 className="font-medium text-foreground mb-2">ملخص القوانين</h4>
@@ -627,6 +678,8 @@ const Settings = () => {
                   <li>تأخير أكثر من 30 دقيقة: خصم {lateOver30Deduction} يوم</li>
                   <li>غياب بدون إذن: خصم {absenceWithoutPermissionDeduction} يوم</li>
                   <li>أقصى غياب مسموح بإذن: {maxExcusedAbsenceDays} أيام شهرياً</li>
+                  <li>معدل الوقت الإضافي: × {overtimeMultiplier}</li>
+                  <li>دولة الشركة: {COUNTRIES.find(c => c.code === countryCode)?.name || countryCode}</li>
                 </ul>
               </div>
 
