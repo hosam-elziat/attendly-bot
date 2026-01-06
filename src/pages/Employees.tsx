@@ -370,6 +370,7 @@ interface EmployeeFormData extends CreateEmployeeData {
   hire_date?: string;
   currency?: string;
   notes?: string;
+  telegram_chat_id?: string;
 }
 
 interface AddEmployeeFormProps {
@@ -397,6 +398,7 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddE
     hire_date: '',
     currency: defaultCurrency,
     notes: '',
+    telegram_chat_id: '',
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -485,14 +487,25 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddE
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="address">{t('employeeDetails.address')}</Label>
-        <Input 
-          id="address" 
-          placeholder={t('employees.addressPlaceholder')}
-          value={formData.address}
-          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="address">{t('employeeDetails.address')}</Label>
+          <Input 
+            id="address" 
+            placeholder={t('employees.addressPlaceholder')}
+            value={formData.address}
+            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="telegram_id">Telegram ID</Label>
+          <Input 
+            id="telegram_id" 
+            placeholder="123456789"
+            value={formData.telegram_chat_id}
+            onChange={(e) => setFormData({ ...formData, telegram_chat_id: e.target.value })}
+          />
+        </div>
       </div>
       
       {/* Salary Info */}
@@ -651,6 +664,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     hire_date: employee.hire_date || '',
     currency: employee.currency || defaultCurrency,
     notes: employee.notes || '',
+    telegram_chat_id: employee.telegram_chat_id || '',
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -760,6 +774,15 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
             id="edit-address" 
             value={formData.address}
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-telegram_id">Telegram ID</Label>
+          <Input 
+            id="edit-telegram_id" 
+            placeholder="123456789"
+            value={formData.telegram_chat_id}
+            onChange={(e) => setFormData({ ...formData, telegram_chat_id: e.target.value })}
           />
         </div>
       </div>
