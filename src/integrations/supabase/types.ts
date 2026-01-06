@@ -165,6 +165,7 @@ export type Database = {
           overtime_multiplier: number | null
           owner_id: string
           telegram_bot_connected: boolean | null
+          telegram_bot_username: string | null
           timezone: string | null
           updated_at: string
           work_end_time: string | null
@@ -187,6 +188,7 @@ export type Database = {
           overtime_multiplier?: number | null
           owner_id: string
           telegram_bot_connected?: boolean | null
+          telegram_bot_username?: string | null
           timezone?: string | null
           updated_at?: string
           work_end_time?: string | null
@@ -209,6 +211,7 @@ export type Database = {
           overtime_multiplier?: number | null
           owner_id?: string
           telegram_bot_connected?: boolean | null
+          telegram_bot_username?: string | null
           timezone?: string | null
           updated_at?: string
           work_end_time?: string | null
@@ -565,6 +568,50 @@ export type Database = {
             foreignKeyName: "subscriptions_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telegram_bots: {
+        Row: {
+          assigned_at: string | null
+          assigned_company_id: string | null
+          bot_name: string | null
+          bot_token: string
+          bot_username: string
+          created_at: string
+          id: string
+          is_available: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_company_id?: string | null
+          bot_name?: string | null
+          bot_token: string
+          bot_username: string
+          created_at?: string
+          id?: string
+          is_available?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_company_id?: string | null
+          bot_name?: string | null
+          bot_token?: string
+          bot_username?: string
+          created_at?: string
+          id?: string
+          is_available?: boolean | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_bots_assigned_company_id_fkey"
+            columns: ["assigned_company_id"]
+            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
