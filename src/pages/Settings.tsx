@@ -18,7 +18,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -41,6 +41,15 @@ const Settings = () => {
   const [breakDuration, setBreakDuration] = useState(60);
   const [weekendDays, setWeekendDays] = useState<string[]>(['friday', 'saturday']);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Attendance policy states
+  const [dailyLateAllowance, setDailyLateAllowance] = useState(15);
+  const [monthlyLateAllowance, setMonthlyLateAllowance] = useState(60);
+  const [lateUnder15Deduction, setLateUnder15Deduction] = useState(0.25);
+  const [late15To30Deduction, setLate15To30Deduction] = useState(0.5);
+  const [lateOver30Deduction, setLateOver30Deduction] = useState(1);
+  const [absenceWithoutPermissionDeduction, setAbsenceWithoutPermissionDeduction] = useState(2);
+  const [maxExcusedAbsenceDays, setMaxExcusedAbsenceDays] = useState(2);
 
   const WEEKDAYS = [
     { id: 'sunday', label: t('common.sunday') },
@@ -61,6 +70,15 @@ const Settings = () => {
       setWorkStart(company.work_start_time?.slice(0, 5) || '09:00');
       setWorkEnd(company.work_end_time?.slice(0, 5) || '17:00');
       setBreakDuration(company.break_duration_minutes || 60);
+      
+      // Attendance policy
+      setDailyLateAllowance((company as any).daily_late_allowance_minutes || 15);
+      setMonthlyLateAllowance((company as any).monthly_late_allowance_minutes || 60);
+      setLateUnder15Deduction((company as any).late_under_15_deduction || 0.25);
+      setLate15To30Deduction((company as any).late_15_to_30_deduction || 0.5);
+      setLateOver30Deduction((company as any).late_over_30_deduction || 1);
+      setAbsenceWithoutPermissionDeduction((company as any).absence_without_permission_deduction || 2);
+      setMaxExcusedAbsenceDays((company as any).max_excused_absence_days || 2);
     }
   }, [company]);
 
@@ -154,6 +172,50 @@ const Settings = () => {
       
       await refetch();
       toast.success('تم حفظ ساعات العمل');
+    } catch (error: any) {
+      console.error('Save error:', error);
+      toast.error('فشل في الحفظ: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAttendancePolicy = async () => {
+    if (!company?.id) {
+      toast.error('لم يتم العثور على الشركة');
+      return;
+    }
+
+    // Validate values
+    if (dailyLateAllowance < 0 || dailyLateAllowance > 60) {
+      toast.error('السماحية اليومية يجب أن تكون بين 0 و 60 دقيقة');
+      return;
+    }
+    if (monthlyLateAllowance < 0 || monthlyLateAllowance > 300) {
+      toast.error('السماحية الشهرية يجب أن تكون بين 0 و 300 دقيقة');
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          daily_late_allowance_minutes: dailyLateAllowance,
+          monthly_late_allowance_minutes: monthlyLateAllowance,
+          late_under_15_deduction: lateUnder15Deduction,
+          late_15_to_30_deduction: late15To30Deduction,
+          late_over_30_deduction: lateOver30Deduction,
+          absence_without_permission_deduction: absenceWithoutPermissionDeduction,
+          max_excused_absence_days: maxExcusedAbsenceDays,
+        } as any)
+        .eq('id', company.id);
+
+      if (error) throw error;
+      
+      await refetch();
+      toast.success('تم حفظ قوانين الحضور والانصراف');
     } catch (error: any) {
       console.error('Save error:', error);
       toast.error('فشل في الحفظ: ' + error.message);
@@ -425,6 +487,153 @@ const Settings = () => {
               <p className="text-sm text-muted-foreground mt-4">
                 {t('settings.weekendNote')}
               </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Attendance Policies */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.6 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="w-5 h-5 text-primary" />
+                قوانين الحضور والانصراف
+              </CardTitle>
+              <CardDescription>
+                تحديد قوانين التأخير والغياب والخصومات
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Late Allowance */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  سماحية التأخير
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="daily-late">السماحية اليومية (بالدقائق)</Label>
+                    <Input 
+                      id="daily-late" 
+                      type="number" 
+                      min={0}
+                      max={60}
+                      value={dailyLateAllowance}
+                      onChange={(e) => setDailyLateAllowance(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">الحد الأقصى للتأخير اليومي بدون خصم</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="monthly-late">السماحية الشهرية (بالدقائق)</Label>
+                    <Input 
+                      id="monthly-late" 
+                      type="number" 
+                      min={0}
+                      max={300}
+                      value={monthlyLateAllowance}
+                      onChange={(e) => setMonthlyLateAllowance(Math.min(300, Math.max(0, parseInt(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">رصيد التأخيرات الشهري للموظف</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deduction Rules */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  قوانين الخصم (بالأيام)
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label htmlFor="late-under-15">تأخير أقل من 15 دقيقة</Label>
+                    <Input 
+                      id="late-under-15" 
+                      type="number" 
+                      step="0.25"
+                      min={0}
+                      max={2}
+                      value={lateUnder15Deduction}
+                      onChange={(e) => setLateUnder15Deduction(Math.min(2, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">خصم {lateUnder15Deduction === 0.25 ? 'ربع' : lateUnder15Deduction === 0.5 ? 'نصف' : lateUnder15Deduction} يوم</p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label htmlFor="late-15-30">تأخير 15-30 دقيقة</Label>
+                    <Input 
+                      id="late-15-30" 
+                      type="number" 
+                      step="0.25"
+                      min={0}
+                      max={2}
+                      value={late15To30Deduction}
+                      onChange={(e) => setLate15To30Deduction(Math.min(2, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">خصم {late15To30Deduction === 0.5 ? 'نصف' : late15To30Deduction} يوم</p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label htmlFor="late-over-30">تأخير أكثر من 30 دقيقة</Label>
+                    <Input 
+                      id="late-over-30" 
+                      type="number" 
+                      step="0.5"
+                      min={0}
+                      max={3}
+                      value={lateOver30Deduction}
+                      onChange={(e) => setLateOver30Deduction(Math.min(3, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">خصم {lateOver30Deduction} يوم</p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-destructive/10 border-destructive/30">
+                    <Label htmlFor="absence-no-permission">غياب بدون إذن</Label>
+                    <Input 
+                      id="absence-no-permission" 
+                      type="number" 
+                      step="0.5"
+                      min={0}
+                      max={5}
+                      value={absenceWithoutPermissionDeduction}
+                      onChange={(e) => setAbsenceWithoutPermissionDeduction(Math.min(5, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">خصم {absenceWithoutPermissionDeduction} يوم</p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label htmlFor="max-excused">أقصى غياب بإذن (أيام/شهر)</Label>
+                    <Input 
+                      id="max-excused" 
+                      type="number" 
+                      min={0}
+                      max={10}
+                      value={maxExcusedAbsenceDays}
+                      onChange={(e) => setMaxExcusedAbsenceDays(Math.min(10, Math.max(0, parseInt(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">الحد الأقصى للغياب المسموح بإذن شهرياً</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Policy Summary */}
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <h4 className="font-medium text-foreground mb-2">ملخص القوانين</h4>
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>السماحية اليومية: {dailyLateAllowance} دقيقة</li>
+                  <li>رصيد التأخيرات الشهري: {monthlyLateAllowance} دقيقة</li>
+                  <li>تأخير أقل من 15 دقيقة (بعد انتهاء الرصيد): خصم {lateUnder15Deduction} يوم</li>
+                  <li>تأخير 15-30 دقيقة: خصم {late15To30Deduction} يوم</li>
+                  <li>تأخير أكثر من 30 دقيقة: خصم {lateOver30Deduction} يوم</li>
+                  <li>غياب بدون إذن: خصم {absenceWithoutPermissionDeduction} يوم</li>
+                  <li>أقصى غياب مسموح بإذن: {maxExcusedAbsenceDays} أيام شهرياً</li>
+                </ul>
+              </div>
+
+              <Button onClick={handleSaveAttendancePolicy} className="btn-primary-gradient" disabled={saving}>
+                {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                حفظ قوانين الحضور
+              </Button>
             </CardContent>
           </Card>
         </motion.div>
