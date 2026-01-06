@@ -3,7 +3,8 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendanceStats } from '@/hooks/useAttendance';
-import { useAdvancedStats } from '@/hooks/useAdvancedStats';
+import { useAdvancedStats, COUNTRIES } from '@/hooks/useAdvancedStats';
+import { usePublicHolidays } from '@/hooks/usePublicHolidays';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Users, 
@@ -17,16 +18,20 @@ import {
   AlertTriangle,
   Coffee,
   Timer,
-  Percent
+  Percent,
+  Flag
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
 
 const Dashboard = () => {
   const { t, language } = useLanguage();
   const { profile } = useAuth();
   const { data: stats, isLoading } = useAttendanceStats();
   const { data: advancedStats, isLoading: advancedLoading } = useAdvancedStats();
+  const { data: holidays, isLoading: holidaysLoading } = usePublicHolidays();
 
   const firstName = profile?.full_name?.split(' ')[0] || 'هناك';
 
@@ -262,6 +267,35 @@ const Dashboard = () => {
                     </Card>
                   )}
                 </div>
+
+                {/* Public Holidays */}
+                {!holidaysLoading && holidays && holidays.length > 0 && (
+                  <Card className="mt-4 border-primary/30 bg-primary/5">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Flag className="w-4 h-4 text-primary" />
+                        {language === 'ar' ? 'الإجازات الرسمية هذا الشهر' : 'Public Holidays This Month'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {holidays.map((holiday, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-background/50">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {language === 'ar' ? holiday.localName : holiday.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(holiday.date), 'EEEE, d MMMM', { locale: language === 'ar' ? ar : undefined })}
+                              </p>
+                            </div>
+                            <Calendar className="w-4 h-4 text-primary" />
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </motion.div>
             )}
           </>
