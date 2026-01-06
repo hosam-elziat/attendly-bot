@@ -106,6 +106,12 @@ export const useCreateEmployee = () => {
           : '17:00:00',
         break_duration_minutes: validatedData.break_duration_minutes ?? 60,
         weekend_days: validatedData.weekend_days ?? ['friday', 'saturday'],
+        phone: employeeData.phone || null,
+        national_id: employeeData.national_id || null,
+        address: employeeData.address || null,
+        hire_date: employeeData.hire_date || null,
+        currency: employeeData.currency || null,
+        notes: employeeData.notes || null,
       };
 
       const { data, error } = await supabase
