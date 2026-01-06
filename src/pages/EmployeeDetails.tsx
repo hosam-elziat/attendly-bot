@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees, Employee } from '@/hooks/useEmployees';
 import { useAttendance } from '@/hooks/useAttendance';
+import { useEmployeeSalaryStats, SalaryFilterPeriod } from '@/hooks/useEmployeeSalaryStats';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +34,11 @@ import {
   Banknote,
   FileText,
   MapPin,
-  CreditCard
+  CreditCard,
+  Gift,
+  Minus,
+  Timer,
+  MessageCircle
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, differenceInMinutes, parseISO, isWithinInterval } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -96,6 +101,7 @@ const EmployeeDetails = () => {
   const { data: employees = [] } = useEmployees();
   const { data: attendanceLogs = [] } = useAttendance();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('month');
+  const [salaryPeriod, setSalaryPeriod] = useState<SalaryFilterPeriod>('this_month');
 
   const employee = employees.find(e => e.id === id) as Employee & {
     phone?: string;
@@ -105,6 +111,16 @@ const EmployeeDetails = () => {
     currency?: string;
     notes?: string;
   };
+
+  // Use salary stats hook
+  const salaryStats = useEmployeeSalaryStats(id, salaryPeriod, employee ? {
+    base_salary: employee.base_salary,
+    salary_type: employee.salary_type,
+    work_start_time: employee.work_start_time,
+    work_end_time: employee.work_end_time,
+    weekend_days: employee.weekend_days,
+    break_duration_minutes: employee.break_duration_minutes,
+  } : undefined);
 
   const currency = CURRENCIES.find(c => c.code === (employee?.currency || 'SAR')) || CURRENCIES[0];
 
@@ -380,6 +396,13 @@ const EmployeeDetails = () => {
                         </p>
                       </div>
                     </div>
+                    <div className="flex items-center gap-3">
+                      <MessageCircle className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Telegram ID</p>
+                        <p className="font-medium font-mono">{employee.telegram_chat_id || '—'}</p>
+                      </div>
+                    </div>
                   </div>
                   {employee.notes && (
                     <div className="md:col-span-2 flex items-start gap-3">
@@ -431,10 +454,22 @@ const EmployeeDetails = () => {
 
             <TabsContent value="salary">
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>{t('employeeDetails.salaryInfo')}</CardTitle>
+                  <Select value={salaryPeriod} onValueChange={(v: SalaryFilterPeriod) => setSalaryPeriod(v)}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="this_month">هذا الشهر</SelectItem>
+                      <SelectItem value="last_month">الشهر الماضي</SelectItem>
+                      <SelectItem value="this_year">هذا العام</SelectItem>
+                      <SelectItem value="all_time">كل الوقت</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                  {/* Base Salary */}
                   <div className="flex items-center gap-3">
                     <Banknote className="w-5 h-5 text-muted-foreground" />
                     <div>
@@ -447,7 +482,70 @@ const EmployeeDetails = () => {
                       </p>
                     </div>
                   </div>
+
+                  {/* Salary Statistics Grid */}
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-4 border-t">
+                    <div className="text-center p-4 rounded-lg bg-success/10 border border-success/20">
+                      <p className="text-sm text-muted-foreground">المرتب المكتسب</p>
+                      <p className="text-2xl font-bold text-success">
+                        {salaryStats.earnedSalary.toLocaleString()} {currency.symbol}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {salaryStats.workDays} / {salaryStats.expectedWorkDays} يوم
+                      </p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                      <p className="text-sm text-muted-foreground">إجمالي الخصومات</p>
+                      <p className="text-2xl font-bold text-destructive">
+                        -{salaryStats.totalDeductions.toLocaleString()} {currency.symbol}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {salaryStats.deductionPercentage}% من المرتب
+                      </p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-primary/10 border border-primary/20">
+                      <p className="text-sm text-muted-foreground">المكافآت</p>
+                      <p className="text-2xl font-bold text-primary">
+                        +{salaryStats.totalBonuses.toLocaleString()} {currency.symbol}
+                      </p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-warning/10 border border-warning/20">
+                      <p className="text-sm text-muted-foreground">صافي المرتب</p>
+                      <p className="text-2xl font-bold text-warning">
+                        {salaryStats.netSalary.toLocaleString()} {currency.symbol}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Additional Details */}
                   <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <Timer className="w-5 h-5 text-success" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">الأوفر تايم</p>
+                        <p className="font-medium">{salaryStats.overtimeHours} ساعة</p>
+                        <p className="text-xs text-success">+{salaryStats.overtimeAmount.toLocaleString()} {currency.symbol}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <AlertTriangle className="w-5 h-5 text-warning" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">دقائق التأخير</p>
+                        <p className="font-medium">{salaryStats.lateMinutes} دقيقة</p>
+                        <p className="text-xs text-destructive">-{salaryStats.lateDeductionAmount.toLocaleString()} {currency.symbol}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <TrendingUp className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.commitmentRate')}</p>
+                        <p className="font-medium">{stats.commitmentRate}%</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Late Arrivals & Absences */}
+                  <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
                     <div className="text-center p-4 rounded-lg bg-muted/50">
                       <p className="text-sm text-muted-foreground">{t('employeeDetails.lateArrivals')}</p>
                       <p className="text-2xl font-bold text-warning">{stats.lateArrivals}</p>
@@ -455,10 +553,6 @@ const EmployeeDetails = () => {
                     <div className="text-center p-4 rounded-lg bg-muted/50">
                       <p className="text-sm text-muted-foreground">{t('employeeDetails.absentDays')}</p>
                       <p className="text-2xl font-bold text-destructive">{stats.absentDays}</p>
-                    </div>
-                    <div className="text-center p-4 rounded-lg bg-muted/50">
-                      <p className="text-sm text-muted-foreground">{t('employeeDetails.commitmentRate')}</p>
-                      <p className="text-2xl font-bold text-success">{stats.commitmentRate}%</p>
                     </div>
                   </div>
                 </CardContent>
