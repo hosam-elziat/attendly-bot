@@ -68,6 +68,50 @@ export type Database = {
           },
         ]
       }
+      attendance_policies: {
+        Row: {
+          company_id: string
+          created_at: string
+          deduction_amount: number
+          id: string
+          is_active: boolean | null
+          late_threshold_minutes: number
+          policy_description: string | null
+          policy_name: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          deduction_amount?: number
+          id?: string
+          is_active?: boolean | null
+          late_threshold_minutes?: number
+          policy_description?: string | null
+          policy_name: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          deduction_amount?: number
+          id?: string
+          is_active?: boolean | null
+          late_threshold_minutes?: number
+          policy_description?: string | null
+          policy_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_policies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_logs: {
         Row: {
           attendance_id: string
@@ -105,10 +149,17 @@ export type Database = {
       }
       companies: {
         Row: {
+          absence_without_permission_deduction: number | null
           break_duration_minutes: number | null
           created_at: string
+          daily_late_allowance_minutes: number | null
           default_currency: string | null
           id: string
+          late_15_to_30_deduction: number | null
+          late_over_30_deduction: number | null
+          late_under_15_deduction: number | null
+          max_excused_absence_days: number | null
+          monthly_late_allowance_minutes: number | null
           name: string
           owner_id: string
           telegram_bot_connected: boolean | null
@@ -118,10 +169,17 @@ export type Database = {
           work_start_time: string | null
         }
         Insert: {
+          absence_without_permission_deduction?: number | null
           break_duration_minutes?: number | null
           created_at?: string
+          daily_late_allowance_minutes?: number | null
           default_currency?: string | null
           id?: string
+          late_15_to_30_deduction?: number | null
+          late_over_30_deduction?: number | null
+          late_under_15_deduction?: number | null
+          max_excused_absence_days?: number | null
+          monthly_late_allowance_minutes?: number | null
           name: string
           owner_id: string
           telegram_bot_connected?: boolean | null
@@ -131,10 +189,17 @@ export type Database = {
           work_start_time?: string | null
         }
         Update: {
+          absence_without_permission_deduction?: number | null
           break_duration_minutes?: number | null
           created_at?: string
+          daily_late_allowance_minutes?: number | null
           default_currency?: string | null
           id?: string
+          late_15_to_30_deduction?: number | null
+          late_over_30_deduction?: number | null
+          late_under_15_deduction?: number | null
+          max_excused_absence_days?: number | null
+          monthly_late_allowance_minutes?: number | null
           name?: string
           owner_id?: string
           telegram_bot_connected?: boolean | null
@@ -159,6 +224,7 @@ export type Database = {
           hire_date: string | null
           id: string
           is_active: boolean | null
+          monthly_late_balance_minutes: number | null
           national_id: string | null
           notes: string | null
           phone: string | null
@@ -183,6 +249,7 @@ export type Database = {
           hire_date?: string | null
           id?: string
           is_active?: boolean | null
+          monthly_late_balance_minutes?: number | null
           national_id?: string | null
           notes?: string | null
           phone?: string | null
@@ -207,6 +274,7 @@ export type Database = {
           hire_date?: string | null
           id?: string
           is_active?: boolean | null
+          monthly_late_balance_minutes?: number | null
           national_id?: string | null
           notes?: string | null
           phone?: string | null
