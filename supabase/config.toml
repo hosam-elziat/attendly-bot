@@ -1,1 +1,7 @@
 project_id = "seqqfrtnrjngvqidtrcp"
+
+[functions.get-public-holidays]
+verify_jwt = false
+
+[functions.assign-telegram-bot]
+verify_jwt = false
