@@ -15,6 +15,34 @@ export const EmployeeSchema = z.object({
     .max(100, 'Department must be less than 100 characters')
     .optional()
     .nullable(),
+
+  // Personal details
+  phone: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(30, 'Phone must be less than 30 characters').nullable().optional()
+  ),
+  national_id: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(50, 'National ID must be less than 50 characters').nullable().optional()
+  ),
+  address: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(255, 'Address must be less than 255 characters').nullable().optional()
+  ),
+  hire_date: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').nullable().optional()
+  ),
+  currency: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().length(3, 'Currency must be a 3-letter code').nullable().optional()
+  ),
+  notes: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(2000, 'Notes must be less than 2000 characters').nullable().optional()
+  ),
+
+  // Employment & schedule
   salary_type: z.enum(['monthly', 'daily']).default('monthly'),
   base_salary: z.number()
     .min(0, 'Salary cannot be negative')
