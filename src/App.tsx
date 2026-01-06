@@ -11,6 +11,7 @@ import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
+import EmployeeDetails from "./pages/EmployeeDetails";
 import Attendance from "./pages/Attendance";
 import Leaves from "./pages/Leaves";
 import Salaries from "./pages/Salaries";
@@ -37,6 +38,9 @@ const App = () => (
                 } />
                 <Route path="/dashboard/employees" element={
                   <ProtectedRoute><Employees /></ProtectedRoute>
+                } />
+                <Route path="/dashboard/employees/:id" element={
+                  <ProtectedRoute><EmployeeDetails /></ProtectedRoute>
                 } />
                 <Route path="/dashboard/attendance" element={
                   <ProtectedRoute><Attendance /></ProtectedRoute>

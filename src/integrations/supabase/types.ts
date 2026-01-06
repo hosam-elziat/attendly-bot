@@ -144,15 +144,21 @@ export type Database = {
       }
       employees: {
         Row: {
+          address: string | null
           base_salary: number | null
           break_duration_minutes: number | null
           company_id: string
           created_at: string
+          currency: string | null
           department: string | null
           email: string
           full_name: string
+          hire_date: string | null
           id: string
           is_active: boolean | null
+          national_id: string | null
+          notes: string | null
+          phone: string | null
           salary_type: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id: string | null
           updated_at: string
@@ -162,15 +168,21 @@ export type Database = {
           work_start_time: string | null
         }
         Insert: {
+          address?: string | null
           base_salary?: number | null
           break_duration_minutes?: number | null
           company_id: string
           created_at?: string
+          currency?: string | null
           department?: string | null
           email: string
           full_name: string
+          hire_date?: string | null
           id?: string
           is_active?: boolean | null
+          national_id?: string | null
+          notes?: string | null
+          phone?: string | null
           salary_type?: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id?: string | null
           updated_at?: string
@@ -180,15 +192,21 @@ export type Database = {
           work_start_time?: string | null
         }
         Update: {
+          address?: string | null
           base_salary?: number | null
           break_duration_minutes?: number | null
           company_id?: string
           created_at?: string
+          currency?: string | null
           department?: string | null
           email?: string
           full_name?: string
+          hire_date?: string | null
           id?: string
           is_active?: boolean | null
+          national_id?: string | null
+          notes?: string | null
+          phone?: string | null
           salary_type?: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id?: string | null
           updated_at?: string

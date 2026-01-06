@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Table, 
   TableBody, 
@@ -31,7 +33,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,19 +50,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { CURRENCIES } from './EmployeeDetails';
 
 const WEEKDAYS = [
-  { id: 'sunday', label: 'Sun' },
-  { id: 'monday', label: 'Mon' },
-  { id: 'tuesday', label: 'Tue' },
-  { id: 'wednesday', label: 'Wed' },
-  { id: 'thursday', label: 'Thu' },
-  { id: 'friday', label: 'Fri' },
-  { id: 'saturday', label: 'Sat' },
+  { id: 'sunday', labelKey: 'common.sun' },
+  { id: 'monday', labelKey: 'common.mon' },
+  { id: 'tuesday', labelKey: 'common.tue' },
+  { id: 'wednesday', labelKey: 'common.wed' },
+  { id: 'thursday', labelKey: 'common.thu' },
+  { id: 'friday', labelKey: 'common.fri' },
+  { id: 'saturday', labelKey: 'common.sat' },
 ];
 
 const Employees = () => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { data: employees = [], isLoading } = useEmployees();
   const createEmployee = useCreateEmployee();
   const deleteEmployee = useDeleteEmployee();
@@ -99,6 +103,11 @@ const Employees = () => {
     setEditDialogOpen(true);
   };
 
+  const getCurrencySymbol = (code: string | null) => {
+    const currency = CURRENCIES.find(c => c.code === (code || 'SAR'));
+    return currency?.symbol || 'ر.س';
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -112,7 +121,7 @@ const Employees = () => {
           <div>
             <h1 className="text-2xl font-bold text-foreground">{t('employees.title')}</h1>
             <p className="text-muted-foreground mt-1">
-              Manage your team members, roles, and work schedules
+              {t('employees.manage')}
             </p>
           </div>
           
@@ -162,9 +171,9 @@ const Employees = () => {
                     <SelectValue placeholder={t('employees.status')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="all">{t('employees.allStatus')}</SelectItem>
+                    <SelectItem value="active">{t('common.active')}</SelectItem>
+                    <SelectItem value="inactive">{t('common.inactive')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -185,32 +194,32 @@ const Employees = () => {
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : filteredEmployees.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Users className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-1">No employees yet</h3>
+                  <h3 className="text-lg font-medium text-foreground mb-1">{t('employees.noEmployees')}</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Get started by adding your first team member
+                    {t('employees.getStarted')}
                   </p>
                   <Button onClick={() => setDialogOpen(true)} className="btn-primary-gradient">
                     <Plus className="w-4 h-4 me-2" />
-                    Add Employee
+                    {t('employees.add')}
                   </Button>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
+                      <TableHead>{t('employees.fullName')}</TableHead>
                       <TableHead>{t('employees.department')}</TableHead>
-                      <TableHead>Work Hours</TableHead>
-                      <TableHead>Salary</TableHead>
+                      <TableHead>{t('employees.workHours')}</TableHead>
+                      <TableHead>{t('employees.salary')}</TableHead>
                       <TableHead>{t('employees.status')}</TableHead>
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredEmployees.map((employee) => (
-                      <TableRow key={employee.id}>
+                      <TableRow key={employee.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/dashboard/employees/${employee.id}`)}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
@@ -236,7 +245,7 @@ const Employees = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          ${Number(employee.base_salary).toLocaleString()} / {employee.salary_type}
+                          {Number(employee.base_salary).toLocaleString()} {getCurrencySymbol(employee.currency)} / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
                         </TableCell>
                         <TableCell>
                           <Badge 
@@ -246,7 +255,7 @@ const Employees = () => {
                             {employee.is_active ? t('common.active') : t('common.inactive')}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
@@ -254,6 +263,10 @@ const Employees = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/dashboard/employees/${employee.id}`)}>
+                                <Eye className="w-4 h-4 me-2" />
+                                {t('employees.viewDetails')}
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEdit(employee)}>
                                 <Edit className="w-4 h-4 me-2" />
                                 {t('common.edit')}
@@ -285,9 +298,9 @@ const Employees = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+            <AlertDialogTitle>{t('employees.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this employee? This action cannot be undone.
+              {t('employees.deleteConfirm')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -475,7 +488,7 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
       </div>
 
       <div className="space-y-2">
-        <Label>Weekend Days</Label>
+        <Label>{t('employees.weekendDays')}</Label>
         <div className="flex flex-wrap gap-3">
           {WEEKDAYS.map((day) => (
             <div key={day.id} className="flex items-center space-x-2">
@@ -485,7 +498,7 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
                 onCheckedChange={() => handleWeekendToggle(day.id)}
               />
               <Label htmlFor={`add-${day.id}`} className="text-sm font-normal cursor-pointer">
-                {day.label}
+                {t(day.labelKey)}
               </Label>
             </div>
           ))}
@@ -658,7 +671,7 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
       </div>
 
       <div className="space-y-2">
-        <Label>Weekend Days</Label>
+        <Label>{t('employees.weekendDays')}</Label>
         <div className="flex flex-wrap gap-3">
           {WEEKDAYS.map((day) => (
             <div key={day.id} className="flex items-center space-x-2">
@@ -668,7 +681,7 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
                 onCheckedChange={() => handleWeekendToggle(day.id)}
               />
               <Label htmlFor={`edit-${day.id}`} className="text-sm font-normal cursor-pointer">
-                {day.label}
+                {t(day.labelKey)}
               </Label>
             </div>
           ))}
