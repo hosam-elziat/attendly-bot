@@ -20,6 +20,12 @@ export interface Employee {
   work_end_time: string | null;
   break_duration_minutes: number | null;
   weekend_days: string[] | null;
+  phone: string | null;
+  national_id: string | null;
+  address: string | null;
+  hire_date: string | null;
+  currency: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +40,12 @@ export interface CreateEmployeeData {
   work_end_time?: string;
   break_duration_minutes?: number;
   weekend_days?: string[];
+  phone?: string;
+  national_id?: string;
+  address?: string;
+  hire_date?: string;
+  currency?: string;
+  notes?: string;
 }
 
 export const useEmployees = () => {

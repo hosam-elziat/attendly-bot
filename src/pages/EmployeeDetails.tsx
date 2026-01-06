@@ -1,0 +1,491 @@
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useEmployees, Employee } from '@/hooks/useEmployees';
+import { useAttendance } from '@/hooks/useAttendance';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { 
+  ArrowRight, 
+  ArrowLeft, 
+  User, 
+  Mail, 
+  Phone, 
+  Building, 
+  Calendar,
+  Clock,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Banknote,
+  FileText,
+  MapPin,
+  CreditCard
+} from 'lucide-react';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, differenceInMinutes, parseISO, isWithinInterval } from 'date-fns';
+import { ar } from 'date-fns/locale';
+
+// Arab countries with timezones
+export const ARAB_COUNTRIES = [
+  { code: 'SA', name: 'السعودية', timezone: 'Asia/Riyadh', offset: '+03:00' },
+  { code: 'AE', name: 'الإمارات', timezone: 'Asia/Dubai', offset: '+04:00' },
+  { code: 'EG', name: 'مصر', timezone: 'Africa/Cairo', offset: '+02:00' },
+  { code: 'JO', name: 'الأردن', timezone: 'Asia/Amman', offset: '+03:00' },
+  { code: 'LB', name: 'لبنان', timezone: 'Asia/Beirut', offset: '+02:00' },
+  { code: 'SY', name: 'سوريا', timezone: 'Asia/Damascus', offset: '+03:00' },
+  { code: 'IQ', name: 'العراق', timezone: 'Asia/Baghdad', offset: '+03:00' },
+  { code: 'KW', name: 'الكويت', timezone: 'Asia/Kuwait', offset: '+03:00' },
+  { code: 'BH', name: 'البحرين', timezone: 'Asia/Bahrain', offset: '+03:00' },
+  { code: 'QA', name: 'قطر', timezone: 'Asia/Qatar', offset: '+03:00' },
+  { code: 'OM', name: 'عمان', timezone: 'Asia/Muscat', offset: '+04:00' },
+  { code: 'YE', name: 'اليمن', timezone: 'Asia/Aden', offset: '+03:00' },
+  { code: 'LY', name: 'ليبيا', timezone: 'Africa/Tripoli', offset: '+02:00' },
+  { code: 'TN', name: 'تونس', timezone: 'Africa/Tunis', offset: '+01:00' },
+  { code: 'DZ', name: 'الجزائر', timezone: 'Africa/Algiers', offset: '+01:00' },
+  { code: 'MA', name: 'المغرب', timezone: 'Africa/Casablanca', offset: '+01:00' },
+  { code: 'SD', name: 'السودان', timezone: 'Africa/Khartoum', offset: '+02:00' },
+  { code: 'SO', name: 'الصومال', timezone: 'Africa/Mogadishu', offset: '+03:00' },
+  { code: 'DJ', name: 'جيبوتي', timezone: 'Africa/Djibouti', offset: '+03:00' },
+  { code: 'MR', name: 'موريتانيا', timezone: 'Africa/Nouakchott', offset: '+00:00' },
+  { code: 'KM', name: 'جزر القمر', timezone: 'Indian/Comoro', offset: '+03:00' },
+  { code: 'PS', name: 'فلسطين', timezone: 'Asia/Gaza', offset: '+02:00' },
+];
+
+// Currencies
+export const CURRENCIES = [
+  { code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س' },
+  { code: 'AED', name: 'درهم إماراتي', symbol: 'د.إ' },
+  { code: 'EGP', name: 'جنيه مصري', symbol: 'ج.م' },
+  { code: 'JOD', name: 'دينار أردني', symbol: 'د.أ' },
+  { code: 'LBP', name: 'ليرة لبنانية', symbol: 'ل.ل' },
+  { code: 'SYP', name: 'ليرة سورية', symbol: 'ل.س' },
+  { code: 'IQD', name: 'دينار عراقي', symbol: 'د.ع' },
+  { code: 'KWD', name: 'دينار كويتي', symbol: 'د.ك' },
+  { code: 'BHD', name: 'دينار بحريني', symbol: 'د.ب' },
+  { code: 'QAR', name: 'ريال قطري', symbol: 'ر.ق' },
+  { code: 'OMR', name: 'ريال عماني', symbol: 'ر.ع' },
+  { code: 'YER', name: 'ريال يمني', symbol: 'ر.ي' },
+  { code: 'LYD', name: 'دينار ليبي', symbol: 'د.ل' },
+  { code: 'TND', name: 'دينار تونسي', symbol: 'د.ت' },
+  { code: 'DZD', name: 'دينار جزائري', symbol: 'د.ج' },
+  { code: 'MAD', name: 'درهم مغربي', symbol: 'د.م' },
+  { code: 'SDG', name: 'جنيه سوداني', symbol: 'ج.س' },
+  { code: 'USD', name: 'دولار أمريكي', symbol: '$' },
+  { code: 'EUR', name: 'يورو', symbol: '€' },
+];
+
+type FilterPeriod = 'week' | 'month' | 'year';
+
+const EmployeeDetails = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { t, direction } = useLanguage();
+  const { data: employees = [] } = useEmployees();
+  const { data: attendanceLogs = [] } = useAttendance();
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('month');
+
+  const employee = employees.find(e => e.id === id) as Employee & {
+    phone?: string;
+    national_id?: string;
+    address?: string;
+    hire_date?: string;
+    currency?: string;
+    notes?: string;
+  };
+
+  const currency = CURRENCIES.find(c => c.code === (employee?.currency || 'SAR')) || CURRENCIES[0];
+
+  // Calculate date range based on filter
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    switch (filterPeriod) {
+      case 'week':
+        return { start: startOfWeek(now, { weekStartsOn: 0 }), end: endOfWeek(now, { weekStartsOn: 0 }) };
+      case 'month':
+        return { start: startOfMonth(now), end: endOfMonth(now) };
+      case 'year':
+        return { start: startOfYear(now), end: endOfYear(now) };
+    }
+  }, [filterPeriod]);
+
+  // Filter attendance logs for this employee within date range
+  const employeeAttendance = useMemo(() => {
+    if (!employee) return [];
+    return attendanceLogs.filter(log => {
+      if (log.employee_id !== employee.id) return false;
+      const logDate = parseISO(log.date);
+      return isWithinInterval(logDate, { start: dateRange.start, end: dateRange.end });
+    });
+  }, [attendanceLogs, employee, dateRange]);
+
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const totalDays = employeeAttendance.length;
+    const presentDays = employeeAttendance.filter(log => log.status === 'checked_out' || log.status === 'checked_in').length;
+    const absentDays = Math.max(0, getExpectedWorkDays(dateRange.start, dateRange.end, employee?.weekend_days || []) - presentDays);
+    
+    // Calculate total hours
+    let totalMinutes = 0;
+    employeeAttendance.forEach(log => {
+      if (log.check_in_time && log.check_out_time) {
+        const checkIn = parseISO(log.check_in_time);
+        const checkOut = parseISO(log.check_out_time);
+        totalMinutes += differenceInMinutes(checkOut, checkIn);
+      }
+    });
+    const totalHours = Math.round(totalMinutes / 60 * 10) / 10;
+
+    // Calculate commitment rate
+    const expectedDays = getExpectedWorkDays(dateRange.start, dateRange.end, employee?.weekend_days || []);
+    const commitmentRate = expectedDays > 0 ? Math.round((presentDays / expectedDays) * 100) : 100;
+
+    // Calculate late arrivals
+    const lateArrivals = employeeAttendance.filter(log => {
+      if (!log.check_in_time || !employee?.work_start_time) return false;
+      const checkInTime = parseISO(log.check_in_time);
+      const [hours, minutes] = employee.work_start_time.split(':').map(Number);
+      const expectedStart = new Date(checkInTime);
+      expectedStart.setHours(hours, minutes, 0, 0);
+      return checkInTime > expectedStart;
+    }).length;
+
+    return {
+      totalDays,
+      presentDays,
+      absentDays,
+      totalHours,
+      commitmentRate,
+      lateArrivals,
+      expectedDays,
+    };
+  }, [employeeAttendance, dateRange, employee]);
+
+  if (!employee) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-12">
+          <AlertTriangle className="w-12 h-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium">{t('employeeDetails.notFound')}</h3>
+          <Button onClick={() => navigate('/dashboard/employees')} className="mt-4">
+            {t('employeeDetails.backToList')}
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const BackIcon = direction === 'rtl' ? ArrowRight : ArrowLeft;
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/employees')}>
+              <BackIcon className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-lg font-bold text-primary">
+                  {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                </span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">{employee.full_name}</h1>
+                <p className="text-muted-foreground">{employee.department || t('employees.department')}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Badge variant={employee.is_active ? 'default' : 'secondary'} className={employee.is_active ? 'bg-success' : ''}>
+              {employee.is_active ? t('common.active') : t('common.inactive')}
+            </Badge>
+            <Select value={filterPeriod} onValueChange={(v: FilterPeriod) => setFilterPeriod(v)}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">{t('employeeDetails.thisWeek')}</SelectItem>
+                <SelectItem value="month">{t('employeeDetails.thisMonth')}</SelectItem>
+                <SelectItem value="year">{t('employeeDetails.thisYear')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </motion.div>
+
+        {/* Stats Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+        >
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{t('employeeDetails.attendanceDays')}</p>
+                  <p className="text-2xl font-bold">{stats.presentDays} / {stats.expectedDays}</p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-success" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{t('employeeDetails.absentDays')}</p>
+                  <p className="text-2xl font-bold">{stats.absentDays}</p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <XCircle className="w-6 h-6 text-destructive" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{t('employeeDetails.totalHours')}</p>
+                  <p className="text-2xl font-bold">{stats.totalHours} {t('employeeDetails.hours')}</p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-primary" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{t('employeeDetails.commitmentRate')}</p>
+                  <p className="text-2xl font-bold">{stats.commitmentRate}%</p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-warning/10 flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-warning" />
+                </div>
+              </div>
+              <Progress value={stats.commitmentRate} className="mt-3" />
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <Tabs defaultValue="info" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="info">{t('employeeDetails.personalInfo')}</TabsTrigger>
+              <TabsTrigger value="attendance">{t('employeeDetails.attendanceLog')}</TabsTrigger>
+              <TabsTrigger value="salary">{t('employeeDetails.salaryInfo')}</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="info">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('employeeDetails.personalInfo')}</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <User className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employees.fullName')}</p>
+                        <p className="font-medium">{employee.full_name}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employees.email')}</p>
+                        <p className="font-medium">{employee.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Phone className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.phone')}</p>
+                        <p className="font-medium">{employee.phone || '—'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.nationalId')}</p>
+                        <p className="font-medium">{employee.national_id || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Building className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employees.department')}</p>
+                        <p className="font-medium">{employee.department || '—'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Calendar className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.hireDate')}</p>
+                        <p className="font-medium">
+                          {employee.hire_date ? format(parseISO(employee.hire_date), 'PPP', { locale: ar }) : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.address')}</p>
+                        <p className="font-medium">{employee.address || '—'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employees.workHours')}</p>
+                        <p className="font-medium">
+                          {employee.work_start_time?.slice(0, 5) || '09:00'} - {employee.work_end_time?.slice(0, 5) || '17:00'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  {employee.notes && (
+                    <div className="md:col-span-2 flex items-start gap-3">
+                      <FileText className="w-5 h-5 text-muted-foreground mt-1" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.notes')}</p>
+                        <p className="font-medium">{employee.notes}</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="attendance">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('employeeDetails.attendanceLog')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {employeeAttendance.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {t('employeeDetails.noAttendance')}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {employeeAttendance.map((log) => (
+                        <div key={log.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                          <div>
+                            <p className="font-medium">{format(parseISO(log.date), 'EEEE، d MMMM', { locale: ar })}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {log.check_in_time ? format(parseISO(log.check_in_time), 'HH:mm') : '—'} 
+                              {' → '} 
+                              {log.check_out_time ? format(parseISO(log.check_out_time), 'HH:mm') : '—'}
+                            </p>
+                          </div>
+                          <Badge variant={log.status === 'checked_out' ? 'default' : 'secondary'}>
+                            {log.status === 'checked_in' ? t('attendance.checkedIn') : 
+                             log.status === 'checked_out' ? t('attendance.checkedOut') : 
+                             log.status === 'on_break' ? t('attendance.onBreak') : log.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="salary">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('employeeDetails.salaryInfo')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Banknote className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">{t('employees.salaryAmount')}</p>
+                      <p className="font-medium text-xl">
+                        {Number(employee.base_salary).toLocaleString()} {currency.symbol}
+                        <span className="text-sm text-muted-foreground ms-2">
+                          / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <p className="text-sm text-muted-foreground">{t('employeeDetails.lateArrivals')}</p>
+                      <p className="text-2xl font-bold text-warning">{stats.lateArrivals}</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <p className="text-sm text-muted-foreground">{t('employeeDetails.absentDays')}</p>
+                      <p className="text-2xl font-bold text-destructive">{stats.absentDays}</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <p className="text-sm text-muted-foreground">{t('employeeDetails.commitmentRate')}</p>
+                      <p className="text-2xl font-bold text-success">{stats.commitmentRate}%</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </motion.div>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+// Helper function to calculate expected work days
+function getExpectedWorkDays(start: Date, end: Date, weekendDays: string[]): number {
+  let count = 0;
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const current = new Date(start);
+  
+  while (current <= end) {
+    const dayName = dayNames[current.getDay()];
+    if (!weekendDays.includes(dayName)) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return count;
+}
+
+export default EmployeeDetails;
