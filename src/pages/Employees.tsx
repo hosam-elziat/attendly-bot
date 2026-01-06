@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees, useCreateEmployee, useDeleteEmployee, useUpdateEmployee, CreateEmployeeData, Employee } from '@/hooks/useEmployees';
+import { useCompany } from '@/hooks/useCompany';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,7 +34,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { CURRENCIES } from './EmployeeDetails';
+import { CURRENCIES, ARAB_COUNTRIES } from './EmployeeDetails';
 
 const WEEKDAYS = [
   { id: 'sunday', labelKey: 'common.sun' },
@@ -62,10 +63,17 @@ const WEEKDAYS = [
   { id: 'saturday', labelKey: 'common.sat' },
 ];
 
+export const EMPLOYEE_ROLES = [
+  { id: 'admin', labelKey: 'employees.roleAdmin' },
+  { id: 'manager', labelKey: 'employees.roleManager' },
+  { id: 'employee', labelKey: 'employees.roleEmployee' },
+];
+
 const Employees = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { data: employees = [], isLoading } = useEmployees();
+  const { data: company } = useCompany();
   const createEmployee = useCreateEmployee();
   const deleteEmployee = useDeleteEmployee();
   const updateEmployee = useUpdateEmployee();
@@ -76,6 +84,8 @@ const Employees = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
+
+  const defaultCurrency = (company as any)?.default_currency || 'SAR';
 
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = 
@@ -104,7 +114,7 @@ const Employees = () => {
   };
 
   const getCurrencySymbol = (code: string | null) => {
-    const currency = CURRENCIES.find(c => c.code === (code || 'SAR'));
+    const currency = CURRENCIES.find(c => c.code === (code || defaultCurrency));
     return currency?.symbol || 'ر.س';
   };
 
@@ -132,11 +142,12 @@ const Employees = () => {
                 {t('employees.add')}
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t('employees.add')}</DialogTitle>
               </DialogHeader>
               <AddEmployeeForm 
+                defaultCurrency={defaultCurrency}
                 onClose={() => setDialogOpen(false)} 
                 onSubmit={async (data) => {
                   await createEmployee.mutateAsync(data);
@@ -304,7 +315,7 @@ const Employees = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -312,7 +323,7 @@ const Employees = () => {
               {deleteEmployee.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                'Delete'
+                t('common.delete')
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -321,13 +332,14 @@ const Employees = () => {
 
       {/* Edit Employee Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Employee</DialogTitle>
+            <DialogTitle>{t('employees.editEmployee')}</DialogTitle>
           </DialogHeader>
           {selectedEmployee && (
             <EditEmployeeForm 
               employee={selectedEmployee}
+              defaultCurrency={defaultCurrency}
               onClose={() => {
                 setEditDialogOpen(false);
                 setSelectedEmployee(null);
@@ -352,15 +364,22 @@ interface EmployeeFormData extends CreateEmployeeData {
   break_duration_minutes?: number;
   weekend_days?: string[];
   is_active?: boolean;
+  phone?: string;
+  national_id?: string;
+  address?: string;
+  hire_date?: string;
+  currency?: string;
+  notes?: string;
 }
 
 interface AddEmployeeFormProps {
+  defaultCurrency: string;
   onClose: () => void;
   onSubmit: (data: EmployeeFormData) => Promise<void>;
   isLoading: boolean;
 }
 
-const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps) => {
+const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddEmployeeFormProps) => {
   const { t } = useLanguage();
   const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: '',
@@ -372,6 +391,12 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
     work_end_time: '17:00',
     break_duration_minutes: 60,
     weekend_days: ['friday', 'saturday'],
+    phone: '',
+    national_id: '',
+    address: '',
+    hire_date: '',
+    currency: defaultCurrency,
+    notes: '',
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -390,75 +415,144 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="name">Full Name</Label>
-          <Input 
-            id="name" 
-            placeholder="John Doe" 
-            required 
-            value={formData.full_name}
-            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input 
-            id="email" 
-            type="email" 
-            placeholder="john@company.com" 
-            required 
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          />
-        </div>
-      </div>
-      
+      {/* Basic Info */}
       <div className="space-y-2">
-        <Label htmlFor="department">{t('employees.department')}</Label>
-        <Input 
-          id="department" 
-          placeholder="Engineering" 
-          value={formData.department}
-          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-        />
+        <Label className="text-base font-medium">{t('employees.basicInfo')}</Label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="name">{t('employees.fullName')}</Label>
+            <Input 
+              id="name" 
+              placeholder={t('employees.fullNamePlaceholder')}
+              required 
+              value={formData.full_name}
+              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">{t('employees.email')}</Label>
+            <Input 
+              id="email" 
+              type="email" 
+              placeholder="email@company.com" 
+              required 
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            />
+          </div>
+        </div>
       </div>
-      
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Salary Type</Label>
-          <Select 
-            value={formData.salary_type} 
-            onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="daily">Daily</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label htmlFor="phone">{t('employeeDetails.phone')}</Label>
+          <Input 
+            id="phone" 
+            placeholder="+966 5xx xxx xxxx"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="salary">Salary Amount</Label>
+          <Label htmlFor="national_id">{t('employeeDetails.nationalId')}</Label>
           <Input 
-            id="salary" 
-            type="number" 
-            placeholder="5000" 
-            value={formData.base_salary || ''}
-            onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+            id="national_id" 
+            placeholder="1234567890"
+            value={formData.national_id}
+            onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
           />
         </div>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="department">{t('employees.department')}</Label>
+          <Input 
+            id="department" 
+            placeholder={t('employees.departmentPlaceholder')}
+            value={formData.department}
+            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="hire_date">{t('employeeDetails.hireDate')}</Label>
+          <Input 
+            id="hire_date" 
+            type="date"
+            value={formData.hire_date}
+            onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="address">{t('employeeDetails.address')}</Label>
+        <Input 
+          id="address" 
+          placeholder={t('employees.addressPlaceholder')}
+          value={formData.address}
+          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+        />
+      </div>
+      
+      {/* Salary Info */}
       <div className="border-t pt-4">
-        <Label className="text-base font-medium">Work Schedule</Label>
-        <p className="text-sm text-muted-foreground mb-3">Set individual work hours for this employee</p>
+        <Label className="text-base font-medium">{t('employees.salaryInfo')}</Label>
+        <div className="grid gap-4 sm:grid-cols-3 mt-3">
+          <div className="space-y-2">
+            <Label>{t('employees.salaryType')}</Label>
+            <Select 
+              value={formData.salary_type} 
+              onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">{t('employees.monthly')}</SelectItem>
+                <SelectItem value="daily">{t('employees.daily')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="salary">{t('employees.salaryAmount')}</Label>
+            <Input 
+              id="salary" 
+              type="number" 
+              placeholder="5000" 
+              value={formData.base_salary || ''}
+              onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>{t('employees.currency')}</Label>
+            <Select 
+              value={formData.currency} 
+              onValueChange={(value) => setFormData({ ...formData, currency: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((curr) => (
+                  <SelectItem key={curr.code} value={curr.code}>
+                    {curr.symbol} - {curr.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Work Schedule */}
+      <div className="border-t pt-4">
+        <Label className="text-base font-medium">{t('employees.workSchedule')}</Label>
+        <p className="text-sm text-muted-foreground mb-3">{t('employees.workScheduleDesc')}</p>
         
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="work-start">Start Time</Label>
+            <Label htmlFor="work-start">{t('settings.workStart')}</Label>
             <Input 
               id="work-start" 
               type="time" 
@@ -467,7 +561,7 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="work-end">End Time</Label>
+            <Label htmlFor="work-end">{t('settings.workEnd')}</Label>
             <Input 
               id="work-end" 
               type="time" 
@@ -476,7 +570,7 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="break">Break (min)</Label>
+            <Label htmlFor="break">{t('settings.breakDuration')}</Label>
             <Input 
               id="break" 
               type="number" 
@@ -491,7 +585,7 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
         <Label>{t('employees.weekendDays')}</Label>
         <div className="flex flex-wrap gap-3">
           {WEEKDAYS.map((day) => (
-            <div key={day.id} className="flex items-center space-x-2">
+            <div key={day.id} className="flex items-center space-x-2 rtl:space-x-reverse">
               <Checkbox 
                 id={`add-${day.id}`}
                 checked={formData.weekend_days?.includes(day.id)}
@@ -503,6 +597,18 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Notes */}
+      <div className="border-t pt-4 space-y-2">
+        <Label htmlFor="notes">{t('employeeDetails.notes')}</Label>
+        <Textarea 
+          id="notes" 
+          placeholder={t('employees.notesPlaceholder')}
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          rows={3}
+        />
       </div>
 
       <div className="flex gap-3 pt-4">
@@ -520,12 +626,13 @@ const AddEmployeeForm = ({ onClose, onSubmit, isLoading }: AddEmployeeFormProps)
 
 interface EditEmployeeFormProps {
   employee: Employee;
+  defaultCurrency: string;
   onClose: () => void;
   onSubmit: (data: Partial<EmployeeFormData>) => Promise<void>;
   isLoading: boolean;
 }
 
-const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmployeeFormProps) => {
+const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoading }: EditEmployeeFormProps) => {
   const { t } = useLanguage();
   const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: employee.full_name,
@@ -538,6 +645,12 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
     break_duration_minutes: employee.break_duration_minutes || 60,
     weekend_days: employee.weekend_days || ['friday', 'saturday'],
     is_active: employee.is_active,
+    phone: employee.phone || '',
+    national_id: employee.national_id || '',
+    address: employee.address || '',
+    hire_date: employee.hire_date || '',
+    currency: employee.currency || defaultCurrency,
+    notes: employee.notes || '',
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -560,28 +673,51 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Basic Info */}
+      <div className="space-y-2">
+        <Label className="text-base font-medium">{t('employees.basicInfo')}</Label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="edit-name">{t('employees.fullName')}</Label>
+            <Input 
+              id="edit-name" 
+              required 
+              value={formData.full_name}
+              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-email">{t('employees.email')}</Label>
+            <Input 
+              id="edit-email" 
+              type="email" 
+              required 
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="edit-name">Full Name</Label>
+          <Label htmlFor="edit-phone">{t('employeeDetails.phone')}</Label>
           <Input 
-            id="edit-name" 
-            required 
-            value={formData.full_name}
-            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+            id="edit-phone" 
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="edit-email">Email</Label>
+          <Label htmlFor="edit-national_id">{t('employeeDetails.nationalId')}</Label>
           <Input 
-            id="edit-email" 
-            type="email" 
-            required 
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            id="edit-national_id" 
+            value={formData.national_id}
+            onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
           />
         </div>
       </div>
-      
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="edit-department">{t('employees.department')}</Label>
@@ -592,7 +728,7 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
           />
         </div>
         <div className="space-y-2">
-          <Label>Status</Label>
+          <Label>{t('employees.status')}</Label>
           <Select 
             value={formData.is_active ? 'active' : 'inactive'} 
             onValueChange={(value) => setFormData({ ...formData, is_active: value === 'active' })}
@@ -601,47 +737,90 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="active">{t('common.active')}</SelectItem>
+              <SelectItem value="inactive">{t('common.inactive')}</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-      </div>
-      
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Salary Type</Label>
-          <Select 
-            value={formData.salary_type} 
-            onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="daily">Daily</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="edit-salary">Salary Amount</Label>
-          <Input 
-            id="edit-salary" 
-            type="number" 
-            value={formData.base_salary || ''}
-            onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
-          />
         </div>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="edit-hire_date">{t('employeeDetails.hireDate')}</Label>
+          <Input 
+            id="edit-hire_date" 
+            type="date"
+            value={formData.hire_date}
+            onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-address">{t('employeeDetails.address')}</Label>
+          <Input 
+            id="edit-address" 
+            value={formData.address}
+            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          />
+        </div>
+      </div>
+      
+      {/* Salary Info */}
       <div className="border-t pt-4">
-        <Label className="text-base font-medium">Work Schedule</Label>
-        <p className="text-sm text-muted-foreground mb-3">Individual work hours for this employee</p>
+        <Label className="text-base font-medium">{t('employees.salaryInfo')}</Label>
+        <div className="grid gap-4 sm:grid-cols-3 mt-3">
+          <div className="space-y-2">
+            <Label>{t('employees.salaryType')}</Label>
+            <Select 
+              value={formData.salary_type} 
+              onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">{t('employees.monthly')}</SelectItem>
+                <SelectItem value="daily">{t('employees.daily')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-salary">{t('employees.salaryAmount')}</Label>
+            <Input 
+              id="edit-salary" 
+              type="number" 
+              value={formData.base_salary || ''}
+              onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>{t('employees.currency')}</Label>
+            <Select 
+              value={formData.currency} 
+              onValueChange={(value) => setFormData({ ...formData, currency: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((curr) => (
+                  <SelectItem key={curr.code} value={curr.code}>
+                    {curr.symbol} - {curr.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Work Schedule */}
+      <div className="border-t pt-4">
+        <Label className="text-base font-medium">{t('employees.workSchedule')}</Label>
+        <p className="text-sm text-muted-foreground mb-3">{t('employees.workScheduleDesc')}</p>
         
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="edit-work-start">Start Time</Label>
+            <Label htmlFor="edit-work-start">{t('settings.workStart')}</Label>
             <Input 
               id="edit-work-start" 
               type="time" 
@@ -650,7 +829,7 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-work-end">End Time</Label>
+            <Label htmlFor="edit-work-end">{t('settings.workEnd')}</Label>
             <Input 
               id="edit-work-end" 
               type="time" 
@@ -659,7 +838,7 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-break">Break (min)</Label>
+            <Label htmlFor="edit-break">{t('settings.breakDuration')}</Label>
             <Input 
               id="edit-break" 
               type="number" 
@@ -674,7 +853,7 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
         <Label>{t('employees.weekendDays')}</Label>
         <div className="flex flex-wrap gap-3">
           {WEEKDAYS.map((day) => (
-            <div key={day.id} className="flex items-center space-x-2">
+            <div key={day.id} className="flex items-center space-x-2 rtl:space-x-reverse">
               <Checkbox 
                 id={`edit-${day.id}`}
                 checked={formData.weekend_days?.includes(day.id)}
@@ -686,6 +865,17 @@ const EditEmployeeForm = ({ employee, onClose, onSubmit, isLoading }: EditEmploy
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Notes */}
+      <div className="border-t pt-4 space-y-2">
+        <Label htmlFor="edit-notes">{t('employeeDetails.notes')}</Label>
+        <Textarea 
+          id="edit-notes" 
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          rows={3}
+        />
       </div>
 
       <div className="flex gap-3 pt-4">
