@@ -18,11 +18,12 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { CompanySchema } from '@/lib/validations';
+import { CURRENCIES, ARAB_COUNTRIES } from './EmployeeDetails';
 
 const Settings = () => {
   const { t, language, setLanguage, direction } = useLanguage();
@@ -34,6 +35,7 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [timezone, setTimezone] = useState('UTC+0');
+  const [defaultCurrency, setDefaultCurrency] = useState('SAR');
   const [workStart, setWorkStart] = useState('09:00');
   const [workEnd, setWorkEnd] = useState('17:00');
   const [breakDuration, setBreakDuration] = useState(60);
@@ -55,6 +57,7 @@ const Settings = () => {
     if (company) {
       setCompanyName(company.name || '');
       setTimezone(company.timezone || 'UTC+0');
+      setDefaultCurrency((company as any).default_currency || 'SAR');
       setWorkStart(company.work_start_time?.slice(0, 5) || '09:00');
       setWorkEnd(company.work_end_time?.slice(0, 5) || '17:00');
       setBreakDuration(company.break_duration_minutes || 60);
@@ -100,6 +103,7 @@ const Settings = () => {
         .update({
           name: validationResult.data.name,
           timezone: validationResult.data.timezone,
+          default_currency: defaultCurrency,
         })
         .eq('id', company.id);
 
@@ -298,16 +302,30 @@ const Settings = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="UTC+0">UTC +0 (لندن)</SelectItem>
-                      <SelectItem value="UTC+2">UTC +2 (القاهرة)</SelectItem>
-                      <SelectItem value="UTC+3">UTC +3 (الرياض، الكويت)</SelectItem>
-                      <SelectItem value="UTC+4">UTC +4 (دبي)</SelectItem>
-                      <SelectItem value="UTC+5">UTC +5 (كراتشي)</SelectItem>
-                      <SelectItem value="UTC+5.5">UTC +5:30 (مومباي)</SelectItem>
-                      <SelectItem value="UTC+8">UTC +8 (سنغافورة)</SelectItem>
+                      {ARAB_COUNTRIES.map((country) => (
+                        <SelectItem key={country.code} value={country.offset}>
+                          {country.name} ({country.offset})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="default-currency">{t('settings.defaultCurrency')}</Label>
+                <Select value={defaultCurrency} onValueChange={setDefaultCurrency}>
+                  <SelectTrigger id="default-currency" className="w-full sm:w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((curr) => (
+                      <SelectItem key={curr.code} value={curr.code}>
+                        {curr.symbol} - {curr.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">{t('settings.defaultCurrencyDesc')}</p>
               </div>
               <Button onClick={handleSaveCompany} className="btn-primary-gradient" disabled={saving}>
                 {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}

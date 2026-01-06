@@ -115,6 +115,16 @@ const translations: Record<Language, Record<string, string>> = {
     'employees.deleteConfirm': 'Are you sure you want to delete this employee? This action cannot be undone.',
     'employees.editEmployee': 'Edit Employee',
     'employees.allStatus': 'All Status',
+    'employees.basicInfo': 'Basic Information',
+    'employees.salaryInfo': 'Salary Information',
+    'employees.fullNamePlaceholder': 'John Doe',
+    'employees.departmentPlaceholder': 'Engineering',
+    'employees.addressPlaceholder': 'City, Street',
+    'employees.notesPlaceholder': 'Additional notes about the employee...',
+    'employees.currency': 'Currency',
+    'employees.roleAdmin': 'Admin',
+    'employees.roleManager': 'Manager',
+    'employees.roleEmployee': 'Employee',
     
     // Attendance
     'attendance.title': 'Attendance',
@@ -243,6 +253,8 @@ const translations: Record<Language, Record<string, string>> = {
     'settings.weekendNote': 'Note: Weekend settings are saved per employee when you edit them individually.',
     'settings.languageDesc': 'Choose your preferred language. Arabic will enable RTL layout.',
     'settings.themeDesc': 'Customize the appearance of the application',
+    'settings.defaultCurrency': 'Default Currency',
+    'settings.defaultCurrencyDesc': 'This currency will be used by default for new employees',
     
     // Common
     'common.save': 'Save',
@@ -298,7 +310,6 @@ const translations: Record<Language, Record<string, string>> = {
     'employees.nationalId': 'National ID',
     'employees.address': 'Address',
     'employees.hireDate': 'Hire Date',
-    'employees.currency': 'Currency',
     'employees.notes': 'Notes',
     'employees.additionalInfo': 'Additional Info',
     'employees.viewDetails': 'View Details',
@@ -407,6 +418,16 @@ const translations: Record<Language, Record<string, string>> = {
     'employees.deleteConfirm': 'هل أنت متأكد من حذف هذا الموظف؟ لا يمكن التراجع عن هذا الإجراء.',
     'employees.editEmployee': 'تعديل الموظف',
     'employees.allStatus': 'جميع الحالات',
+    'employees.basicInfo': 'المعلومات الأساسية',
+    'employees.salaryInfo': 'معلومات الراتب',
+    'employees.fullNamePlaceholder': 'أحمد محمد',
+    'employees.departmentPlaceholder': 'الهندسة',
+    'employees.addressPlaceholder': 'المدينة، الشارع',
+    'employees.notesPlaceholder': 'ملاحظات إضافية عن الموظف...',
+    'employees.currency': 'العملة',
+    'employees.roleAdmin': 'مدير',
+    'employees.roleManager': 'مشرف',
+    'employees.roleEmployee': 'موظف',
     
     // Attendance
     'attendance.title': 'الحضور',
@@ -535,6 +556,8 @@ const translations: Record<Language, Record<string, string>> = {
     'settings.weekendNote': 'ملاحظة: يتم حفظ إعدادات العطلة لكل موظف عند تعديله.',
     'settings.languageDesc': 'اختر لغتك المفضلة. العربية ستفعل التخطيط من اليمين لليسار.',
     'settings.themeDesc': 'تخصيص مظهر التطبيق',
+    'settings.defaultCurrency': 'العملة الافتراضية',
+    'settings.defaultCurrencyDesc': 'هذه العملة ستستخدم افتراضياً للموظفين الجدد',
     
     // Common
     'common.save': 'حفظ',
@@ -590,7 +613,6 @@ const translations: Record<Language, Record<string, string>> = {
     'employees.nationalId': 'رقم الهوية',
     'employees.address': 'العنوان',
     'employees.hireDate': 'تاريخ التعيين',
-    'employees.currency': 'العملة',
     'employees.notes': 'ملاحظات',
     'employees.additionalInfo': 'معلومات إضافية',
     'employees.viewDetails': 'عرض التفاصيل',

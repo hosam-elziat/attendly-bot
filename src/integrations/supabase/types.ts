@@ -107,6 +107,7 @@ export type Database = {
         Row: {
           break_duration_minutes: number | null
           created_at: string
+          default_currency: string | null
           id: string
           name: string
           owner_id: string
@@ -119,6 +120,7 @@ export type Database = {
         Insert: {
           break_duration_minutes?: number | null
           created_at?: string
+          default_currency?: string | null
           id?: string
           name: string
           owner_id: string
@@ -131,6 +133,7 @@ export type Database = {
         Update: {
           break_duration_minutes?: number | null
           created_at?: string
+          default_currency?: string | null
           id?: string
           name?: string
           owner_id?: string
