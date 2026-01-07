@@ -19,6 +19,7 @@ import Leaves from "./pages/Leaves";
 import Salaries from "./pages/Salaries";
 import TelegramBot from "./pages/TelegramBot";
 import Settings from "./pages/Settings";
+import Subscription from "./pages/Subscription";
 import NotFound from "./pages/NotFound";
 
 // Super Admin Pages
@@ -69,6 +70,9 @@ const App = () => (
                   } />
                   <Route path="/dashboard/settings" element={
                     <ProtectedRoute><Settings /></ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/subscription" element={
+                    <ProtectedRoute><Subscription /></ProtectedRoute>
                   } />
                   
                   {/* Super Admin Routes */}

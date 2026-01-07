@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: Clock, label: t('nav.attendance'), path: '/dashboard/attendance' },
     { icon: Calendar, label: t('nav.leaves'), path: '/dashboard/leaves' },
     { icon: DollarSign, label: t('nav.salaries'), path: '/dashboard/salaries' },
+    { icon: CreditCard, label: language === 'ar' ? 'الاشتراك' : 'Subscription', path: '/dashboard/subscription' },
     { icon: Send, label: t('nav.telegram'), path: '/dashboard/telegram' },
     { icon: Settings, label: t('nav.settings'), path: '/dashboard/settings' },
   ];
