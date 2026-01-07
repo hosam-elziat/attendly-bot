@@ -220,9 +220,6 @@ const TelegramBot = () => {
                     <p className="text-xs text-muted-foreground mt-3">
                       سيتم تحديث اسم البوت إلى "{company?.name} - حضور وانصراف"
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      ملاحظة: صورة البوت يمكن تغييرها فقط من خلال @BotFather في تيليجرام
-                    </p>
                   </div>
 
                   {/* Bot Link Section */}
