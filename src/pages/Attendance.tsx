@@ -25,11 +25,11 @@ import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus } from 'lucide-react'
 import { format } from 'date-fns';
 import EditAttendanceDialog from '@/components/attendance/EditAttendanceDialog';
 import AddAttendanceDialog from '@/components/attendance/AddAttendanceDialog';
-import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
+
 import { useQueryClient } from '@tanstack/react-query';
 
 const Attendance = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const { data: attendance = [], isLoading } = useAttendance();
   const { data: stats } = useAttendanceStats();
@@ -113,14 +113,6 @@ const Attendance = () => {
           ))}
         </div>
 
-        {/* Subscription Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.4 }}
-        >
-          <SubscriptionCard />
-        </motion.div>
 
         {/* Date Filter & Add Button */}
         <motion.div
@@ -157,7 +149,7 @@ const Attendance = () => {
                 </div>
                 <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
                   <Plus className="w-4 h-4" />
-                  {t('attendance.addRecord') || 'إضافة حضور'}
+                  {language === 'ar' ? 'إضافة حضور' : 'Add Attendance'}
                 </Button>
               </div>
             </CardContent>
