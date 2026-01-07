@@ -9,7 +9,7 @@ import {
   Clock, 
   CreditCard,
   TrendingUp,
-  AlertTriangle,
+  Bot,
   CheckCircle,
   XCircle
 } from 'lucide-react';
@@ -20,6 +20,8 @@ interface DashboardStats {
   activeSubscriptions: number;
   trialSubscriptions: number;
   expiredSubscriptions: number;
+  availableBots: number;
+  assignedBots: number;
   todayAttendance: {
     present: number;
     absent: number;
@@ -40,6 +42,8 @@ const SuperAdminDashboard = () => {
     activeSubscriptions: 0,
     trialSubscriptions: 0,
     expiredSubscriptions: 0,
+    availableBots: 0,
+    assignedBots: 0,
     todayAttendance: { present: 0, absent: 0, late: 0 },
     recentCompanies: [],
   });
@@ -69,6 +73,13 @@ const SuperAdminDashboard = () => {
 
         if (subsError) throw subsError;
 
+        // Fetch telegram bots
+        const { data: bots, error: botsError } = await supabase
+          .from('telegram_bots')
+          .select('id, is_available');
+
+        if (botsError) throw botsError;
+
         // Fetch today's attendance
         const today = new Date().toISOString().split('T')[0];
         const { data: attendance, error: attError } = await supabase
@@ -88,6 +99,9 @@ const SuperAdminDashboard = () => {
         const trialCount = (subscriptions || []).filter(s => s.status === 'trial').length;
         const expiredCount = (subscriptions || []).filter(s => s.status === 'cancelled' || s.status === 'inactive').length;
 
+        const availableBots = (bots || []).filter(b => b.is_available === true).length;
+        const assignedBots = (bots || []).filter(b => b.is_available === false).length;
+
         const presentCount = (attendance || []).filter(a => a.status === 'checked_in' || a.status === 'checked_out').length;
         const absentCount = (employees || []).length - presentCount;
 
@@ -97,6 +111,8 @@ const SuperAdminDashboard = () => {
           activeSubscriptions: activeCount,
           trialSubscriptions: trialCount,
           expiredSubscriptions: expiredCount,
+          availableBots,
+          assignedBots,
           todayAttendance: {
             present: presentCount,
             absent: Math.max(0, absentCount),
@@ -187,6 +203,34 @@ const SuperAdminDashboard = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Telegram Bots Stats */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Bot className="w-5 h-5 text-primary" />
+                بوتات التيليجرام
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 rounded-xl bg-green-500/10">
+                  <p className="text-3xl font-bold text-green-400">{loading ? '...' : stats.availableBots}</p>
+                  <p className="text-slate-400 text-sm mt-1">متاح للاستخدام</p>
+                </div>
+                <div className="text-center p-4 rounded-xl bg-blue-500/10">
+                  <p className="text-3xl font-bold text-blue-400">{loading ? '...' : stats.assignedBots}</p>
+                  <p className="text-slate-400 text-sm mt-1">مستخدم</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Today's Attendance */}
