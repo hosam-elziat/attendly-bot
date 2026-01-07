@@ -415,6 +415,42 @@ export type Database = {
           },
         ]
       }
+      saas_team: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean | null
+          permissions: Json | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          permissions?: Json | null
+          role: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          permissions?: Json | null
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       salary_adjustments: {
         Row: {
           bonus: number | null
@@ -658,6 +694,7 @@ export type Database = {
         Args: { p_company_id: string; p_user_id: string }
         Returns: boolean
       }
+      get_saas_team_permissions: { Args: { p_user_id: string }; Returns: Json }
       get_user_company_id: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -667,6 +704,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_owner: { Args: { p_user_id: string }; Returns: boolean }
+      is_saas_admin: { Args: { p_user_id: string }; Returns: boolean }
+      is_saas_team_member: { Args: { p_user_id: string }; Returns: boolean }
     }
     Enums: {
       attendance_status: "checked_in" | "on_break" | "checked_out"
@@ -674,7 +713,13 @@ export type Database = {
       leave_type: "vacation" | "sick" | "personal"
       salary_type: "monthly" | "daily"
       subscription_status: "active" | "inactive" | "trial" | "cancelled"
-      user_role: "owner" | "admin" | "manager" | "employee"
+      user_role:
+        | "owner"
+        | "admin"
+        | "manager"
+        | "employee"
+        | "super_admin"
+        | "support"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -807,7 +852,14 @@ export const Constants = {
       leave_type: ["vacation", "sick", "personal"],
       salary_type: ["monthly", "daily"],
       subscription_status: ["active", "inactive", "trial", "cancelled"],
-      user_role: ["owner", "admin", "manager", "employee"],
+      user_role: [
+        "owner",
+        "admin",
+        "manager",
+        "employee",
+        "super_admin",
+        "support",
+      ],
     },
   },
 } as const
