@@ -219,6 +219,54 @@ export type Database = {
         }
         Relationships: []
       }
+      discount_codes: {
+        Row: {
+          applicable_plans: string[] | null
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean | null
+          max_uses: number | null
+          updated_at: string
+          used_count: number | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          applicable_plans?: string[] | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value: number
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          updated_at?: string
+          used_count?: number | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          applicable_plans?: string[] | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          updated_at?: string
+          used_count?: number | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       employees: {
         Row: {
           address: string | null
@@ -562,13 +610,74 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          currency: string
+          description: string | null
+          features: Json | null
+          id: string
+          is_active: boolean | null
+          is_unlimited: boolean | null
+          max_employees: number | null
+          min_employees: number
+          name: string
+          name_ar: string | null
+          price_monthly: number
+          price_quarterly: number | null
+          price_yearly: number | null
+          trial_days: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_unlimited?: boolean | null
+          max_employees?: number | null
+          min_employees?: number
+          name: string
+          name_ar?: string | null
+          price_monthly?: number
+          price_quarterly?: number | null
+          price_yearly?: number | null
+          trial_days?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_unlimited?: boolean | null
+          max_employees?: number | null
+          min_employees?: number
+          name?: string
+          name_ar?: string | null
+          price_monthly?: number
+          price_quarterly?: number | null
+          price_yearly?: number | null
+          trial_days?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
+          billing_cycle: string | null
           company_id: string
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
+          discount_code_id: string | null
           id: string
+          max_employees: number | null
+          plan_id: string | null
           plan_name: string | null
           status: Database["public"]["Enums"]["subscription_status"] | null
           stripe_customer_id: string | null
@@ -576,11 +685,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          billing_cycle?: string | null
           company_id: string
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          discount_code_id?: string | null
           id?: string
+          max_employees?: number | null
+          plan_id?: string | null
           plan_name?: string | null
           status?: Database["public"]["Enums"]["subscription_status"] | null
           stripe_customer_id?: string | null
@@ -588,11 +701,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          billing_cycle?: string | null
           company_id?: string
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          discount_code_id?: string | null
           id?: string
+          max_employees?: number | null
+          plan_id?: string | null
           plan_name?: string | null
           status?: Database["public"]["Enums"]["subscription_status"] | null
           stripe_customer_id?: string | null
@@ -605,6 +722,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: true
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_discount_code_id_fkey"
+            columns: ["discount_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
             referencedColumns: ["id"]
           },
         ]
