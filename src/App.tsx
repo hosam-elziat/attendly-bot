@@ -28,6 +28,8 @@ import SuperAdminCompanies from "./pages/super-admin/SuperAdminCompanies";
 import SuperAdminEmployees from "./pages/super-admin/SuperAdminEmployees";
 import SuperAdminSubscriptions from "./pages/super-admin/SuperAdminSubscriptions";
 import SuperAdminTeam from "./pages/super-admin/SuperAdminTeam";
+import SuperAdminPlans from "./pages/super-admin/SuperAdminPlans";
+import SuperAdminTelegramBots from "./pages/super-admin/SuperAdminTelegramBots";
 
 const queryClient = new QueryClient();
 
@@ -85,6 +87,12 @@ const App = () => (
                   } />
                   <Route path="/super-admin/team" element={
                     <SuperAdminProtectedRoute><SuperAdminTeam /></SuperAdminProtectedRoute>
+                  } />
+                  <Route path="/super-admin/plans" element={
+                    <SuperAdminProtectedRoute><SuperAdminPlans /></SuperAdminProtectedRoute>
+                  } />
+                  <Route path="/super-admin/telegram-bots" element={
+                    <SuperAdminProtectedRoute><SuperAdminTelegramBots /></SuperAdminProtectedRoute>
                   } />
                   
                   <Route path="*" element={<NotFound />} />
