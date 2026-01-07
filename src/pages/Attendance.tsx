@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAttendance, useAttendanceStats } from '@/hooks/useAttendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Table, 
   TableBody, 
@@ -19,13 +21,28 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, Loader2 } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Loader2, Edit } from 'lucide-react';
 import { format } from 'date-fns';
+import EditAttendanceDialog from '@/components/attendance/EditAttendanceDialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 const Attendance = () => {
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
   const { data: attendance = [], isLoading } = useAttendance();
   const { data: stats } = useAttendanceStats();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
+
+  const handleEditClick = (record: any) => {
+    setSelectedRecord(record);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['attendance'] });
+    queryClient.invalidateQueries({ queryKey: ['attendanceStats'] });
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -163,6 +180,7 @@ const Attendance = () => {
                       <TableHead>{t('attendance.checkIn')}</TableHead>
                       <TableHead>{t('attendance.checkOut')}</TableHead>
                       <TableHead>{t('employees.status')}</TableHead>
+                      <TableHead>{t('common.actions') || 'الإجراءات'}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -187,6 +205,16 @@ const Attendance = () => {
                           {formatTime(record.check_out_time)}
                         </TableCell>
                         <TableCell>{getStatusBadge(record.status)}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditClick(record)}
+                            className="text-primary hover:text-primary/80"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -196,6 +224,13 @@ const Attendance = () => {
           </Card>
         </motion.div>
       </div>
+
+      <EditAttendanceDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        record={selectedRecord}
+        onSuccess={handleEditSuccess}
+      />
     </DashboardLayout>
   );
 };
