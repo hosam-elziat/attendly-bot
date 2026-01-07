@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,7 +6,7 @@ import { useCompany } from '@/hooks/useCompany';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2 } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw, ImagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -14,6 +14,9 @@ const TelegramBot = () => {
   const { t } = useLanguage();
   const { data: company, refetch } = useCompany();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isConnected = company?.telegram_bot_connected || false;
   const botUsername = company?.telegram_bot_username;
@@ -67,6 +70,90 @@ const TelegramBot = () => {
     }
   };
 
+  const handleUpdateName = async () => {
+    setIsUpdatingName(true);
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        toast.error('يجب تسجيل الدخول أولاً');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('action', 'update_name');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-telegram-bot`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success('تم تحديث اسم البوت بنجاح!');
+
+    } catch (error: any) {
+      console.error('Update name error:', error);
+      toast.error('فشل في التحديث: ' + error.message);
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
+
+  const handleUpdatePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUpdatingPhoto(true);
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        toast.error('يجب تسجيل الدخول أولاً');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('action', 'update_photo');
+      formData.append('photo', file);
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-telegram-bot`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success('تم تحديث صورة البوت بنجاح!');
+
+    } catch (error: any) {
+      console.error('Update photo error:', error);
+      toast.error('فشل في التحديث: ' + error.message);
+    } finally {
+      setIsUpdatingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const copyBotLink = () => {
     if (botLink) {
@@ -153,6 +240,58 @@ const TelegramBot = () => {
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {t('telegram.activeDesc')}
+                    </p>
+                  </div>
+
+                  {/* Bot Settings Section */}
+                  <div className="p-4 rounded-lg bg-muted border">
+                    <h4 className="font-medium text-foreground mb-4">إعدادات البوت</h4>
+                    <div className="flex flex-wrap gap-3">
+                      <Button 
+                        variant="outline" 
+                        onClick={handleUpdateName}
+                        disabled={isUpdatingName}
+                      >
+                        {isUpdatingName ? (
+                          <>
+                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            جاري التحديث...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4 me-2" />
+                            تحديث اسم البوت
+                          </>
+                        )}
+                      </Button>
+                      
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUpdatePhoto}
+                      />
+                      <Button 
+                        variant="outline" 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUpdatingPhoto}
+                      >
+                        {isUpdatingPhoto ? (
+                          <>
+                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            جاري الرفع...
+                          </>
+                        ) : (
+                          <>
+                            <ImagePlus className="w-4 h-4 me-2" />
+                            تحديث صورة البوت
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      سيتم تحديث اسم البوت إلى "{company?.name} - حضور وانصراف"
                     </p>
                   </div>
 
