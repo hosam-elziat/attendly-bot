@@ -67,26 +67,6 @@ const TelegramBot = () => {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!company?.id) return;
-    
-    try {
-      const { error } = await supabase
-        .from('companies')
-        .update({ 
-          telegram_bot_connected: false,
-          telegram_bot_username: null 
-        })
-        .eq('id', company.id);
-
-      if (error) throw error;
-      
-      await refetch();
-      toast.success('تم فصل بوت تيليجرام');
-    } catch (error: any) {
-      toast.error('فشل في الفصل: ' + error.message);
-    }
-  };
 
   const copyBotLink = () => {
     if (botLink) {
@@ -202,9 +182,6 @@ const TelegramBot = () => {
                     </div>
                   )}
 
-                  <Button variant="destructive" onClick={handleDisconnect}>
-                    {t('telegram.disconnect')}
-                  </Button>
                 </>
               ) : (
                 <>
