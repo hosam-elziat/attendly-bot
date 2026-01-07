@@ -510,9 +510,9 @@ const SuperAdminCompanies = () => {
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
                                 <Label>تغيير الحالة</Label>
-                                <Select
+                              <Select
                                   value={selectedCompany.subscription.status}
-                                  onValueChange={(value) => updateSubscription({ status: value })}
+                                  onValueChange={(value) => updateSubscription({ status: value as "active" | "inactive" | "trial" | "cancelled" })}
                                   disabled={updating}
                                 >
                                   <SelectTrigger className="bg-slate-800 border-slate-700">
