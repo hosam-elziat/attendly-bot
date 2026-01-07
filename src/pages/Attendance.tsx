@@ -21,9 +21,11 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, Loader2, Edit } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import EditAttendanceDialog from '@/components/attendance/EditAttendanceDialog';
+import AddAttendanceDialog from '@/components/attendance/AddAttendanceDialog';
+import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
 import { useQueryClient } from '@tanstack/react-query';
 
 const Attendance = () => {
@@ -32,6 +34,7 @@ const Attendance = () => {
   const { data: attendance = [], isLoading } = useAttendance();
   const { data: stats } = useAttendanceStats();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
 
   const handleEditClick = (record: any) => {
@@ -39,9 +42,9 @@ const Attendance = () => {
     setEditDialogOpen(true);
   };
 
-  const handleEditSuccess = () => {
+  const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['attendance'] });
-    queryClient.invalidateQueries({ queryKey: ['attendanceStats'] });
+    queryClient.invalidateQueries({ queryKey: ['attendance-stats'] });
   };
 
   const getStatusBadge = (status: string) => {
@@ -110,37 +113,52 @@ const Attendance = () => {
           ))}
         </div>
 
-        {/* Date Filter */}
+        {/* Subscription Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.4 }}
         >
+          <SubscriptionCard />
+        </motion.div>
+
+        {/* Date Filter & Add Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+        >
           <Card>
             <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Select defaultValue="today">
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder={t('attendance.selectDate')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="today">{t('attendance.today')}</SelectItem>
-                    <SelectItem value="yesterday">{t('attendance.yesterday')}</SelectItem>
-                    <SelectItem value="week">{t('attendance.thisWeek')}</SelectItem>
-                    <SelectItem value="month">{t('attendance.thisMonth')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select defaultValue="all">
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder={t('attendance.filterStatus')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t('attendance.allStatus')}</SelectItem>
-                    <SelectItem value="checked_in">{t('attendance.present')}</SelectItem>
-                    <SelectItem value="on_break">{t('attendance.onBreak')}</SelectItem>
-                    <SelectItem value="checked_out">{t('attendance.left')}</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-col sm:flex-row gap-4 justify-between">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Select defaultValue="today">
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder={t('attendance.selectDate')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="today">{t('attendance.today')}</SelectItem>
+                      <SelectItem value="yesterday">{t('attendance.yesterday')}</SelectItem>
+                      <SelectItem value="week">{t('attendance.thisWeek')}</SelectItem>
+                      <SelectItem value="month">{t('attendance.thisMonth')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select defaultValue="all">
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder={t('attendance.filterStatus')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('attendance.allStatus')}</SelectItem>
+                      <SelectItem value="checked_in">{t('attendance.present')}</SelectItem>
+                      <SelectItem value="on_break">{t('attendance.onBreak')}</SelectItem>
+                      <SelectItem value="checked_out">{t('attendance.left')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  {t('attendance.addRecord') || 'إضافة حضور'}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -229,7 +247,13 @@ const Attendance = () => {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         record={selectedRecord}
-        onSuccess={handleEditSuccess}
+        onSuccess={handleSuccess}
+      />
+
+      <AddAttendanceDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        onSuccess={handleSuccess}
       />
     </DashboardLayout>
   );
