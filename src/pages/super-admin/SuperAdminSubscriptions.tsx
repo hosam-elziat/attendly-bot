@@ -252,7 +252,7 @@ const SuperAdminSubscriptions = () => {
                         <TableCell>
                           <Select
                             value={sub.status}
-                            onValueChange={(value) => updateSubscriptionStatus(sub.id, value)}
+                            onValueChange={(value: 'active' | 'trial' | 'inactive' | 'cancelled') => updateSubscriptionStatus(sub.id, value)}
                           >
                             <SelectTrigger className="w-32 bg-slate-800 border-slate-700 text-white h-8">
                               <SelectValue />
