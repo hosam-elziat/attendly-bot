@@ -1,0 +1,158 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Loader2, Clock } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { format } from 'date-fns';
+
+interface AttendanceRecord {
+  id: string;
+  employee_id: string;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  status: string;
+  employees?: {
+    full_name: string;
+  };
+}
+
+interface EditAttendanceDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  record: AttendanceRecord | null;
+  onSuccess: () => void;
+}
+
+const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAttendanceDialogProps) => {
+  const { language } = useLanguage();
+  const [submitting, setSubmitting] = useState(false);
+  const [checkInTime, setCheckInTime] = useState('');
+  const [checkOutTime, setCheckOutTime] = useState('');
+  const [status, setStatus] = useState('');
+
+  const handleOpen = (isOpen: boolean) => {
+    if (isOpen && record) {
+      setCheckInTime(record.check_in_time ? format(new Date(record.check_in_time), "HH:mm") : '');
+      setCheckOutTime(record.check_out_time ? format(new Date(record.check_out_time), "HH:mm") : '');
+      setStatus(record.status || 'checked_in');
+    }
+    onOpenChange(isOpen);
+  };
+
+  const handleSave = async () => {
+    if (!record) return;
+
+    setSubmitting(true);
+
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      const updates: any = {
+        status: status as "checked_in" | "on_break" | "checked_out",
+      };
+
+      if (checkInTime) {
+        updates.check_in_time = `${today}T${checkInTime}:00`;
+      }
+
+      if (checkOutTime) {
+        updates.check_out_time = `${today}T${checkOutTime}:00`;
+      }
+
+      const { error } = await supabase
+        .from('attendance_logs')
+        .update(updates)
+        .eq('id', record.id);
+
+      if (error) throw error;
+
+      toast.success(language === 'ar' ? 'تم تحديث الحضور بنجاح' : 'Attendance updated successfully');
+      onOpenChange(false);
+      onSuccess();
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+      toast.error(language === 'ar' ? 'فشل في تحديث الحضور' : 'Failed to update attendance');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-primary" />
+            {language === 'ar' ? 'تعديل الحضور' : 'Edit Attendance'}
+          </DialogTitle>
+        </DialogHeader>
+        
+        {record && (
+          <div className="space-y-4 mt-4">
+            <div className="p-3 rounded-lg bg-accent/50">
+              <p className="font-medium text-foreground">{record.employees?.full_name}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'وقت الحضور' : 'Check-in Time'}</Label>
+                <Input
+                  type="time"
+                  value={checkInTime}
+                  onChange={(e) => setCheckInTime(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'وقت الانصراف' : 'Check-out Time'}</Label>
+                <Input
+                  type="time"
+                  value={checkOutTime}
+                  onChange={(e) => setCheckOutTime(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'الحالة' : 'Status'}</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checked_in">{language === 'ar' ? 'حاضر' : 'Checked In'}</SelectItem>
+                  <SelectItem value="on_break">{language === 'ar' ? 'استراحة' : 'On Break'}</SelectItem>
+                  <SelectItem value="checked_out">{language === 'ar' ? 'انصرف' : 'Checked Out'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button 
+                onClick={handleSave} 
+                disabled={submitting}
+                className="flex-1"
+              >
+                {submitting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                {language === 'ar' ? 'حفظ التغييرات' : 'Save Changes'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                className="flex-1"
+              >
+                {language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default EditAttendanceDialog;

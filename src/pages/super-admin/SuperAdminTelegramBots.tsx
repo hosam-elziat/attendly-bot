@@ -115,6 +115,22 @@ const SuperAdminTelegramBots = () => {
       return;
     }
 
+    const cleanUsername = newBot.bot_username.replace('@', '');
+
+    // Check for duplicate username or token
+    const existingBot = bots.find(
+      bot => bot.bot_username === cleanUsername || bot.bot_token === newBot.bot_token
+    );
+
+    if (existingBot) {
+      if (existingBot.bot_token === newBot.bot_token) {
+        toast.error('هذا الـ Token مستخدم بالفعل في بوت آخر');
+      } else {
+        toast.error('هذا الـ Username مستخدم بالفعل في بوت آخر');
+      }
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -122,12 +138,19 @@ const SuperAdminTelegramBots = () => {
         .from('telegram_bots')
         .insert({
           bot_token: newBot.bot_token,
-          bot_username: newBot.bot_username.replace('@', ''),
+          bot_username: cleanUsername,
           bot_name: newBot.bot_name || null,
           is_available: true,
         });
 
-      if (error) throw error;
+      if (error) {
+        // Handle unique constraint violation
+        if (error.code === '23505') {
+          toast.error('هذا البوت موجود بالفعل (Token أو Username مكرر)');
+          return;
+        }
+        throw error;
+      }
 
       toast.success('تم إضافة البوت بنجاح');
       setAddDialogOpen(false);
@@ -144,6 +167,23 @@ const SuperAdminTelegramBots = () => {
   const handleUpdateBot = async () => {
     if (!isSuperAdmin || !editingBot) return;
 
+    const cleanUsername = editingBot.bot_username.replace('@', '');
+
+    // Check for duplicate username or token (excluding current bot)
+    const existingBot = bots.find(
+      bot => bot.id !== editingBot.id && 
+        (bot.bot_username === cleanUsername || bot.bot_token === editingBot.bot_token)
+    );
+
+    if (existingBot) {
+      if (existingBot.bot_token === editingBot.bot_token) {
+        toast.error('هذا الـ Token مستخدم بالفعل في بوت آخر');
+      } else {
+        toast.error('هذا الـ Username مستخدم بالفعل في بوت آخر');
+      }
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -151,12 +191,18 @@ const SuperAdminTelegramBots = () => {
         .from('telegram_bots')
         .update({
           bot_token: editingBot.bot_token,
-          bot_username: editingBot.bot_username.replace('@', ''),
+          bot_username: cleanUsername,
           bot_name: editingBot.bot_name,
         })
         .eq('id', editingBot.id);
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('هذا البوت موجود بالفعل (Token أو Username مكرر)');
+          return;
+        }
+        throw error;
+      }
 
       toast.success('تم تحديث البوت بنجاح');
       setEditDialogOpen(false);

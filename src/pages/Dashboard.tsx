@@ -25,6 +25,7 @@ import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
 
 const Dashboard = () => {
   const { t, language } = useLanguage();
@@ -301,49 +302,61 @@ const Dashboard = () => {
           </>
         )}
 
-        {/* Quick Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('dashboard.quickActions')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <QuickActionCard 
-                title={t('dashboard.manageEmployees')}
-                count={stats?.totalEmployees ?? 0}
-                description={t('dashboard.manageEmployeesDesc')}
-                actionLabel={t('dashboard.view')}
-                link="/dashboard/employees"
-              />
-              <QuickActionCard 
-                title={t('dashboard.pendingLeaves')}
-                count={stats?.pendingLeaves ?? 0}
-                description={t('dashboard.pendingLeavesDesc')}
-                actionLabel={t('dashboard.review')}
-                link="/dashboard/leaves"
-              />
-              <QuickActionCard 
-                title={t('dashboard.viewAttendance')}
-                count={stats?.present ?? 0}
-                description={t('dashboard.viewAttendanceDesc')}
-                actionLabel={t('dashboard.view')}
-                link="/dashboard/attendance"
-              />
-              <QuickActionCard 
-                title={t('dashboard.telegramBot')}
-                count={0}
-                description={t('dashboard.telegramBotDesc')}
-                actionLabel={t('dashboard.setup')}
-                link="/dashboard/telegram"
-                isSuccess
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
+        {/* Two Column Layout: Quick Actions & Subscription */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Quick Actions */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('dashboard.quickActions')}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <QuickActionCard 
+                  title={t('dashboard.manageEmployees')}
+                  count={stats?.totalEmployees ?? 0}
+                  description={t('dashboard.manageEmployeesDesc')}
+                  actionLabel={t('dashboard.view')}
+                  link="/dashboard/employees"
+                />
+                <QuickActionCard 
+                  title={t('dashboard.pendingLeaves')}
+                  count={stats?.pendingLeaves ?? 0}
+                  description={t('dashboard.pendingLeavesDesc')}
+                  actionLabel={t('dashboard.review')}
+                  link="/dashboard/leaves"
+                />
+                <QuickActionCard 
+                  title={t('dashboard.viewAttendance')}
+                  count={stats?.present ?? 0}
+                  description={t('dashboard.viewAttendanceDesc')}
+                  actionLabel={t('dashboard.view')}
+                  link="/dashboard/attendance"
+                />
+                <QuickActionCard 
+                  title={t('dashboard.telegramBot')}
+                  count={0}
+                  description={t('dashboard.telegramBotDesc')}
+                  actionLabel={t('dashboard.setup')}
+                  link="/dashboard/telegram"
+                  isSuccess
+                />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Subscription Info */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.6 }}
+          >
+            <SubscriptionCard />
+          </motion.div>
+        </div>
 
         {/* Getting Started */}
         {(stats?.totalEmployees ?? 0) === 0 && (
