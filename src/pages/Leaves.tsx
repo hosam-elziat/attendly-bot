@@ -83,7 +83,7 @@ const Leaves = () => {
         </motion.div>
 
         {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 grid-cols-3">
           {[
             { label: t('leaves.pending'), value: pendingCount, color: 'text-warning' },
             { label: t('leaves.approved'), value: approvedCount, color: 'text-success' },
@@ -96,10 +96,10 @@ const Leaves = () => {
               transition={{ duration: 0.4, delay: index * 0.1 }}
             >
               <Card className="card-hover">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                    <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                <CardContent className="p-3 sm:pt-6 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                    <p className="text-xs sm:text-sm text-muted-foreground">{stat.label}</p>
+                    <p className={`text-xl sm:text-3xl font-bold ${stat.color}`}>{stat.value}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -126,15 +126,76 @@ const Leaves = () => {
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : leaveRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Calendar className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-1">{t('leaves.noRequests')}</h3>
-                  <p className="text-sm text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <Calendar className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-base sm:text-lg font-medium text-foreground mb-1">{t('leaves.noRequests')}</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     {t('leaves.noRequestsDesc')}
                   </p>
                 </div>
               ) : (
-                <Table>
+                <>
+                {/* Mobile Cards View */}
+                <div className="block sm:hidden p-3 space-y-3">
+                  {leaveRequests.map((leave) => (
+                    <Card key={leave.id}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                              <span className="text-xs font-medium text-accent-foreground">
+                                {leave.employees?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'U'}
+                              </span>
+                            </div>
+                            <span className="font-medium text-foreground text-sm">
+                              {leave.employees?.full_name || t('common.unknown')}
+                            </span>
+                          </div>
+                          {getStatusBadge(leave.status)}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+                          {getTypeBadge(leave.leave_type)}
+                          <span className="text-muted-foreground">
+                            {format(new Date(leave.start_date), 'MMM d')} - {format(new Date(leave.end_date), 'MMM d')}
+                          </span>
+                          <span className="text-muted-foreground">
+                            ({leave.days} {leave.days > 1 ? t('leaves.days') : t('leaves.day')})
+                          </span>
+                        </div>
+                        {leave.reason && (
+                          <p className="text-xs text-muted-foreground truncate mb-2">{leave.reason}</p>
+                        )}
+                        {leave.status === 'pending' && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-success hover:text-success hover:bg-success/10"
+                              onClick={() => handleApprove(leave.id)}
+                              disabled={updateLeave.isPending}
+                            >
+                              <Check className="w-4 h-4 me-1" />
+                              {t('leaves.approved')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleReject(leave.id)}
+                              disabled={updateLeave.isPending}
+                            >
+                              <X className="w-4 h-4 me-1" />
+                              {t('leaves.rejected')}
+                            </Button>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                
+                {/* Desktop Table View */}
+                <Table className="hidden sm:table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('leaves.employee')}</TableHead>
@@ -203,6 +264,7 @@ const Leaves = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
             </CardContent>
           </Card>

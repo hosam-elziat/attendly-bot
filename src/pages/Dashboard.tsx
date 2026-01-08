@@ -120,62 +120,62 @@ const Dashboard = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.4 }}
               >
-                <h2 className="text-lg font-semibold text-foreground mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">
                   {language === 'ar' ? 'إحصائيات الشهر' : 'Monthly Statistics'}
                 </h2>
                 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-3">
                   {/* Team Commitment Rate */}
                   <Card className="card-hover">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Percent className="w-4 h-4" />
-                        {language === 'ar' ? 'نسبة التزام الفريق' : 'Team Commitment'}
+                    <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                        <Percent className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{language === 'ar' ? 'نسبة الالتزام' : 'Commitment'}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-3 sm:p-6 pt-0">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-3xl font-bold text-foreground">
+                        <span className="text-xl sm:text-3xl font-bold text-foreground">
                           {advancedStats.teamCommitmentRate}%
                         </span>
-                        <TrendingUp className="w-5 h-5 text-success" />
+                        <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
                       </div>
-                      <Progress value={advancedStats.teamCommitmentRate} className="h-2" />
+                      <Progress value={advancedStats.teamCommitmentRate} className="h-1.5 sm:h-2" />
                     </CardContent>
                   </Card>
 
                   {/* Absence Rate */}
                   <Card className="card-hover">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <TrendingDown className="w-4 h-4" />
-                        {language === 'ar' ? 'نسبة الغيابات' : 'Absence Rate'}
+                    <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                        <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{language === 'ar' ? 'نسبة الغياب' : 'Absence'}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-3 sm:p-6 pt-0">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-3xl font-bold text-foreground">
+                        <span className="text-xl sm:text-3xl font-bold text-foreground">
                           {advancedStats.absenceRate}%
                         </span>
-                        <TrendingDown className={`w-5 h-5 ${advancedStats.absenceRate > 10 ? 'text-destructive' : 'text-success'}`} />
+                        <TrendingDown className={`w-4 h-4 sm:w-5 sm:h-5 ${advancedStats.absenceRate > 10 ? 'text-destructive' : 'text-success'}`} />
                       </div>
-                      <Progress value={advancedStats.absenceRate} className="h-2 [&>div]:bg-destructive" />
+                      <Progress value={advancedStats.absenceRate} className="h-1.5 sm:h-2 [&>div]:bg-destructive" />
                     </CardContent>
                   </Card>
 
                   {/* Monthly Late Count */}
                   <Card className="card-hover">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        {language === 'ar' ? 'عدد التأخيرات' : 'Late Arrivals'}
+                    <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                        <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{language === 'ar' ? 'التأخيرات' : 'Late'}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold text-foreground">
+                    <CardContent className="p-3 sm:p-6 pt-0">
+                      <div className="text-xl sm:text-3xl font-bold text-foreground">
                         {advancedStats.monthlyLateCount}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                         {language === 'ar' ? 'هذا الشهر' : 'This month'}
                       </p>
                     </CardContent>
@@ -183,53 +183,53 @@ const Dashboard = () => {
 
                   {/* Total Break Time */}
                   <Card className="card-hover">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Coffee className="w-4 h-4" />
-                        {language === 'ar' ? 'إجمالي الاستراحات' : 'Total Breaks'}
+                    <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                        <Coffee className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{language === 'ar' ? 'الاستراحات' : 'Breaks'}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold text-foreground">
+                    <CardContent className="p-3 sm:p-6 pt-0">
+                      <div className="text-xl sm:text-3xl font-bold text-foreground">
                         {formatMinutes(advancedStats.totalBreakMinutes)}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {language === 'ar' ? 'لجميع الموظفين' : 'All employees'}
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                        {language === 'ar' ? 'الإجمالي' : 'Total'}
                       </p>
                     </CardContent>
                   </Card>
 
                   {/* Total Overtime */}
                   <Card className="card-hover">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Timer className="w-4 h-4" />
-                        {language === 'ar' ? 'إجمالي الوقت الإضافي' : 'Total Overtime'}
+                    <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                        <Timer className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{language === 'ar' ? 'الوقت الإضافي' : 'Overtime'}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold text-foreground">
+                    <CardContent className="p-3 sm:p-6 pt-0">
+                      <div className="text-xl sm:text-3xl font-bold text-foreground">
                         {formatMinutes(advancedStats.totalOvertimeMinutes)}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {language === 'ar' ? `× ${advancedStats.overtimeMultiplier} معدل الحساب` : `× ${advancedStats.overtimeMultiplier} multiplier`}
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                        {language === 'ar' ? `× ${advancedStats.overtimeMultiplier}` : `× ${advancedStats.overtimeMultiplier}`}
                       </p>
                     </CardContent>
                   </Card>
 
                   {/* Average Overtime */}
                   <Card className="card-hover">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Timer className="w-4 h-4" />
-                        {language === 'ar' ? 'متوسط الوقت الإضافي' : 'Avg Overtime/Employee'}
+                    <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                        <Timer className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{language === 'ar' ? 'المتوسط' : 'Avg'}</span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-bold text-foreground">
+                    <CardContent className="p-3 sm:p-6 pt-0">
+                      <div className="text-xl sm:text-3xl font-bold text-foreground">
                         {formatMinutes(advancedStats.avgOvertimePerEmployee)}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                         {language === 'ar' ? 'لكل موظف' : 'Per employee'}
                       </p>
                     </CardContent>
@@ -237,21 +237,21 @@ const Dashboard = () => {
                 </div>
 
                 {/* Top Performers */}
-                <div className="grid gap-4 sm:grid-cols-2 mt-4">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 mt-3 sm:mt-4">
                   {advancedStats.mostCommittedEmployee && (
                     <Card className="border-success/30 bg-success/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <Trophy className="w-4 h-4 text-success" />
-                          {language === 'ar' ? 'أكثر موظف ملتزم' : 'Most Committed'}
+                      <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                          <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-success" />
+                          {language === 'ar' ? 'الأكثر التزاماً' : 'Most Committed'}
                         </CardTitle>
                       </CardHeader>
-                      <CardContent>
-                        <div className="text-xl font-bold text-foreground">
+                      <CardContent className="p-3 sm:p-6 pt-0">
+                        <div className="text-base sm:text-xl font-bold text-foreground truncate">
                           {advancedStats.mostCommittedEmployee.name}
                         </div>
-                        <p className="text-sm text-success mt-1">
-                          {advancedStats.mostCommittedEmployee.rate.toFixed(0)}% {language === 'ar' ? 'نسبة الالتزام' : 'commitment'}
+                        <p className="text-xs sm:text-sm text-success mt-1">
+                          {advancedStats.mostCommittedEmployee.rate.toFixed(0)}%
                         </p>
                       </CardContent>
                     </Card>
@@ -259,18 +259,18 @@ const Dashboard = () => {
 
                   {advancedStats.mostAbsentEmployee && advancedStats.mostAbsentEmployee.count > 0 && (
                     <Card className="border-destructive/30 bg-destructive/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-destructive" />
-                          {language === 'ar' ? 'أكثر موظف غياباً' : 'Most Absent'}
+                      <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1 sm:gap-2">
+                          <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 text-destructive" />
+                          {language === 'ar' ? 'الأكثر غياباً' : 'Most Absent'}
                         </CardTitle>
                       </CardHeader>
-                      <CardContent>
-                        <div className="text-xl font-bold text-foreground">
+                      <CardContent className="p-3 sm:p-6 pt-0">
+                        <div className="text-base sm:text-xl font-bold text-foreground truncate">
                           {advancedStats.mostAbsentEmployee.name}
                         </div>
-                        <p className="text-sm text-destructive mt-1">
-                          {advancedStats.mostAbsentEmployee.count} {language === 'ar' ? 'يوم غياب' : 'days absent'}
+                        <p className="text-xs sm:text-sm text-destructive mt-1">
+                          {advancedStats.mostAbsentEmployee.count} {language === 'ar' ? 'يوم' : 'days'}
                         </p>
                       </CardContent>
                     </Card>

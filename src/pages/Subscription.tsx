@@ -217,16 +217,16 @@ const Subscription = () => {
                 {language === 'ar' ? 'اشتراكك الحالي' : 'Your Current Subscription'}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
                 {/* Plan Name */}
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     {language === 'ar' ? 'الباقة' : 'Plan'}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold text-foreground">
-                      {subscription?.plan_name || (language === 'ar' ? 'لا يوجد اشتراك' : 'No Subscription')}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <p className="text-base sm:text-xl font-bold text-foreground truncate">
+                      {subscription?.plan_name || (language === 'ar' ? 'لا يوجد' : 'None')}
                     </p>
                     {subscription && getStatusBadge(subscription.status)}
                   </div>
@@ -234,10 +234,10 @@ const Subscription = () => {
 
                 {/* Billing Cycle */}
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'دورة الفوترة' : 'Billing Cycle'}
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    {language === 'ar' ? 'الدورة' : 'Cycle'}
                   </p>
-                  <p className="text-xl font-bold text-foreground">
+                  <p className="text-base sm:text-xl font-bold text-foreground">
                     {subscription?.billing_cycle === 'monthly' 
                       ? (language === 'ar' ? 'شهري' : 'Monthly')
                       : subscription?.billing_cycle === 'quarterly'
@@ -248,20 +248,20 @@ const Subscription = () => {
 
                 {/* Days Remaining */}
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'الأيام المتبقية' : 'Days Remaining'}
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    {language === 'ar' ? 'المتبقي' : 'Remaining'}
                   </p>
-                  <p className={`text-xl font-bold ${daysRemaining <= 7 ? 'text-destructive' : 'text-foreground'}`}>
+                  <p className={`text-base sm:text-xl font-bold ${daysRemaining <= 7 ? 'text-destructive' : 'text-foreground'}`}>
                     {daysRemaining} {language === 'ar' ? 'يوم' : 'days'}
                   </p>
                 </div>
 
                 {/* Expiry Date */}
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'تاريخ الانتهاء' : 'Expiry Date'}
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    {language === 'ar' ? 'الانتهاء' : 'Expiry'}
                   </p>
-                  <p className="text-xl font-bold text-foreground">
+                  <p className="text-base sm:text-xl font-bold text-foreground">
                     {subscription?.current_period_end
                       ? format(new Date(subscription.current_period_end), 'PP', { locale: language === 'ar' ? ar : undefined })
                       : '—'}
@@ -339,8 +339,8 @@ const Subscription = () => {
                 </Tabs>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {plans.map((plan, index) => {
                   const isCurrentPlan = subscription?.plan_id === plan.id;
                   const features = Array.isArray(plan.features) ? plan.features : [];

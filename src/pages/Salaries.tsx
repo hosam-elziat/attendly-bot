@@ -166,21 +166,21 @@ const Salaries = () => {
         </motion.div>
 
         {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 grid-cols-3">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
           >
             <Card className="card-hover">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-primary" />
+              <CardContent className="p-3 sm:pt-6 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 sm:w-6 sm:h-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">{t('salaries.totalPayroll')}</p>
-                    <p className="text-2xl font-bold text-foreground">{totalPayroll.toLocaleString()} {employees[0]?.currency || 'SAR'}</p>
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t('salaries.totalPayroll')}</p>
+                    <p className="text-sm sm:text-2xl font-bold text-foreground">{totalPayroll.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
@@ -193,14 +193,14 @@ const Salaries = () => {
             transition={{ duration: 0.4, delay: 0.2 }}
           >
             <Card className="card-hover">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6 text-success" />
+              <CardContent className="p-3 sm:pt-6 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-success/10 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 text-success" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">{t('salaries.totalBonuses')}</p>
-                    <p className="text-2xl font-bold text-success">+{totalBonuses.toLocaleString()}</p>
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t('salaries.totalBonuses')}</p>
+                    <p className="text-sm sm:text-2xl font-bold text-success">+{totalBonuses.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
@@ -213,14 +213,14 @@ const Salaries = () => {
             transition={{ duration: 0.4, delay: 0.3 }}
           >
             <Card className="card-hover">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-destructive/10 flex items-center justify-center">
-                    <TrendingDown className="w-6 h-6 text-destructive" />
+              <CardContent className="p-3 sm:pt-6 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg bg-destructive/10 flex items-center justify-center">
+                    <TrendingDown className="w-4 h-4 sm:w-6 sm:h-6 text-destructive" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">{t('salaries.totalDeductions')}</p>
-                    <p className="text-2xl font-bold text-destructive">-{totalDeductions.toLocaleString()}</p>
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t('salaries.totalDeductions')}</p>
+                    <p className="text-sm sm:text-2xl font-bold text-destructive">-{totalDeductions.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
@@ -273,17 +273,76 @@ const Salaries = () => {
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : employees.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <DollarSign className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-1">
+                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <DollarSign className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-base sm:text-lg font-medium text-foreground mb-1">
                     {language === 'ar' ? 'لا توجد بيانات رواتب' : 'No salary data'}
                   </h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     {language === 'ar' ? 'قم بإضافة موظفين لعرض بيانات الرواتب' : 'Add employees to view salary data'}
                   </p>
                 </div>
               ) : (
-                <Table>
+                <>
+                {/* Mobile Cards View */}
+                <div className="block sm:hidden p-3 space-y-3">
+                  {employees.map((employee) => {
+                    const netSalary = (employee.base_salary || 0) + employee.total_bonus - employee.total_deduction;
+                    return (
+                      <Card key={employee.id}>
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                                <span className="text-xs font-medium text-accent-foreground">
+                                  {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                </span>
+                              </div>
+                              <span className="font-medium text-foreground text-sm">{employee.full_name}</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditClick(employee)}
+                              className="text-primary hover:text-primary/80 h-8 w-8 p-0"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <p className="text-muted-foreground">{t('salaries.workDays')}</p>
+                              <p className="font-medium">{employee.work_days}/22</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">{t('salaries.baseSalary')}</p>
+                              <p className="font-medium">{(employee.base_salary || 0).toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">{t('salaries.bonus')}</p>
+                              <p className={employee.total_bonus > 0 ? 'text-success font-medium' : 'text-muted-foreground'}>
+                                {employee.total_bonus > 0 ? `+${employee.total_bonus}` : '0'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">{t('salaries.deductions')}</p>
+                              <p className={employee.total_deduction > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                                {employee.total_deduction > 0 ? `-${employee.total_deduction}` : '0'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-3 pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">{t('salaries.netSalary')}</span>
+                            <span className="font-bold text-foreground">{netSalary.toLocaleString()} {employee.currency || 'SAR'}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+                
+                {/* Desktop Table View */}
+                <Table className="hidden sm:table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('salaries.employee')}</TableHead>
@@ -362,6 +421,7 @@ const Salaries = () => {
                     })}
                   </TableBody>
                 </Table>
+                </>
               )}
             </CardContent>
           </Card>

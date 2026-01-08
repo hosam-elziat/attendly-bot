@@ -351,8 +351,8 @@ const Settings = () => {
                 {t('settings.updateCompany')}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+            <CardContent className="space-y-4 p-4 sm:p-6">
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="company-name">{t('settings.companyName')}</Label>
                   <Input 
@@ -420,8 +420,8 @@ const Settings = () => {
                 {t('settings.workingHoursDesc')}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-3">
+            <CardContent className="space-y-4 p-4 sm:p-6">
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="work-start">{t('settings.workStart')}</Label>
                   <Input 
