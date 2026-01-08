@@ -59,6 +59,38 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-background" dir={direction}>
+      {/* Mobile Bottom Navigation */}
+      <nav className={cn(
+        "fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border lg:hidden",
+        "flex items-center justify-around py-2 px-1"
+      )}>
+        {navItems.slice(0, 5).map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={cn(
+                "flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition-colors min-w-[56px]",
+                isActive
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              )}
+            >
+              <item.icon className="w-5 h-5" />
+              <span className="text-[10px] font-medium truncate">{item.label.split(' ')[0]}</span>
+            </Link>
+          );
+        })}
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="flex flex-col items-center gap-1 px-2 py-1 rounded-lg text-muted-foreground min-w-[56px]"
+        >
+          <Menu className="w-5 h-5" />
+          <span className="text-[10px] font-medium">{language === 'ar' ? 'المزيد' : 'More'}</span>
+        </button>
+      </nav>
+
       {/* Sidebar */}
       <aside
         className={cn(
@@ -176,7 +208,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </header>
 
         {/* Page content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6 pb-20 lg:pb-6">
           {children}
         </div>
       </main>

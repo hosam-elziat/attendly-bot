@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 interface AttendanceRecord {
   id: string;
   employee_id: string;
+  date: string;
   check_in_time: string | null;
   check_out_time: string | null;
   status: string;
@@ -50,18 +51,19 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
     setSubmitting(true);
 
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      // Use the record's actual date, not today
+      const recordDate = record.date;
       
       const updates: any = {
         status: status as "checked_in" | "on_break" | "checked_out",
       };
 
       if (checkInTime) {
-        updates.check_in_time = `${today}T${checkInTime}:00`;
+        updates.check_in_time = `${recordDate}T${checkInTime}:00`;
       }
 
       if (checkOutTime) {
-        updates.check_out_time = `${today}T${checkOutTime}:00`;
+        updates.check_out_time = `${recordDate}T${checkOutTime}:00`;
       }
 
       const { error } = await supabase
