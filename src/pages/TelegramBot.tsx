@@ -300,7 +300,7 @@ const TelegramBot = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                 <FeatureItem 
                   title={t('telegram.checkInOut')}
                   description={t('telegram.checkInOutDesc')}
@@ -372,13 +372,13 @@ const TelegramBot = () => {
 };
 
 const FeatureItem = ({ title, description }: { title: string; description: string }) => (
-  <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
-    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-      <CheckCircle className="w-4 h-4 text-primary" />
+  <div className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg bg-muted/50">
+    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+      <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
     </div>
     <div>
-      <p className="font-medium text-foreground">{title}</p>
-      <p className="text-sm text-muted-foreground">{description}</p>
+      <p className="font-medium text-foreground text-sm sm:text-base">{title}</p>
+      <p className="text-xs sm:text-sm text-muted-foreground">{description}</p>
     </div>
   </div>
 );

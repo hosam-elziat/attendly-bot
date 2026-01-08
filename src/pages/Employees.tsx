@@ -205,10 +205,10 @@ const Employees = () => {
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : filteredEmployees.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Users className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-1">{t('employees.noEmployees')}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
+              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <Users className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-base sm:text-lg font-medium text-foreground mb-1">{t('employees.noEmployees')}</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-4">
                     {t('employees.getStarted')}
                   </p>
                   <Button onClick={() => setDialogOpen(true)} className="btn-primary-gradient">
@@ -217,7 +217,75 @@ const Employees = () => {
                   </Button>
                 </div>
               ) : (
-                <Table>
+                <>
+                {/* Mobile Cards View */}
+                <div className="block sm:hidden p-3 space-y-3">
+                  {filteredEmployees.map((employee) => (
+                    <Card key={employee.id} className="cursor-pointer" onClick={() => navigate(`/dashboard/employees/${employee.id}`)}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-medium text-accent-foreground">
+                                {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-foreground text-sm truncate">{employee.full_name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{employee.department || '—'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant={employee.is_active ? 'default' : 'secondary'}
+                              className={`text-[10px] ${employee.is_active ? 'bg-success hover:bg-success/90' : ''}`}
+                            >
+                              {employee.is_active ? t('common.active') : t('common.inactive')}
+                            </Badge>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/employees/${employee.id}`); }}>
+                                  <Eye className="w-4 h-4 me-2" />
+                                  {t('employees.viewDetails')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEdit(employee); }}>
+                                  <Edit className="w-4 h-4 me-2" />
+                                  {t('common.edit')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedEmployee(employee);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4 me-2" />
+                                  {t('common.delete')}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{employee.work_start_time?.slice(0, 5) || '09:00'} - {employee.work_end_time?.slice(0, 5) || '17:00'}</span>
+                          </div>
+                          <span>{Number(employee.base_salary).toLocaleString()} {getCurrencySymbol(employee.currency)}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                
+                {/* Desktop Table View */}
+                <Table className="hidden sm:table">
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('employees.fullName')}</TableHead>
@@ -299,6 +367,7 @@ const Employees = () => {
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
             </CardContent>
           </Card>
