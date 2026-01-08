@@ -209,7 +209,7 @@ const SubscriptionCard = () => {
             </div>
             {plans.length > 3 && (
               <Button variant="link" className="w-full mt-2 text-primary" asChild>
-                <Link to="/dashboard/settings">
+                <Link to="/dashboard/subscription">
                   {language === 'ar' ? 'عرض جميع الباقات' : 'View all plans'}
                 </Link>
               </Button>

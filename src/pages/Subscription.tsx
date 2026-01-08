@@ -85,13 +85,48 @@ const Subscription = () => {
     fetchData();
   }, [profile?.company_id]);
 
-  const handleUpgrade = async (planId: string, planName: string) => {
+  const handleUpgrade = async (planId: string, planName: string, plan: PlanInfo) => {
     setUpgrading(planId);
     try {
-      // In a real app, this would integrate with a payment provider
-      toast.info(language === 'ar' 
-        ? `سيتم التواصل معك لترقية الباقة إلى ${planName}`
-        : `We will contact you to upgrade to ${planName}`);
+      if (!profile?.company_id) return;
+      
+      // Calculate 3 months from now
+      const now = new Date();
+      const trialEnd = new Date(now.setMonth(now.getMonth() + 3));
+      
+      // Update or create subscription with 3 months free trial
+      const { error } = await supabase
+        .from('subscriptions')
+        .upsert({
+          company_id: profile.company_id,
+          plan_id: planId,
+          plan_name: planName,
+          status: 'trial',
+          billing_cycle: billingCycle,
+          max_employees: plan.is_unlimited ? null : plan.max_employees || plan.min_employees,
+          current_period_start: new Date().toISOString(),
+          current_period_end: trialEnd.toISOString(),
+        }, {
+          onConflict: 'company_id'
+        });
+      
+      if (error) throw error;
+      
+      // Refresh data
+      const { data: newSub } = await supabase
+        .from('subscriptions')
+        .select('status, plan_name, max_employees, current_period_end, current_period_start, billing_cycle, plan_id')
+        .eq('company_id', profile.company_id)
+        .single();
+      
+      if (newSub) setSubscription(newSub);
+      
+      toast.success(language === 'ar' 
+        ? `تم تفعيل باقة ${planName} لمدة 3 أشهر مجاناً!`
+        : `${planName} plan activated for 3 months free!`);
+    } catch (error) {
+      console.error('Error upgrading plan:', error);
+      toast.error(language === 'ar' ? 'فشل في تغيير الباقة' : 'Failed to change plan');
     } finally {
       setUpgrading(null);
     }
@@ -369,13 +404,13 @@ const Subscription = () => {
                           <Button 
                             className="w-full"
                             variant={isCurrentPlan ? 'outline' : 'default'}
-                            disabled={isCurrentPlan || upgrading === plan.id}
-                            onClick={() => handleUpgrade(plan.id, language === 'ar' ? plan.name_ar || plan.name : plan.name)}
+                            disabled={upgrading === plan.id}
+                            onClick={() => !isCurrentPlan && handleUpgrade(plan.id, language === 'ar' ? plan.name_ar || plan.name : plan.name, plan)}
                           >
                             {upgrading === plan.id && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
                             {isCurrentPlan 
                               ? (language === 'ar' ? 'باقتك الحالية' : 'Current Plan')
-                              : (language === 'ar' ? 'ترقية الآن' : 'Upgrade Now')}
+                              : (language === 'ar' ? 'تفعيل مجاناً لـ 3 أشهر' : 'Activate Free for 3 Months')}
                           </Button>
                         </CardContent>
                       </Card>

@@ -70,14 +70,22 @@ const Dashboard = () => {
         ) : (
           <>
             {/* Basic Stats Row */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-5">
+              <StatCard
+                icon={Users}
+                label={language === 'ar' ? 'سجلوا حضور اليوم' : 'Checked In Today'}
+                value={stats?.totalCheckedInToday ?? 0}
+                subtitle={`${stats?.totalEmployees ?? 0} ${t('dashboard.totalEmployees')}`}
+                color="text-primary"
+                delay={0}
+              />
               <StatCard
                 icon={Users}
                 label={t('dashboard.present')}
                 value={stats?.present ?? 0}
-                subtitle={`${stats?.totalEmployees ?? 0} ${t('dashboard.totalEmployees')}`}
+                subtitle={t('dashboard.currentlyPresent') || 'Currently Present'}
                 color="text-success"
-                delay={0}
+                delay={0.1}
               />
               <StatCard
                 icon={Users}
@@ -85,7 +93,7 @@ const Dashboard = () => {
                 value={stats?.absent ?? 0}
                 subtitle={t('dashboard.notCheckedIn')}
                 color="text-destructive"
-                delay={0.1}
+                delay={0.2}
               />
               <StatCard
                 icon={Coffee}
@@ -93,7 +101,7 @@ const Dashboard = () => {
                 value={stats?.onBreak ?? 0}
                 subtitle={t('dashboard.currentlyOnBreak')}
                 color="text-warning"
-                delay={0.2}
+                delay={0.3}
               />
               <StatCard
                 icon={AlertCircle}
@@ -101,7 +109,7 @@ const Dashboard = () => {
                 value={stats?.pendingLeaves ?? 0}
                 subtitle={t('dashboard.leaveRequests')}
                 color="text-primary"
-                delay={0.3}
+                delay={0.4}
               />
             </div>
 
@@ -414,15 +422,15 @@ const StatCard = ({ icon: Icon, label, value, subtitle, color, delay }: StatCard
     transition={{ duration: 0.4, delay }}
   >
     <Card className="card-hover">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+      <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 pt-3 sm:pt-4 px-3 sm:px-6">
+        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground line-clamp-1">
           {label}
         </CardTitle>
-        <Icon className={`w-5 h-5 ${color}`} />
+        <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${color} flex-shrink-0`} />
       </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold text-foreground">{value}</div>
-        <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+      <CardContent className="pt-0 pb-3 sm:pb-4 px-3 sm:px-6">
+        <div className="text-2xl sm:text-3xl font-bold text-foreground">{value}</div>
+        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1 line-clamp-1">{subtitle}</p>
       </CardContent>
     </Card>
   </motion.div>

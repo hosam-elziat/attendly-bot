@@ -63,18 +63,19 @@ export const useAttendanceStats = () => {
         .eq('company_id', profile.company_id)
         .eq('is_active', true);
 
-      // Get today's attendance
+      // Get today's attendance - count all who checked in today (including checked out)
       const { data: attendance } = await supabase
         .from('attendance_logs')
         .select('status')
         .eq('company_id', profile.company_id)
         .eq('date', today);
 
+      const totalCheckedInToday = attendance?.length || 0; // Total people who checked in today
       const checkedIn = attendance?.filter(a => a.status === 'checked_in').length || 0;
       const onBreak = attendance?.filter(a => a.status === 'on_break').length || 0;
       const checkedOut = attendance?.filter(a => a.status === 'checked_out').length || 0;
       const present = checkedIn + onBreak;
-      const absent = (totalEmployees || 0) - present - checkedOut;
+      const absent = (totalEmployees || 0) - totalCheckedInToday;
 
       // Get pending leave requests
       const { count: pendingLeaves } = await supabase
@@ -90,6 +91,7 @@ export const useAttendanceStats = () => {
         onBreak,
         checkedOut,
         pendingLeaves: pendingLeaves || 0,
+        totalCheckedInToday, // New field: total who checked in today (doesn't decrease on checkout)
       };
     },
     enabled: !!profile?.company_id,
