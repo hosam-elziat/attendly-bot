@@ -158,7 +158,8 @@ const AISummaryButton = () => {
           },
           body: JSON.stringify({ 
             messages: [...messages, userMessage],
-            language 
+            language,
+            companyId: profile?.company_id
           }),
         }
       );
