@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.update-telegram-bot]
 verify_jwt = false
+
+[functions.ai-daily-summary]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false

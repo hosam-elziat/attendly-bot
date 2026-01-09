@@ -21,6 +21,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import AISummaryButton from '@/components/ai/AISummaryButton';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -211,6 +212,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <div className="p-4 sm:p-6 pb-20 lg:pb-6">
           {children}
         </div>
+
+        {/* AI Summary Button */}
+        <AISummaryButton />
       </main>
     </div>
   );
