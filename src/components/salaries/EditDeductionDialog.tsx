@@ -42,12 +42,15 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
     setSubmitting(true);
 
     try {
+      // Convert month string (YYYY-MM) to date format (YYYY-MM-01)
+      const monthDate = `${month}-01`;
+      
       const { error } = await supabase
         .from('salary_adjustments')
         .insert({
           employee_id: employeeId,
           company_id: profile.company_id,
-          month: month,
+          month: monthDate,
           bonus: activeTab === 'bonus' ? amount : 0,
           deduction: activeTab === 'deduction' ? amount : 0,
           description: description || null,
