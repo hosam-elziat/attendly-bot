@@ -619,6 +619,47 @@ export type Database = {
           },
         ]
       }
+      registration_sessions: {
+        Row: {
+          company_id: string
+          created_at: string
+          data: Json
+          expires_at: string
+          id: string
+          step: string
+          telegram_chat_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          data?: Json
+          expires_at?: string
+          id?: string
+          step?: string
+          telegram_chat_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          data?: Json
+          expires_at?: string
+          id?: string
+          step?: string
+          telegram_chat_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registration_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saas_team: {
         Row: {
           created_at: string
