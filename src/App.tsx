@@ -18,6 +18,7 @@ import Attendance from "./pages/Attendance";
 import Leaves from "./pages/Leaves";
 import Salaries from "./pages/Salaries";
 import TelegramBot from "./pages/TelegramBot";
+import JoinRequests from "./pages/JoinRequests";
 import Settings from "./pages/Settings";
 import Subscription from "./pages/Subscription";
 import History from "./pages/History";
@@ -68,6 +69,9 @@ const App = () => (
                   } />
                   <Route path="/dashboard/telegram" element={
                     <ProtectedRoute><TelegramBot /></ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/join-requests" element={
+                    <ProtectedRoute><JoinRequests /></ProtectedRoute>
                   } />
                   <Route path="/dashboard/settings" element={
                     <ProtectedRoute><Settings /></ProtectedRoute>
