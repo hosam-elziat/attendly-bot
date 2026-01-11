@@ -419,12 +419,101 @@ serve(async (req) => {
           )
           break
 
+        case 'my_salary':
+          // Check if it's the last day of the month
+          const currentDate = new Date()
+          const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
+          const isLastDay = currentDate.getDate() === lastDayOfMonth
+          
+          if (!isLastDay) {
+            await sendMessage(botToken, chatId, 
+              `⏳ <b>المرتب غير متاح حالياً</b>\n\n` +
+              `يمكنك الاطلاع على تقرير مرتبك في آخر يوم من الشهر فقط.\n\n` +
+              `📅 اليوم الحالي: ${currentDate.getDate()}\n` +
+              `📅 آخر يوم في الشهر: ${lastDayOfMonth}`,
+              getEmployeeKeyboard()
+            )
+          } else {
+            // Get salary info
+            const { data: empDetails } = await supabase
+              .from('employees')
+              .select('base_salary, currency, work_start_time, work_end_time, weekend_days')
+              .eq('id', employee.id)
+              .single()
+            
+            const baseSalary = empDetails?.base_salary || 0
+            const currency = empDetails?.currency || 'SAR'
+            
+            // Get this month's data
+            const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+            
+            // Get attendance for overtime calculation
+            const { data: monthAttendance } = await supabase
+              .from('attendance_logs')
+              .select('*')
+              .eq('employee_id', employee.id)
+              .gte('date', monthStart.toISOString().split('T')[0])
+              .lte('date', monthEnd.toISOString().split('T')[0])
+            
+            // Get adjustments
+            const { data: adjustments } = await supabase
+              .from('salary_adjustments')
+              .select('*')
+              .eq('employee_id', employee.id)
+              .gte('month', monthStart.toISOString().split('T')[0])
+              .lte('month', monthEnd.toISOString().split('T')[0])
+            
+            const totalBonus = adjustments?.reduce((sum, a) => sum + (a.bonus || 0), 0) || 0
+            const totalDeduction = adjustments?.reduce((sum, a) => sum + (a.deduction || 0), 0) || 0
+            
+            // Calculate overtime (simplified - hours beyond 8 per day)
+            let overtimeHours = 0
+            const workStartTime = empDetails?.work_start_time || '09:00:00'
+            const workEndTime = empDetails?.work_end_time || '17:00:00'
+            
+            for (const log of monthAttendance || []) {
+              if (log.check_in_time && log.check_out_time) {
+                const checkIn = new Date(log.check_in_time)
+                const checkOut = new Date(log.check_out_time)
+                const hoursWorked = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)
+                if (hoursWorked > 8) {
+                  overtimeHours += hoursWorked - 8
+                }
+              }
+            }
+            
+            // Calculate overtime amount (hourly rate * 2 for overtime)
+            const hourlyRate = baseSalary / 30 / 8
+            const overtimeAmount = Math.round(overtimeHours * hourlyRate * 2)
+            
+            const workDays = monthAttendance?.length || 0
+            const netSalary = baseSalary + totalBonus + overtimeAmount - totalDeduction
+            
+            let salaryMsg = `💰 <b>تقرير راتبك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
+            salaryMsg += `📊 الراتب الأساسي: ${baseSalary.toLocaleString()} ${currency}\n`
+            if (overtimeAmount > 0) {
+              salaryMsg += `⏰ الوقت الإضافي (${overtimeHours.toFixed(1)} ساعة): +${overtimeAmount.toLocaleString()} ${currency}\n`
+            }
+            if (totalBonus > 0) {
+              salaryMsg += `🎉 المكافآت: +${totalBonus.toLocaleString()} ${currency}\n`
+            }
+            if (totalDeduction > 0) {
+              salaryMsg += `📉 الخصومات: -${totalDeduction.toLocaleString()} ${currency}\n`
+            }
+            salaryMsg += `\n💵 <b>الإجمالي: ${netSalary.toLocaleString()} ${currency}</b>\n`
+            salaryMsg += `\n📅 أيام العمل: ${workDays} يوم`
+            
+            await sendMessage(botToken, chatId, salaryMsg, getEmployeeKeyboard())
+          }
+          break
+
         case 'my_status':
           let statusMsg = `👤 ${employee.full_name}\n\n`
           statusMsg += `📊 رصيد الإجازات: ${employee.leave_balance || 0} يوم\n\n`
           
           if (attendance) {
-            const statusEmoji = attendance.status === 'checked_in' ? '🟢' 
+            const statusEmoji = attendance.status === 'checked_in' ? '🟢'
               : attendance.status === 'on_break' ? '☕' 
               : attendance.status === 'checked_out' ? '🔴' : '❓'
             statusMsg += `حالتك اليوم: ${statusEmoji} ${getStatusText(attendance.status)}\n`
@@ -796,7 +885,8 @@ function getEmployeeKeyboard() {
         { text: '↩️ إنهاء استراحة', callback_data: 'end_break' }
       ],
       [
-        { text: '📝 طلب إجازة', callback_data: 'request_leave' }
+        { text: '📝 طلب إجازة', callback_data: 'request_leave' },
+        { text: '💰 راتبي', callback_data: 'my_salary' }
       ],
       [
         { text: '📊 حالتي', callback_data: 'my_status' }

@@ -434,6 +434,7 @@ const Salaries = () => {
         employeeId={selectedEmployee?.id || ''}
         employeeName={selectedEmployee?.name || ''}
         month={selectedMonth}
+        baseSalary={employees.find(e => e.id === selectedEmployee?.id)?.base_salary || 0}
         onSuccess={fetchSalaryData}
       />
     </DashboardLayout>
