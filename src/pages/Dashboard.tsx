@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAttendanceStats } from '@/hooks/useAttendance';
 import { useAdvancedStats, COUNTRIES } from '@/hooks/useAdvancedStats';
 import { usePublicHolidays } from '@/hooks/usePublicHolidays';
+import { useOnboarding } from '@/hooks/useOnboarding';
+import OnboardingTour from '@/components/onboarding/OnboardingTour';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Users, 
@@ -33,6 +35,7 @@ const Dashboard = () => {
   const { data: stats, isLoading } = useAttendanceStats();
   const { data: advancedStats, isLoading: advancedLoading } = useAdvancedStats();
   const { data: holidays, isLoading: holidaysLoading } = usePublicHolidays();
+  const { showOnboarding, completeOnboarding } = useOnboarding();
 
   const firstName = profile?.full_name?.split(' ')[0] || 'هناك';
 
@@ -47,6 +50,7 @@ const Dashboard = () => {
 
   return (
     <DashboardLayout>
+      {showOnboarding && <OnboardingTour onComplete={completeOnboarding} />}
       <div className="space-y-8">
         {/* Header */}
         <motion.div
