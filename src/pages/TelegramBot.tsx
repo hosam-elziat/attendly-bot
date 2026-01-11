@@ -71,34 +71,34 @@ const TelegramBot = () => {
 
   const handleUpdateName = async () => {
     setIsUpdatingName(true);
-    
+
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      
+
       if (!sessionData.session) {
         toast.error('يجب تسجيل الدخول أولاً');
         return;
       }
 
-      const formData = new FormData();
-      formData.append('action', 'update_name');
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-telegram-bot`, {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
         headers: {
           Authorization: `Bearer ${sessionData.session.access_token}`
         },
-        body: formData
+        body: { action: 'update_name' }
       });
 
-      const data = await response.json();
+      if (error) {
+        console.error('Update name error:', error);
+        toast.error('فشل في التحديث');
+        return;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         toast.error(data.error);
         return;
       }
 
-      toast.success('تم تحديث اسم البوت بنجاح!');
+      toast.success(data?.message || 'تم تحديث اسم البوت بنجاح!');
 
     } catch (error: any) {
       console.error('Update name error:', error);
@@ -110,45 +110,34 @@ const TelegramBot = () => {
 
   const handleSetWebhook = async () => {
     setIsSettingWebhook(true);
-    
+
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      
+
       if (!sessionData.session) {
         toast.error('يجب تسجيل الدخول أولاً');
         return;
       }
 
-      // Get the bot token from telegram_bots table
-      const { data: bot, error: botError } = await supabase
-        .from('telegram_bots')
-        .select('bot_token, bot_username')
-        .eq('bot_username', botUsername)
-        .single();
+      const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        },
+        body: { action: 'set_webhook' }
+      });
 
-      if (botError || !bot) {
-        toast.error('لم يتم العثور على البوت');
+      if (error) {
+        console.error('Webhook setup error:', error);
+        toast.error('فشل في إعداد الـ Webhook');
         return;
       }
 
-      // Set webhook via Telegram API
-      const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-webhook?bot=${bot.bot_username}`;
-      const response = await fetch(`https://api.telegram.org/bot${bot.bot_token}/setWebhook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          url: webhookUrl,
-          allowed_updates: ['message', 'callback_query']
-        })
-      });
-
-      const result = await response.json();
-      
-      if (result.ok) {
-        toast.success('تم إعداد الـ Webhook بنجاح! البوت جاهز للاستخدام');
-      } else {
-        toast.error('فشل في إعداد الـ Webhook: ' + result.description);
+      if (data?.error) {
+        toast.error(data.error);
+        return;
       }
+
+      toast.success(data?.message || 'تم إعداد الـ Webhook بنجاح!');
 
     } catch (error: any) {
       console.error('Webhook setup error:', error);

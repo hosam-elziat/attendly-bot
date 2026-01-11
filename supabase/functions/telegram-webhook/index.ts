@@ -39,10 +39,24 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
 
-    // Get bot token from URL path (format: /telegram-webhook/{bot_username})
+    // Resolve bot username:
+    // - Prefer explicit ?bot= query param (used by setWebhook in our app)
+    // - Fallback to last path segment if it isn't the function name itself
     const url = new URL(req.url)
-    const pathParts = url.pathname.split('/')
-    const botUsername = pathParts[pathParts.length - 1] || url.searchParams.get('bot')
+    const pathParts = url.pathname.split('/').filter(Boolean)
+    const lastSegment = pathParts[pathParts.length - 1]
+
+    const botUsername =
+      url.searchParams.get('bot') ||
+      (lastSegment && lastSegment !== 'telegram-webhook' ? lastSegment : null)
+
+    console.log('telegram-webhook: incoming', {
+      path: url.pathname,
+      botQuery: url.searchParams.get('bot'),
+      resolvedBotUsername: botUsername,
+      chatId,
+      userId,
+    })
 
     if (!botUsername) {
       return new Response(JSON.stringify({ ok: true, error: 'No bot specified' }), { headers: corsHeaders })
