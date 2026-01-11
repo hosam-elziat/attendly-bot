@@ -419,7 +419,7 @@ const Employees = () => {
                 setSelectedEmployee(null);
               }} 
               onSubmit={async (data) => {
-                await updateEmployee.mutateAsync({ id: selectedEmployee.id, ...data });
+                await updateEmployee.mutateAsync({ id: selectedEmployee.id, oldData: selectedEmployee, ...data });
                 setEditDialogOpen(false);
                 setSelectedEmployee(null);
               }}

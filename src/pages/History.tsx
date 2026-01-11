@@ -194,6 +194,36 @@ const History = () => {
     return String(value);
   };
 
+  // Get a summary of what changed for display in the table row
+  const getChangeSummary = (log: AuditLog): string => {
+    if (log.action === 'insert') {
+      const name = getRecordName(log.new_data);
+      return isRTL ? `إضافة: ${name}` : `Added: ${name}`;
+    }
+    if (log.action === 'delete') {
+      const name = getRecordName(log.old_data);
+      return isRTL ? `حذف: ${name}` : `Deleted: ${name}`;
+    }
+    if (log.action === 'restore') {
+      const name = getRecordName(log.new_data);
+      return isRTL ? `استعادة: ${name}` : `Restored: ${name}`;
+    }
+    if (log.action === 'update') {
+      const changes = getChangedFields(log.old_data, log.new_data);
+      if (changes.length === 0) return log.description || '-';
+      
+      const changedFieldNames = changes.slice(0, 3).map(c => getFieldDisplayName(c.field)).join('، ');
+      const name = getRecordName(log.new_data || log.old_data);
+      if (changes.length > 3) {
+        return isRTL 
+          ? `${name}: تعديل ${changedFieldNames} و${changes.length - 3} آخرين`
+          : `${name}: Changed ${changedFieldNames} and ${changes.length - 3} more`;
+      }
+      return isRTL ? `${name}: تعديل ${changedFieldNames}` : `${name}: Changed ${changedFieldNames}`;
+    }
+    return log.description || '-';
+  };
+
   const getChangedFields = (oldData: Record<string, unknown> | null, newData: Record<string, unknown> | null) => {
     const changes: { field: string; oldValue: unknown; newValue: unknown }[] = [];
     
@@ -364,10 +394,10 @@ const History = () => {
                           <TableRow>
                             <TableHead>{isRTL ? 'الإجراء' : 'Action'}</TableHead>
                             <TableHead>{isRTL ? 'الجدول' : 'Table'}</TableHead>
-                            <TableHead>{isRTL ? 'التفاصيل' : 'Details'}</TableHead>
-                            <TableHead>{isRTL ? 'المستخدم' : 'User'}</TableHead>
-                            <TableHead>{isRTL ? 'التاريخ والوقت' : 'Date & Time'}</TableHead>
-                            <TableHead>{isRTL ? 'عرض' : 'View'}</TableHead>
+                            <TableHead>{isRTL ? 'التعديل' : 'Change'}</TableHead>
+                            <TableHead>{isRTL ? 'قام به' : 'By'}</TableHead>
+                            <TableHead>{isRTL ? 'الوقت' : 'Time'}</TableHead>
+                            <TableHead></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -394,18 +424,33 @@ const History = () => {
                                     {getTableNameArabic(log.table_name)}
                                   </Badge>
                                 </TableCell>
-                                <TableCell className="max-w-xs truncate">
-                                  {log.description || getRecordName(log.new_data || log.old_data)}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm">{log.user_email || '-'}</span>
+                                <TableCell className="max-w-sm">
+                                  <div className="space-y-1">
+                                    <p className="font-medium truncate">{getChangeSummary(log)}</p>
+                                    {log.action === 'update' && log.old_data && log.new_data && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {getChangedFields(log.old_data, log.new_data).slice(0, 2).map((change, idx) => (
+                                          <span key={idx} className="block">
+                                            {getFieldDisplayName(change.field)}: 
+                                            <span className="text-red-500 mx-1">{formatFieldValue(change.oldValue)}</span>
+                                            →
+                                            <span className="text-green-500 mx-1">{formatFieldValue(change.newValue)}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Clock className="h-4 w-4" />
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                                      <User className="h-3 w-3 text-primary" />
+                                    </div>
+                                    <span className="text-sm font-medium">{log.user_email?.split('@')[0] || '-'}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="text-xs text-muted-foreground">
                                     {formatDateTime(log.created_at)}
                                   </div>
                                 </TableCell>
@@ -413,7 +458,7 @@ const History = () => {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="gap-1"
+                                    className="gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setSelectedLog(log);
