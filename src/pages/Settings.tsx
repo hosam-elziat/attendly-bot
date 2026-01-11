@@ -418,7 +418,7 @@ const Settings = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {ARAB_COUNTRIES.map((country) => (
-                        <SelectItem key={country.code} value={country.offset}>
+                        <SelectItem key={country.code} value={country.timezone}>
                           {country.name} ({country.offset})
                         </SelectItem>
                       ))}
