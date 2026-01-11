@@ -30,6 +30,144 @@ export interface DeletedRecord {
   is_restored: boolean;
 }
 
+// Field name translations
+const fieldNameTranslations: Record<string, string> = {
+  full_name: 'الاسم',
+  email: 'البريد الإلكتروني',
+  department: 'القسم',
+  base_salary: 'الراتب الأساسي',
+  salary_type: 'نوع الراتب',
+  is_active: 'الحالة',
+  phone: 'الهاتف',
+  address: 'العنوان',
+  hire_date: 'تاريخ التعيين',
+  national_id: 'رقم الهوية',
+  work_start_time: 'وقت بداية العمل',
+  work_end_time: 'وقت نهاية العمل',
+  break_duration_minutes: 'مدة الاستراحة',
+  weekend_days: 'أيام العطلة',
+  check_in_time: 'وقت الحضور',
+  check_out_time: 'وقت الانصراف',
+  status: 'الحالة',
+  date: 'التاريخ',
+  bonus: 'المكافأة',
+  deduction: 'الخصم',
+  description: 'الوصف',
+  month: 'الشهر',
+  leave_type: 'نوع الإجازة',
+  start_date: 'تاريخ البداية',
+  end_date: 'تاريخ النهاية',
+  days: 'عدد الأيام',
+  reason: 'السبب',
+  notes: 'ملاحظات',
+  currency: 'العملة',
+  telegram_chat_id: 'معرف التليجرام',
+};
+
+// Get human-readable field name
+export const getFieldNameArabic = (fieldName: string): string => {
+  return fieldNameTranslations[fieldName] || fieldName;
+};
+
+// Generate detailed change description
+export const generateChangeDescription = (
+  action: 'insert' | 'update' | 'delete' | 'restore',
+  tableName: string,
+  oldData?: Record<string, unknown> | null,
+  newData?: Record<string, unknown> | null,
+  recordName?: string
+): string => {
+  const tableArabic = getTableNameArabic(tableName);
+  const name = recordName || (newData?.full_name as string) || (oldData?.full_name as string) || '';
+
+  if (action === 'insert') {
+    if (tableName === 'salary_adjustments') {
+      const bonus = newData?.bonus as number;
+      const deduction = newData?.deduction as number;
+      if (bonus && bonus > 0) {
+        return `إضافة مكافأة ${bonus} لـ${name}`;
+      }
+      if (deduction && deduction > 0) {
+        return `إضافة خصم ${deduction} لـ${name}`;
+      }
+      return `إضافة تعديل راتب لـ${name}`;
+    }
+    if (tableName === 'attendance_logs') {
+      return `تسجيل حضور ${name}`;
+    }
+    if (tableName === 'leave_requests') {
+      const leaveTypes: Record<string, string> = {
+        vacation: 'إجازة سنوية',
+        sick: 'إجازة مرضية',
+        personal: 'إجازة شخصية',
+      };
+      const leaveType = leaveTypes[newData?.leave_type as string] || 'إجازة';
+      return `طلب ${leaveType} لـ${name}`;
+    }
+    return `إضافة ${name} إلى ${tableArabic}`;
+  }
+
+  if (action === 'delete') {
+    return `حذف ${name} من ${tableArabic}`;
+  }
+
+  if (action === 'restore') {
+    return `استعادة ${name} إلى ${tableArabic}`;
+  }
+
+  // For update action, list what changed
+  if (action === 'update' && oldData && newData) {
+    const changes: string[] = [];
+    
+    // Fields to ignore in change detection
+    const ignoreFields = ['updated_at', 'created_at', 'id', 'company_id', 'user_id', 'employee_id'];
+    
+    for (const key of Object.keys(newData)) {
+      if (ignoreFields.includes(key)) continue;
+      
+      const oldValue = oldData[key];
+      const newValue = newData[key];
+      
+      // Skip if values are the same
+      if (JSON.stringify(oldValue) === JSON.stringify(newValue)) continue;
+      
+      const fieldName = getFieldNameArabic(key);
+      
+      // Format the change based on field type
+      if (key === 'status') {
+        const statusNames: Record<string, string> = {
+          checked_in: 'حاضر',
+          checked_out: 'انصرف',
+          on_break: 'استراحة',
+          pending: 'قيد الانتظار',
+          approved: 'موافق عليه',
+          rejected: 'مرفوض',
+        };
+        changes.push(`${fieldName}: ${statusNames[oldValue as string] || oldValue} ← ${statusNames[newValue as string] || newValue}`);
+      } else if (key === 'is_active') {
+        changes.push(`${fieldName}: ${oldValue ? 'نشط' : 'غير نشط'} ← ${newValue ? 'نشط' : 'غير نشط'}`);
+      } else if (typeof newValue === 'number') {
+        changes.push(`${fieldName}: ${oldValue || 0} ← ${newValue}`);
+      } else if (key.includes('time') && typeof newValue === 'string') {
+        // Extract time only
+        const oldTime = typeof oldValue === 'string' ? oldValue.split('T')[1]?.slice(0, 5) || oldValue : oldValue;
+        const newTime = typeof newValue === 'string' ? newValue.split('T')[1]?.slice(0, 5) || newValue : newValue;
+        changes.push(`${fieldName}: ${oldTime || '-'} ← ${newTime}`);
+      } else {
+        changes.push(`${fieldName}: ${oldValue || '-'} ← ${newValue || '-'}`);
+      }
+    }
+    
+    if (changes.length === 0) {
+      return `تعديل بيانات ${name}`;
+    }
+    
+    return `تعديل ${name}: ${changes.join(' | ')}`;
+  }
+
+  return `${getActionArabic(action)} في ${tableArabic}`;
+};
+
 export const useAuditLogs = () => {
   const { profile } = useAuth();
 
@@ -40,7 +178,7 @@ export const useAuditLogs = () => {
         .from('audit_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (error) throw error;
       return data as AuditLog[];
@@ -90,6 +228,9 @@ export const useLogAction = () => {
     }) => {
       if (!profile?.company_id || !user?.id) throw new Error('Not authenticated');
 
+      // Auto-generate description if not provided
+      const autoDescription = description || generateChangeDescription(action, tableName, oldData, newData);
+
       const { error } = await supabase.from('audit_logs').insert({
         company_id: profile.company_id,
         user_id: user.id,
@@ -99,7 +240,7 @@ export const useLogAction = () => {
         action,
         old_data: (oldData as Json) || null,
         new_data: (newData as Json) || null,
-        description: description || null,
+        description: autoDescription,
       });
 
       if (error) throw error;
@@ -161,7 +302,6 @@ export const useRestoreRecord = () => {
         recordId: record_id,
         action: 'restore',
         newData: record_data,
-        description: `تم استعادة السجل من ${getTableNameArabic(table_name)}`,
       });
 
       return record_data;
@@ -237,7 +377,6 @@ export const useSoftDelete = () => {
         recordId,
         action: 'delete',
         oldData: recordData,
-        description: `تم حذف سجل من ${getTableNameArabic(tableName)}`,
       });
     },
     onSuccess: () => {
