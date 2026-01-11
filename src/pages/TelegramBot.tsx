@@ -80,13 +80,18 @@ const TelegramBot = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
+      const response = await fetch(`https://seqqfrtnrjngvqidtrcp.supabase.co/functions/v1/update-telegram-bot`, {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcXFmcnRucmpuZ3ZxaWR0cmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2NDQ0NDAsImV4cCI6MjA4MzIyMDQ0MH0.toSzt6hj1Q6ieNKfHe1kOcswGg2XGCz7wA_5IUa75TY'
         },
-        body: { action: 'update_name' }
+        body: JSON.stringify({ action: 'update_name' })
       });
+      
+      const data = await response.json();
+      const error = !response.ok ? new Error(data?.error || 'Request failed') : null;
 
       if (error) {
         console.error('Update name error:', error);
@@ -120,13 +125,18 @@ const TelegramBot = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
+      const response = await fetch(`https://seqqfrtnrjngvqidtrcp.supabase.co/functions/v1/update-telegram-bot`, {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcXFmcnRucmpuZ3ZxaWR0cmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2NDQ0NDAsImV4cCI6MjA4MzIyMDQ0MH0.toSzt6hj1Q6ieNKfHe1kOcswGg2XGCz7wA_5IUa75TY'
         },
-        body: { action: 'set_webhook' }
+        body: JSON.stringify({ action: 'set_webhook' })
       });
+      
+      const data = await response.json();
+      const error = !response.ok ? new Error(data?.error || 'Request failed') : null;
 
       if (error) {
         console.error('Webhook setup error:', error);
