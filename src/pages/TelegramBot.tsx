@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,7 +6,7 @@ import { useCompany } from '@/hooks/useCompany';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw, Camera, Upload } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -16,8 +16,6 @@ const TelegramBot = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [isSettingWebhook, setIsSettingWebhook] = useState(false);
-  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const NAME_COOLDOWN_STORAGE_KEY = 'telegram_bot_name_cooldown_until';
 
@@ -204,78 +202,6 @@ const TelegramBot = () => {
     }
   };
 
-  const handleUpdatePhoto = async (file: File) => {
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('يرجى اختيار صورة صالحة');
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
-      return;
-    }
-
-    setIsUpdatingPhoto(true);
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      if (!sessionData.session) {
-        toast.error('يجب تسجيل الدخول أولاً');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('action', 'update_photo');
-      formData.append('photo', file);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-telegram-bot`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${sessionData.session.access_token}`,
-          },
-          body: formData,
-        }
-      );
-
-      const data = await response.json();
-
-      if (data?.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      toast.success(data?.message || 'تم تحديث صورة البوت بنجاح!');
-
-    } catch (error: any) {
-      console.error('Update photo error:', error);
-      toast.error('فشل في تحديث الصورة: ' + error.message);
-    } finally {
-      setIsUpdatingPhoto(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handlePhotoButtonClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleUpdatePhoto(file);
-    }
-  };
-
   const copyBotLink = () => {
     if (botLink) {
       navigator.clipboard.writeText(botLink);
@@ -390,30 +316,6 @@ const TelegramBot = () => {
                           </>
                         )}
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={handlePhotoButtonClick}
-                        disabled={isUpdatingPhoto}
-                      >
-                        {isUpdatingPhoto ? (
-                          <>
-                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                            جاري الرفع...
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="w-4 h-4 me-2" />
-                            تغيير صورة البوت
-                          </>
-                        )}
-                      </Button>
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        accept="image/*"
-                        className="hidden"
-                      />
                       <Button 
                         variant="outline" 
                         onClick={handleSetWebhook}
