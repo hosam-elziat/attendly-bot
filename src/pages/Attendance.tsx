@@ -120,6 +120,8 @@ const Attendance = () => {
         return <Badge variant="secondary">{t('attendance.onBreak')}</Badge>;
       case 'checked_out':
         return <Badge variant="outline">{t('attendance.left')}</Badge>;
+      case 'absent':
+        return <Badge variant="destructive">{language === 'ar' ? 'غائب' : 'Absent'}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -225,6 +227,7 @@ const Attendance = () => {
                       <SelectItem value="checked_in">{t('attendance.present')}</SelectItem>
                       <SelectItem value="on_break">{t('attendance.onBreak')}</SelectItem>
                       <SelectItem value="checked_out">{t('attendance.left')}</SelectItem>
+                      <SelectItem value="absent">{language === 'ar' ? 'غائب' : 'Absent'}</SelectItem>
                     </SelectContent>
                   </Select>
                   

@@ -86,12 +86,24 @@ export const useUpdateLeaveRequest = () => {
           *,
           employees (
             full_name,
-            email
+            email,
+            leave_balance
           )
         `)
         .single();
 
       if (error) throw error;
+
+      // If approved, deduct from employee's leave balance
+      if (status === 'approved' && data.employee_id) {
+        const currentBalance = (data.employees as any)?.leave_balance || 21;
+        const newBalance = Math.max(0, currentBalance - data.days);
+        
+        await supabase
+          .from('employees')
+          .update({ leave_balance: newBalance })
+          .eq('id', data.employee_id);
+      }
 
       // Log the action
       const statusArabic = status === 'approved' ? 'موافق عليه' : 'مرفوض';
