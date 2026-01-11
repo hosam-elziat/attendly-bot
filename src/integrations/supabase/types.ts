@@ -375,6 +375,7 @@ export type Database = {
           hire_date: string | null
           id: string
           is_active: boolean | null
+          leave_balance: number | null
           monthly_late_balance_minutes: number | null
           national_id: string | null
           notes: string | null
@@ -400,6 +401,7 @@ export type Database = {
           hire_date?: string | null
           id?: string
           is_active?: boolean | null
+          leave_balance?: number | null
           monthly_late_balance_minutes?: number | null
           national_id?: string | null
           notes?: string | null
@@ -425,6 +427,7 @@ export type Database = {
           hire_date?: string | null
           id?: string
           is_active?: boolean | null
+          leave_balance?: number | null
           monthly_late_balance_minutes?: number | null
           national_id?: string | null
           notes?: string | null

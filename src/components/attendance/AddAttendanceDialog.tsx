@@ -82,11 +82,17 @@ const AddAttendanceDialog = ({ open, onOpenChange, onSuccess }: AddAttendanceDia
         employee_id: selectedEmployee,
         company_id: profile.company_id,
         date: selectedDate,
-        status: status === 'absent' ? 'checked_out' : status,
+        status: status,
+        notes: status === 'absent' ? 'غائب' : null,
       };
 
-      // If no times selected and not absent, use employee's default work times
-      if (status !== 'absent') {
+      // Handle different statuses
+      if (status === 'absent') {
+        // For absent, don't add check-in/out times
+        insertData.check_in_time = null;
+        insertData.check_out_time = null;
+      } else {
+        // Use employee's default work times if no time specified
         const defaultCheckIn = selectedEmployeeData?.work_start_time || '09:00:00';
         const defaultCheckOut = selectedEmployeeData?.work_end_time || '17:00:00';
         
