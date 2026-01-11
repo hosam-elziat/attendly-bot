@@ -29,6 +29,10 @@ interface SessionData {
   work_end_time?: string;
   weekend_days?: string[];
   use_company_defaults?: boolean;
+  // Leave request session data
+  leave_type?: 'emergency' | 'regular';
+  leave_date?: string;
+  leave_reason?: string;
 }
 
 serve(async (req) => {
@@ -88,7 +92,7 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days')
       .eq('id', companyId)
       .single()
 
@@ -96,13 +100,15 @@ serve(async (req) => {
       work_start_time: company?.work_start_time || '09:00:00',
       work_end_time: company?.work_end_time || '17:00:00',
       weekend_days: ['friday', 'saturday'],
-      company_name: company?.name || 'الشركة'
+      company_name: company?.name || 'الشركة',
+      annual_leave_days: company?.annual_leave_days || 21,
+      emergency_leave_days: company?.emergency_leave_days || 7
     }
 
     // Check if employee exists
     const { data: employee } = await supabase
       .from('employees')
-      .select('id, full_name, leave_balance, work_start_time, work_end_time')
+      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time')
       .eq('telegram_chat_id', telegramChatId)
       .eq('company_id', companyId)
       .eq('is_active', true)
@@ -572,12 +578,132 @@ serve(async (req) => {
           break
 
         case 'request_leave':
+          // Start leave request flow - ask for leave type
+          await setSession('leave_type_choice', {})
           await sendMessage(botToken, chatId, 
-            `📝 لطلب إجازة، أرسل بالصيغة التالية:\n\n` +
-            `/leave نوع_الإجازة | تاريخ_البداية | تاريخ_النهاية | السبب\n\n` +
-            `أنواع الإجازات: vacation (سنوية) | sick (مرضية) | personal (شخصية)\n\n` +
-            `مثال:\n/leave vacation | 2025-01-15 | 2025-01-17 | إجازة عائلية\n\n` +
-            `📊 رصيد إجازاتك الحالي: ${employee.leave_balance || 0} يوم`
+            `📝 <b>طلب إجازة</b>\n\n` +
+            `📊 رصيدك الحالي:\n` +
+            `• إجازات طارئة: ${employee.emergency_leave_balance || companyDefaults.emergency_leave_days} يوم\n` +
+            `• إجازات اعتيادية: ${employee.leave_balance || (companyDefaults.annual_leave_days - companyDefaults.emergency_leave_days)} يوم\n\n` +
+            `اختر نوع الإجازة:`,
+            {
+              inline_keyboard: [
+                [{ text: '🚨 إجازة طارئة', callback_data: 'leave_emergency' }],
+                [{ text: '📅 إجازة اعتيادية', callback_data: 'leave_regular' }],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
+              ]
+            }
+          )
+          break
+
+        case 'leave_emergency': {
+          // Ask for the day - today or another day
+          await setSession('leave_date_choice', { leave_type: 'emergency' })
+          await sendMessage(botToken, chatId, 
+            `🚨 <b>إجازة طارئة</b>\n\n` +
+            `📊 رصيدك المتاح: ${employee.emergency_leave_balance || companyDefaults.emergency_leave_days} يوم\n\n` +
+            `اختر يوم الإجازة:`,
+            {
+              inline_keyboard: [
+                [{ text: '📅 اليوم', callback_data: 'leave_today' }],
+                [{ text: '📆 يوم آخر', callback_data: 'leave_other_day' }],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
+              ]
+            }
+          )
+          break
+        }
+
+        case 'leave_regular': {
+          // Regular leave needs 48 hours notice - ask for the day
+          const minDate = new Date()
+          minDate.setDate(minDate.getDate() + 2) // 48 hours advance
+          await setSession('leave_date_choice', { leave_type: 'regular' })
+          await sendMessage(botToken, chatId, 
+            `📅 <b>إجازة اعتيادية</b>\n\n` +
+            `📊 رصيدك المتاح: ${employee.leave_balance || (companyDefaults.annual_leave_days - companyDefaults.emergency_leave_days)} يوم\n\n` +
+            `⚠️ الإجازة الاعتيادية تحتاج إبلاغ مسبق قبل 48 ساعة على الأقل.\n\n` +
+            `أرسل تاريخ الإجازة بالصيغة:\n` +
+            `YYYY-MM-DD\n\n` +
+            `مثال: ${minDate.toISOString().split('T')[0]}`,
+            {
+              inline_keyboard: [
+                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
+              ]
+            }
+          )
+          break
+        }
+
+        case 'leave_today': {
+          const session = await getSession()
+          if (!session) break
+          
+          const todayStr = new Date().toISOString().split('T')[0]
+          
+          if (session.data.leave_type === 'emergency') {
+            // Check emergency leave balance
+            const emergencyBalance = employee.emergency_leave_balance || companyDefaults.emergency_leave_days
+            
+            if (emergencyBalance <= 0) {
+              // No emergency balance - submit request to manager
+              await setSession('leave_reason', { ...session.data, leave_date: todayStr })
+              await sendMessage(botToken, chatId, 
+                `⚠️ <b>رصيد الإجازات الطارئة منتهي</b>\n\n` +
+                `سيتم إرسال طلبك للمدير للموافقة.\n\n` +
+                `📝 أرسل سبب الإجازة:`
+              )
+            } else {
+              // Auto-approve emergency leave
+              await supabase.from('leave_requests').insert({
+                employee_id: employee.id,
+                company_id: companyId,
+                leave_type: 'emergency',
+                start_date: todayStr,
+                end_date: todayStr,
+                days: 1,
+                reason: 'إجازة طارئة',
+                status: 'approved',
+                reviewed_at: new Date().toISOString()
+              })
+              
+              // Deduct from emergency balance
+              await supabase
+                .from('employees')
+                .update({ emergency_leave_balance: emergencyBalance - 1 })
+                .eq('id', employee.id)
+              
+              await deleteSession()
+              await sendMessage(botToken, chatId, 
+                `✅ <b>تمت الموافقة على إجازتك الطارئة!</b>\n\n` +
+                `📅 التاريخ: ${todayStr}\n` +
+                `📊 الرصيد المتبقي: ${emergencyBalance - 1} يوم طارئ\n\n` +
+                `🏠 يوم إجازة سعيد!`,
+                getEmployeeKeyboard()
+              )
+            }
+          }
+          break
+        }
+
+        case 'leave_other_day': {
+          const session = await getSession()
+          if (!session) break
+          
+          await setSession('leave_date_input', session.data)
+          await sendMessage(botToken, chatId, 
+            `📆 أرسل تاريخ الإجازة بالصيغة:\n\n` +
+            `YYYY-MM-DD\n\n` +
+            `مثال: 2025-01-15`
+          )
+          break
+        }
+
+        case 'cancel_leave':
+          await deleteSession()
+          await sendMessage(botToken, chatId, 
+            `❌ تم إلغاء طلب الإجازة`,
+            getEmployeeKeyboard()
           )
           break
 
@@ -839,6 +965,130 @@ serve(async (req) => {
             getWeekendKeyboard()
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+    }
+
+    // Handle employee leave request flow
+    if (session && employee) {
+      console.log('Processing employee session step:', session.step, 'with text:', text)
+      
+      switch (session.step) {
+        case 'leave_date_input':
+        case 'leave_date_choice': {
+          // Handle date input for leave requests
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+          if (!dateRegex.test(text)) {
+            await sendMessage(botToken, chatId,
+              '❌ صيغة التاريخ غير صحيحة\n\n' +
+              'الصيغة الصحيحة: YYYY-MM-DD\n' +
+              'مثال: 2025-01-15'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          const leaveDate = new Date(text)
+          const todayDate = new Date()
+          todayDate.setHours(0, 0, 0, 0)
+          
+          if (leaveDate < todayDate) {
+            await sendMessage(botToken, chatId,
+              '❌ لا يمكن طلب إجازة في تاريخ سابق'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          // Check 48 hours rule for regular leave
+          if (session.data.leave_type === 'regular') {
+            const minDate = new Date()
+            minDate.setDate(minDate.getDate() + 2)
+            minDate.setHours(0, 0, 0, 0)
+            
+            if (leaveDate < minDate) {
+              await sendMessage(botToken, chatId,
+                `❌ الإجازة الاعتيادية تحتاج إبلاغ مسبق قبل 48 ساعة على الأقل.\n\n` +
+                `📅 أقرب تاريخ متاح: ${minDate.toISOString().split('T')[0]}`
+              )
+              return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+            }
+          }
+          
+          // For emergency leave with balance
+          if (session.data.leave_type === 'emergency') {
+            const { data: empData } = await supabase
+              .from('employees')
+              .select('emergency_leave_balance')
+              .eq('id', employee.id)
+              .single()
+            
+            const emergencyBalance = empData?.emergency_leave_balance ?? 7
+            
+            if (emergencyBalance > 0) {
+              // Auto-approve
+              await supabase.from('leave_requests').insert({
+                employee_id: employee.id,
+                company_id: companyId,
+                leave_type: 'emergency',
+                start_date: text,
+                end_date: text,
+                days: 1,
+                reason: 'إجازة طارئة',
+                status: 'approved',
+                reviewed_at: new Date().toISOString()
+              })
+              
+              await supabase
+                .from('employees')
+                .update({ emergency_leave_balance: emergencyBalance - 1 })
+                .eq('id', employee.id)
+              
+              await deleteSession()
+              await sendMessage(botToken, chatId, 
+                `✅ <b>تمت الموافقة على إجازتك الطارئة!</b>\n\n` +
+                `📅 التاريخ: ${text}\n` +
+                `📊 الرصيد المتبقي: ${emergencyBalance - 1} يوم طارئ`,
+                getEmployeeKeyboard()
+              )
+              return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+            }
+          }
+          
+          // Need reason - submit to manager
+          await setSession('leave_reason', { ...session.data, leave_date: text })
+          await sendMessage(botToken, chatId, 
+            `📝 أرسل سبب الإجازة:`
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        case 'leave_reason': {
+          // Submit leave request to manager
+          const leaveType = session.data.leave_type === 'emergency' ? 'emergency' : 'regular'
+          const leaveDate = session.data.leave_date || new Date().toISOString().split('T')[0]
+          
+          await supabase.from('leave_requests').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            leave_type: leaveType as any,
+            start_date: leaveDate,
+            end_date: leaveDate,
+            days: 1,
+            reason: text,
+            status: 'pending'
+          })
+          
+          const typeText = leaveType === 'emergency' ? 'طارئة' : 'اعتيادية'
+          
+          await deleteSession()
+          await sendMessage(botToken, chatId, 
+            `✅ <b>تم إرسال طلب الإجازة للمدير</b>\n\n` +
+            `📋 النوع: إجازة ${typeText}\n` +
+            `📅 التاريخ: ${leaveDate}\n` +
+            `📝 السبب: ${text}\n\n` +
+            `⏳ سيتم إبلاغك عند الموافقة أو الرفض.`,
+            getEmployeeKeyboard()
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
       }
     }
 
