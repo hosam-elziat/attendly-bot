@@ -602,6 +602,8 @@ export type Database = {
           full_name: string
           id: string
           language: string | null
+          onboarding_completed: boolean | null
+          onboarding_step: number | null
           theme: string | null
           updated_at: string
           user_id: string
@@ -614,6 +616,8 @@ export type Database = {
           full_name: string
           id?: string
           language?: string | null
+          onboarding_completed?: boolean | null
+          onboarding_step?: number | null
           theme?: string | null
           updated_at?: string
           user_id: string
@@ -626,6 +630,8 @@ export type Database = {
           full_name?: string
           id?: string
           language?: string | null
+          onboarding_completed?: boolean | null
+          onboarding_step?: number | null
           theme?: string | null
           updated_at?: string
           user_id?: string
