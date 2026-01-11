@@ -19,7 +19,8 @@ import {
   Sun,
   Moon,
   CreditCard,
-  History
+  History,
+  UserPlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AISummaryButton from '@/components/ai/AISummaryButton';
@@ -45,6 +46,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: CreditCard, label: language === 'ar' ? 'الاشتراك' : 'Subscription', path: '/dashboard/subscription' },
     { icon: History, label: language === 'ar' ? 'سجل التعديلات' : 'History', path: '/dashboard/history' },
     { icon: Send, label: t('nav.telegram'), path: '/dashboard/telegram' },
+    { icon: UserPlus, label: language === 'ar' ? 'طلبات الانضمام' : 'Join Requests', path: '/dashboard/join-requests' },
     { icon: Settings, label: t('nav.settings'), path: '/dashboard/settings' },
   ];
 
