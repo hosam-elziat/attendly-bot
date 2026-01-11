@@ -10,6 +10,7 @@ import { Loader2, DollarSign, Plus, Minus } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLogAction } from '@/hooks/useAuditLogs';
 
 interface EditDeductionDialogProps {
   open: boolean;
@@ -23,6 +24,7 @@ interface EditDeductionDialogProps {
 const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, month, onSuccess }: EditDeductionDialogProps) => {
   const { language } = useLanguage();
   const { profile } = useAuth();
+  const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
   const [bonus, setBonus] = useState('');
   const [deduction, setDeduction] = useState('');
@@ -45,18 +47,30 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
       // Convert month string (YYYY-MM) to date format (YYYY-MM-01)
       const monthDate = `${month}-01`;
       
-      const { error } = await supabase
+      const insertData = {
+        employee_id: employeeId,
+        company_id: profile.company_id,
+        month: monthDate,
+        bonus: activeTab === 'bonus' ? amount : 0,
+        deduction: activeTab === 'deduction' ? amount : 0,
+        description: description || null,
+      };
+
+      const { data, error } = await supabase
         .from('salary_adjustments')
-        .insert({
-          employee_id: employeeId,
-          company_id: profile.company_id,
-          month: monthDate,
-          bonus: activeTab === 'bonus' ? amount : 0,
-          deduction: activeTab === 'deduction' ? amount : 0,
-          description: description || null,
-        });
+        .insert(insertData)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Log the action
+      await logAction.mutateAsync({
+        tableName: 'salary_adjustments',
+        recordId: data.id,
+        action: 'insert',
+        newData: { ...insertData, id: data.id, full_name: employeeName },
+      });
 
       toast.success(
         activeTab === 'bonus' 

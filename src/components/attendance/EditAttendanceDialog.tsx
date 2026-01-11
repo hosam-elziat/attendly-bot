@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Loader2, Clock } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { format } from 'date-fns';
+import { useLogAction } from '@/hooks/useAuditLogs';
 
 interface AttendanceRecord {
   id: string;
@@ -31,6 +32,7 @@ interface EditAttendanceDialogProps {
 
 const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAttendanceDialogProps) => {
   const { language } = useLanguage();
+  const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
   const [checkInTime, setCheckInTime] = useState('');
   const [checkOutTime, setCheckOutTime] = useState('');
@@ -66,12 +68,29 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         updates.check_out_time = `${recordDate}T${checkOutTime}:00`;
       }
 
-      const { error } = await supabase
+      // Store old data for logging
+      const oldData = {
+        ...record,
+        full_name: record.employees?.full_name,
+      };
+
+      const { data, error } = await supabase
         .from('attendance_logs')
         .update(updates)
-        .eq('id', record.id);
+        .eq('id', record.id)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Log the action
+      await logAction.mutateAsync({
+        tableName: 'attendance_logs',
+        recordId: record.id,
+        action: 'update',
+        oldData,
+        newData: { ...data, full_name: record.employees?.full_name },
+      });
 
       toast.success(language === 'ar' ? 'تم تحديث الحضور بنجاح' : 'Attendance updated successfully');
       onOpenChange(false);

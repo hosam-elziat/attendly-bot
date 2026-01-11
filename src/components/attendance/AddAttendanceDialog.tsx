@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useLogAction } from '@/hooks/useAuditLogs';
 
 interface AddAttendanceDialogProps {
   open: boolean;
@@ -23,6 +24,7 @@ const AddAttendanceDialog = ({ open, onOpenChange, onSuccess }: AddAttendanceDia
   const { language } = useLanguage();
   const { profile } = useAuth();
   const { data: employees = [] } = useEmployees();
+  const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -99,11 +101,21 @@ const AddAttendanceDialog = ({ open, onOpenChange, onSuccess }: AddAttendanceDia
         }
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('attendance_logs')
-        .insert(insertData);
+        .insert(insertData)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Log the action
+      await logAction.mutateAsync({
+        tableName: 'attendance_logs',
+        recordId: data.id,
+        action: 'insert',
+        newData: { ...insertData, id: data.id, full_name: selectedEmployeeData?.full_name },
+      });
 
       toast.success(language === 'ar' ? 'تم إضافة سجل الحضور بنجاح' : 'Attendance record added successfully');
       resetForm();

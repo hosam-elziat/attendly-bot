@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { EmployeeSchema } from '@/lib/validations';
 import { z } from 'zod';
+import { useLogAction } from './useAuditLogs';
 
 export interface Employee {
   id: string;
@@ -73,6 +74,7 @@ export const useEmployees = () => {
 export const useCreateEmployee = () => {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const logAction = useLogAction();
 
   return useMutation({
     mutationFn: async (employeeData: CreateEmployeeData) => {
@@ -123,6 +125,15 @@ export const useCreateEmployee = () => {
         .single();
 
       if (error) throw error;
+
+      // Log the action
+      await logAction.mutateAsync({
+        tableName: 'employees',
+        recordId: data.id,
+        action: 'insert',
+        newData: data,
+      });
+
       return data;
     },
     onSuccess: () => {
@@ -137,9 +148,10 @@ export const useCreateEmployee = () => {
 
 export const useUpdateEmployee = () => {
   const queryClient = useQueryClient();
+  const logAction = useLogAction();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: Partial<Employee> & { id: string }) => {
+    mutationFn: async ({ id, oldData, ...data }: Partial<Employee> & { id: string; oldData?: Employee }) => {
       // Validate partial data
       const partialSchema = EmployeeSchema.partial();
       const validationResult = partialSchema.safeParse(data);
@@ -157,6 +169,16 @@ export const useUpdateEmployee = () => {
         .single();
 
       if (error) throw error;
+
+      // Log the action with old and new data
+      await logAction.mutateAsync({
+        tableName: 'employees',
+        recordId: id,
+        action: 'update',
+        oldData: oldData ? JSON.parse(JSON.stringify(oldData)) : null,
+        newData: JSON.parse(JSON.stringify(result)),
+      });
+
       return result;
     },
     onSuccess: () => {

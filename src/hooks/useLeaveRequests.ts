@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { useLogAction } from './useAuditLogs';
 
 export interface LeaveRequest {
   id: string;
@@ -61,9 +62,10 @@ export const useLeaveRequests = () => {
 export const useUpdateLeaveRequest = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const logAction = useLogAction();
 
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
+    mutationFn: async ({ id, status, oldData }: { id: string; status: 'approved' | 'rejected'; oldData?: LeaveRequest }) => {
       // Validate input
       const validationResult = LeaveStatusUpdateSchema.safeParse({ id, status });
       
@@ -80,10 +82,28 @@ export const useUpdateLeaveRequest = () => {
           reviewed_at: new Date().toISOString(),
         })
         .eq('id', validationResult.data.id)
-        .select()
+        .select(`
+          *,
+          employees (
+            full_name,
+            email
+          )
+        `)
         .single();
 
       if (error) throw error;
+
+      // Log the action
+      const statusArabic = status === 'approved' ? 'موافق عليه' : 'مرفوض';
+      await logAction.mutateAsync({
+        tableName: 'leave_requests',
+        recordId: id,
+        action: 'update',
+        oldData: oldData ? JSON.parse(JSON.stringify(oldData)) : null,
+        newData: JSON.parse(JSON.stringify(data)),
+        description: `تغيير حالة طلب إجازة ${data.employees?.full_name} إلى ${statusArabic}`,
+      });
+
       return data;
     },
     onSuccess: (_, variables) => {
