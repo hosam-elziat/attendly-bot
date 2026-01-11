@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -25,6 +26,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import {
@@ -38,6 +45,10 @@ import {
   Edit,
   RefreshCw,
   Loader2,
+  Search,
+  Eye,
+  ArrowRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -47,7 +58,43 @@ import {
   getTableNameArabic,
   getActionArabic,
   type DeletedRecord,
+  type AuditLog,
 } from '@/hooks/useAuditLogs';
+
+// Field name translations for display
+const fieldNameTranslations: Record<string, string> = {
+  full_name: 'الاسم الكامل',
+  email: 'البريد الإلكتروني',
+  phone: 'رقم الهاتف',
+  department: 'القسم',
+  base_salary: 'الراتب الأساسي',
+  salary_type: 'نوع الراتب',
+  hire_date: 'تاريخ التعيين',
+  is_active: 'نشط',
+  work_start_time: 'وقت بدء العمل',
+  work_end_time: 'وقت انتهاء العمل',
+  break_duration_minutes: 'مدة الاستراحة (دقائق)',
+  weekend_days: 'أيام الإجازة الأسبوعية',
+  notes: 'ملاحظات',
+  address: 'العنوان',
+  national_id: 'رقم الهوية',
+  currency: 'العملة',
+  check_in_time: 'وقت الحضور',
+  check_out_time: 'وقت الانصراف',
+  status: 'الحالة',
+  date: 'التاريخ',
+  bonus: 'مكافأة',
+  deduction: 'خصم',
+  description: 'الوصف',
+  month: 'الشهر',
+  leave_type: 'نوع الإجازة',
+  start_date: 'تاريخ البداية',
+  end_date: 'تاريخ النهاية',
+  days: 'عدد الأيام',
+  reason: 'السبب',
+  telegram_chat_id: 'معرف تيليجرام',
+  monthly_late_balance_minutes: 'رصيد التأخير الشهري',
+};
 
 const History = () => {
   const { language } = useLanguage();
@@ -59,6 +106,37 @@ const History = () => {
   const restoreRecord = useRestoreRecord();
   
   const [selectedRecord, setSelectedRecord] = useState<DeletedRecord | null>(null);
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [deletedSearchQuery, setDeletedSearchQuery] = useState('');
+
+  // Filter audit logs based on search
+  const filteredLogs = useMemo(() => {
+    if (!auditLogs) return [];
+    if (!logSearchQuery.trim()) return auditLogs;
+    
+    const query = logSearchQuery.toLowerCase();
+    return auditLogs.filter(log => 
+      log.user_email?.toLowerCase().includes(query) ||
+      log.description?.toLowerCase().includes(query) ||
+      getTableNameArabic(log.table_name).toLowerCase().includes(query) ||
+      getActionArabic(log.action).toLowerCase().includes(query) ||
+      JSON.stringify(log.new_data || {}).toLowerCase().includes(query) ||
+      JSON.stringify(log.old_data || {}).toLowerCase().includes(query)
+    );
+  }, [auditLogs, logSearchQuery]);
+
+  // Filter deleted records based on search
+  const filteredDeleted = useMemo(() => {
+    if (!deletedRecords) return [];
+    if (!deletedSearchQuery.trim()) return deletedRecords;
+    
+    const query = deletedSearchQuery.toLowerCase();
+    return deletedRecords.filter(record => 
+      getTableNameArabic(record.table_name).toLowerCase().includes(query) ||
+      JSON.stringify(record.record_data).toLowerCase().includes(query)
+    );
+  }, [deletedRecords, deletedSearchQuery]);
 
   const getActionIcon = (action: string) => {
     switch (action) {
@@ -102,6 +180,52 @@ const History = () => {
            (data.description as string) || 
            (data.id as string)?.slice(0, 8) || 
            '-';
+  };
+
+  const getFieldDisplayName = (field: string): string => {
+    return fieldNameTranslations[field] || field;
+  };
+
+  const formatFieldValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '-';
+    if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  };
+
+  const getChangedFields = (oldData: Record<string, unknown> | null, newData: Record<string, unknown> | null) => {
+    const changes: { field: string; oldValue: unknown; newValue: unknown }[] = [];
+    
+    if (!oldData && newData) {
+      // Insert - show all new data
+      Object.entries(newData).forEach(([key, value]) => {
+        if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'company_id') {
+          changes.push({ field: key, oldValue: null, newValue: value });
+        }
+      });
+    } else if (oldData && newData) {
+      // Update - show changed fields
+      const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
+      allKeys.forEach(key => {
+        if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'company_id') {
+          const oldVal = oldData[key];
+          const newVal = newData[key];
+          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+            changes.push({ field: key, oldValue: oldVal, newValue: newVal });
+          }
+        }
+      });
+    } else if (oldData && !newData) {
+      // Delete - show deleted data
+      Object.entries(oldData).forEach(([key, value]) => {
+        if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'company_id') {
+          changes.push({ field: key, oldValue: value, newValue: null });
+        }
+      });
+    }
+    
+    return changes;
   };
 
   const handleRestore = async (record: DeletedRecord) => {
@@ -207,20 +331,31 @@ const History = () => {
             <TabsContent value="history" className="mt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    {isRTL ? 'آخر التعديلات' : 'Recent Changes'}
-                  </CardTitle>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      {isRTL ? 'آخر التعديلات' : 'Recent Changes'}
+                    </CardTitle>
+                    <div className="relative w-full md:w-80">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={isRTL ? 'بحث في التعديلات...' : 'Search changes...'}
+                        value={logSearchQuery}
+                        onChange={(e) => setLogSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {logsLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : !auditLogs?.length ? (
+                  ) : !filteredLogs?.length ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <HistoryIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>{isRTL ? 'لا توجد تعديلات مسجلة' : 'No changes recorded'}</p>
+                      <p>{logSearchQuery ? (isRTL ? 'لا توجد نتائج للبحث' : 'No search results') : (isRTL ? 'لا توجد تعديلات مسجلة' : 'No changes recorded')}</p>
                     </div>
                   ) : (
                     <ScrollArea className="h-[500px]">
@@ -232,17 +367,19 @@ const History = () => {
                             <TableHead>{isRTL ? 'التفاصيل' : 'Details'}</TableHead>
                             <TableHead>{isRTL ? 'المستخدم' : 'User'}</TableHead>
                             <TableHead>{isRTL ? 'التاريخ والوقت' : 'Date & Time'}</TableHead>
+                            <TableHead>{isRTL ? 'عرض' : 'View'}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           <AnimatePresence>
-                            {auditLogs.map((log, index) => (
+                            {filteredLogs.map((log, index) => (
                               <motion.tr
                                 key={log.id}
                                 initial={{ opacity: 0, x: isRTL ? 20 : -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.03 }}
-                                className="group hover:bg-muted/50"
+                                className="group hover:bg-muted/50 cursor-pointer"
+                                onClick={() => setSelectedLog(log)}
                               >
                                 <TableCell>
                                   <div className="flex items-center gap-2">
@@ -272,6 +409,19 @@ const History = () => {
                                     {formatDateTime(log.created_at)}
                                   </div>
                                 </TableCell>
+                                <TableCell>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="gap-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedLog(log);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
                               </motion.tr>
                             ))}
                           </AnimatePresence>
@@ -287,20 +437,31 @@ const History = () => {
             <TabsContent value="deleted" className="mt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trash2 className="h-5 w-5" />
-                    {isRTL ? 'العناصر المحذوفة' : 'Deleted Items'}
-                  </CardTitle>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <CardTitle className="flex items-center gap-2">
+                      <Trash2 className="h-5 w-5" />
+                      {isRTL ? 'العناصر المحذوفة' : 'Deleted Items'}
+                    </CardTitle>
+                    <div className="relative w-full md:w-80">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={isRTL ? 'بحث في المحذوفات...' : 'Search deleted items...'}
+                        value={deletedSearchQuery}
+                        onChange={(e) => setDeletedSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {deletedLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : !deletedRecords?.length ? (
+                  ) : !filteredDeleted?.length ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Trash2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>{isRTL ? 'لا توجد عناصر محذوفة' : 'No deleted items'}</p>
+                      <p>{deletedSearchQuery ? (isRTL ? 'لا توجد نتائج للبحث' : 'No search results') : (isRTL ? 'لا توجد عناصر محذوفة' : 'No deleted items')}</p>
                     </div>
                   ) : (
                     <ScrollArea className="h-[500px]">
@@ -315,7 +476,7 @@ const History = () => {
                         </TableHeader>
                         <TableBody>
                           <AnimatePresence>
-                            {deletedRecords.map((record, index) => (
+                            {filteredDeleted.map((record, index) => (
                               <motion.tr
                                 key={record.id}
                                 initial={{ opacity: 0, x: isRTL ? 20 : -20 }}
@@ -403,6 +564,106 @@ const History = () => {
             </TabsContent>
           </Tabs>
         </motion.div>
+
+        {/* Log Details Dialog */}
+        <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                {selectedLog && getActionIcon(selectedLog.action)}
+                <span>{isRTL ? 'تفاصيل التعديل' : 'Change Details'}</span>
+              </DialogTitle>
+            </DialogHeader>
+            
+            {selectedLog && (
+              <div className="space-y-6">
+                {/* Basic Info */}
+                <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50">
+                  <div>
+                    <p className="text-sm text-muted-foreground">{isRTL ? 'نوع الإجراء' : 'Action Type'}</p>
+                    <Badge variant={getActionBadgeVariant(selectedLog.action)} className="mt-1">
+                      {getActionArabic(selectedLog.action)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{isRTL ? 'الجدول' : 'Table'}</p>
+                    <Badge variant="outline" className="mt-1">
+                      {getTableNameArabic(selectedLog.table_name)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{isRTL ? 'المستخدم' : 'User'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{selectedLog.user_email || '-'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{isRTL ? 'التاريخ والوقت' : 'Date & Time'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{formatDateTime(selectedLog.created_at)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {selectedLog.description && (
+                  <div className="p-4 rounded-lg border">
+                    <p className="text-sm text-muted-foreground mb-2">{isRTL ? 'الوصف' : 'Description'}</p>
+                    <p className="font-medium">{selectedLog.description}</p>
+                  </div>
+                )}
+
+                {/* Changes */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    {isRTL ? 'التغييرات التفصيلية' : 'Detailed Changes'}
+                  </h4>
+                  
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-1/3">{isRTL ? 'الحقل' : 'Field'}</TableHead>
+                          <TableHead className="w-1/3">{isRTL ? 'القيمة السابقة' : 'Old Value'}</TableHead>
+                          <TableHead className="w-1/12 text-center"></TableHead>
+                          <TableHead className="w-1/3">{isRTL ? 'القيمة الجديدة' : 'New Value'}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {getChangedFields(selectedLog.old_data, selectedLog.new_data).map((change, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">
+                              {getFieldDisplayName(change.field)}
+                            </TableCell>
+                            <TableCell className={change.oldValue !== null ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20' : 'text-muted-foreground'}>
+                              {formatFieldValue(change.oldValue)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isRTL ? <ArrowLeft className="h-4 w-4 mx-auto text-muted-foreground" /> : <ArrowRight className="h-4 w-4 mx-auto text-muted-foreground" />}
+                            </TableCell>
+                            <TableCell className={change.newValue !== null ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20' : 'text-muted-foreground'}>
+                              {formatFieldValue(change.newValue)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {getChangedFields(selectedLog.old_data, selectedLog.new_data).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                              {isRTL ? 'لا توجد تفاصيل إضافية' : 'No additional details'}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
