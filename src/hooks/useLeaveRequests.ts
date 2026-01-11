@@ -115,10 +115,15 @@ export const useUpdateLeaveRequest = () => {
       }
 
       // Send Telegram notification to employee
+      console.log('Sending leave notification to employee:', { leave_request_id: id, status });
       try {
-        await supabase.functions.invoke('notify-leave-status', {
+        const notifyResult = await supabase.functions.invoke('notify-leave-status', {
           body: { leave_request_id: id, status }
         });
+        console.log('Notification result:', notifyResult);
+        if (notifyResult.error) {
+          console.error('Notification error:', notifyResult.error);
+        }
       } catch (notifyError) {
         console.error('Failed to send notification:', notifyError);
         // Don't fail the whole operation if notification fails
