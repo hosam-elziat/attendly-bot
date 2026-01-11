@@ -21,6 +21,21 @@ interface TelegramUpdate {
   };
 }
 
+// Registration session storage (in-memory for simplicity)
+const registrationSessions: Map<string, {
+  step: string;
+  data: {
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    work_start_time?: string;
+    work_end_time?: string;
+    weekend_days?: string[];
+    use_company_defaults?: boolean;
+  };
+  companyId: string;
+}> = new Map();
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -39,9 +54,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
 
-    // Resolve bot username:
-    // - Prefer explicit ?bot= query param (used by setWebhook in our app)
-    // - Fallback to last path segment if it isn't the function name itself
+    // Resolve bot username
     const url = new URL(req.url)
     const pathParts = url.pathname.split('/').filter(Boolean)
     const lastSegment = pathParts[pathParts.length - 1]
@@ -76,6 +89,21 @@ serve(async (req) => {
     const botToken = bot.bot_token
     const companyId = bot.assigned_company_id
     const telegramChatId = String(chatId)
+    const sessionKey = `${telegramChatId}_${companyId}`
+
+    // Get company info for defaults
+    const { data: company } = await supabase
+      .from('companies')
+      .select('work_start_time, work_end_time, name')
+      .eq('id', companyId)
+      .single()
+
+    const companyDefaults = {
+      work_start_time: company?.work_start_time || '09:00:00',
+      work_end_time: company?.work_end_time || '17:00:00',
+      weekend_days: ['friday', 'saturday'],
+      company_name: company?.name || 'الشركة'
+    }
 
     // Check if employee exists
     const { data: employee } = await supabase
@@ -92,16 +120,25 @@ serve(async (req) => {
       await answerCallbackQuery(botToken, update.callback_query.id)
 
       if (!employee) {
-        // Handle join request actions for non-employees
-        if (callbackData === 'join_request') {
-          await sendMessage(botToken, chatId, 
-            '📝 للانضمام، أرسل بياناتك بالصيغة التالية:\n\n' +
-            '/join الاسم الكامل | البريد الإلكتروني | رقم الهاتف\n\n' +
-            'مثال:\n/join أحمد محمد | ahmed@email.com | 0501234567'
+        // Handle registration flow for non-employees
+        const session = registrationSessions.get(sessionKey)
+
+        if (callbackData === 'start_registration') {
+          // Start registration process
+          registrationSessions.set(sessionKey, {
+            step: 'full_name',
+            data: {},
+            companyId
+          })
+          await sendMessage(botToken, chatId,
+            '📝 <b>تسجيل موظف جديد</b>\n\n' +
+            'الخطوة 1 من 5:\n' +
+            '👤 أرسل <b>اسمك الثلاثي</b> كاملاً\n\n' +
+            'مثال: أحمد محمد علي'
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
-        
+
         if (callbackData === 'check_status') {
           const { data: request } = await supabase
             .from('join_requests')
@@ -116,13 +153,86 @@ serve(async (req) => {
             const statusText = request.status === 'pending' 
               ? '⏳ قيد المراجعة'
               : request.status === 'approved'
-              ? '✅ تم القبول'
+              ? '✅ تم القبول - أرسل /start لبدء استخدام البوت'
               : '❌ مرفوض' + (request.rejection_reason ? `\nالسبب: ${request.rejection_reason}` : '')
             
             await sendMessage(botToken, chatId, `📋 حالة طلبك: ${statusText}`)
           } else {
             await sendMessage(botToken, chatId, '❌ لم يتم العثور على طلب سابق')
           }
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        // Handle work time selection
+        if (callbackData === 'use_default_time' && session) {
+          session.data.use_company_defaults = true
+          session.data.work_start_time = companyDefaults.work_start_time
+          session.data.work_end_time = companyDefaults.work_end_time
+          session.step = 'weekend_days'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            '✅ تم اختيار الوقت الافتراضي للشركة\n\n' +
+            '📅 الخطوة 5 من 5:\n' +
+            'اختر أيام الإجازة الأسبوعية:',
+            getWeekendKeyboard()
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        if (callbackData === 'custom_time' && session) {
+          session.step = 'work_start_time'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            '⏰ أرسل <b>وقت بدء العمل</b>\n\n' +
+            'الصيغة: HH:MM (مثال: 09:00)'
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        // Handle weekend selection
+        if (callbackData === 'use_default_weekend' && session) {
+          session.data.weekend_days = companyDefaults.weekend_days
+          await submitRegistration(supabase, botToken, chatId, session, telegramChatId, update.callback_query?.from.username)
+          registrationSessions.delete(sessionKey)
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        if (callbackData.startsWith('weekend_') && session) {
+          const day = callbackData.replace('weekend_', '')
+          if (!session.data.weekend_days) {
+            session.data.weekend_days = []
+          }
+          
+          const dayIndex = session.data.weekend_days.indexOf(day)
+          if (dayIndex > -1) {
+            session.data.weekend_days.splice(dayIndex, 1)
+          } else {
+            session.data.weekend_days.push(day)
+          }
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            `📅 أيام الإجازة المختارة: ${session.data.weekend_days.length > 0 ? session.data.weekend_days.map(d => getDayName(d)).join('، ') : 'لم يتم اختيار أي يوم'}\n\n` +
+            'اختر المزيد أو اضغط "تأكيد":',
+            getWeekendKeyboard(session.data.weekend_days)
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        if (callbackData === 'confirm_weekend' && session) {
+          if (!session.data.weekend_days || session.data.weekend_days.length === 0) {
+            session.data.weekend_days = companyDefaults.weekend_days
+          }
+          await submitRegistration(supabase, botToken, chatId, session, telegramChatId, update.callback_query?.from.username)
+          registrationSessions.delete(sessionKey)
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        if (callbackData === 'cancel_registration') {
+          registrationSessions.delete(sessionKey)
+          await sendWelcomeMessage(botToken, chatId, false)
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
 
@@ -214,13 +324,11 @@ serve(async (req) => {
           } else {
             const now = new Date().toISOString()
             
-            // Create break log
             await supabase.from('break_logs').insert({
               attendance_id: attendance.id,
               start_time: now
             })
 
-            // Update attendance status
             await supabase
               .from('attendance_logs')
               .update({ status: 'on_break' })
@@ -241,7 +349,6 @@ serve(async (req) => {
           } else {
             const now = new Date().toISOString()
             
-            // Find active break and update it
             const { data: activeBreak } = await supabase
               .from('break_logs')
               .select('*')
@@ -263,7 +370,6 @@ serve(async (req) => {
                 .eq('id', activeBreak.id)
             }
 
-            // Update attendance status
             await supabase
               .from('attendance_logs')
               .update({ status: 'checked_in' })
@@ -319,6 +425,8 @@ serve(async (req) => {
 
     // Handle /start command
     if (text === '/start') {
+      registrationSessions.delete(sessionKey) // Clear any pending session
+      
       if (employee) {
         await sendMessage(botToken, chatId, 
           `مرحباً ${employee.full_name}! 👋\n\nاختر من الأزرار أدناه:`,
@@ -330,56 +438,129 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
 
-    // Handle /join command for non-employees
-    if (text.startsWith('/join') && !employee) {
-      const parts = text.replace('/join', '').trim().split('|').map(p => p.trim())
-      
-      if (parts.length < 3) {
-        await sendMessage(botToken, chatId, 
-          '❌ صيغة غير صحيحة!\n\n' +
-          'الصيغة الصحيحة:\n' +
-          '/join الاسم الكامل | البريد الإلكتروني | رقم الهاتف\n\n' +
-          'مثال:\n/join أحمد محمد | ahmed@email.com | 0501234567'
-        )
-        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+    // Handle registration flow text inputs
+    const session = registrationSessions.get(sessionKey)
+    if (session && !employee) {
+      switch (session.step) {
+        case 'full_name':
+          // Validate full name (at least 2 words)
+          const nameParts = text.split(' ').filter(p => p.length > 0)
+          if (nameParts.length < 2) {
+            await sendMessage(botToken, chatId,
+              '❌ يرجى إدخال الاسم الثلاثي على الأقل\n\n' +
+              'مثال: أحمد محمد علي'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          session.data.full_name = text
+          session.step = 'email'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            '✅ تم حفظ الاسم\n\n' +
+            '📧 الخطوة 2 من 5:\n' +
+            'أرسل <b>بريدك الإلكتروني</b>\n\n' +
+            'مثال: ahmed@email.com'
+          )
+          break
+
+        case 'email':
+          // Validate email
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+          if (!emailRegex.test(text)) {
+            await sendMessage(botToken, chatId,
+              '❌ بريد إلكتروني غير صحيح\n\n' +
+              'مثال: ahmed@email.com'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          session.data.email = text
+          session.step = 'phone'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            '✅ تم حفظ البريد الإلكتروني\n\n' +
+            '📱 الخطوة 3 من 5:\n' +
+            'أرسل <b>رقم هاتفك</b>\n\n' +
+            'مثال: 0501234567'
+          )
+          break
+
+        case 'phone':
+          // Basic phone validation
+          const phoneClean = text.replace(/[\s\-\+]/g, '')
+          if (phoneClean.length < 9 || !/^\d+$/.test(phoneClean)) {
+            await sendMessage(botToken, chatId,
+              '❌ رقم هاتف غير صحيح\n\n' +
+              'مثال: 0501234567'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          session.data.phone = text
+          session.step = 'work_time_choice'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            '✅ تم حفظ رقم الهاتف\n\n' +
+            '⏰ الخطوة 4 من 5:\n' +
+            'اختر مواعيد العمل:\n\n' +
+            `الوقت الافتراضي للشركة:\n` +
+            `🕐 من ${companyDefaults.work_start_time.substring(0, 5)} إلى ${companyDefaults.work_end_time.substring(0, 5)}`,
+            {
+              inline_keyboard: [
+                [{ text: '✅ استخدام الوقت الافتراضي', callback_data: 'use_default_time' }],
+                [{ text: '⏰ تحديد وقت مختلف', callback_data: 'custom_time' }],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_registration' }]
+              ]
+            }
+          )
+          break
+
+        case 'work_start_time':
+          // Validate time format
+          const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/
+          if (!timeRegex.test(text)) {
+            await sendMessage(botToken, chatId,
+              '❌ صيغة الوقت غير صحيحة\n\n' +
+              'الصيغة الصحيحة: HH:MM\n' +
+              'مثال: 09:00'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          session.data.work_start_time = text + ':00'
+          session.step = 'work_end_time'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            `✅ وقت البدء: ${text}\n\n` +
+            'أرسل <b>وقت انتهاء العمل</b>\n\n' +
+            'الصيغة: HH:MM (مثال: 17:00)'
+          )
+          break
+
+        case 'work_end_time':
+          const endTimeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/
+          if (!endTimeRegex.test(text)) {
+            await sendMessage(botToken, chatId,
+              '❌ صيغة الوقت غير صحيحة\n\n' +
+              'الصيغة الصحيحة: HH:MM\n' +
+              'مثال: 17:00'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          session.data.work_end_time = text + ':00'
+          session.step = 'weekend_days'
+          registrationSessions.set(sessionKey, session)
+
+          await sendMessage(botToken, chatId,
+            `✅ وقت العمل: من ${session.data.work_start_time?.substring(0, 5)} إلى ${text}\n\n` +
+            '📅 الخطوة 5 من 5:\n' +
+            'اختر أيام الإجازة الأسبوعية:',
+            getWeekendKeyboard()
+          )
+          break
       }
 
-      const [fullName, email, phone, nationalId] = parts
-      const username = update.message?.from.username
-
-      // Check if request already exists
-      const { data: existingRequest } = await supabase
-        .from('join_requests')
-        .select('id, status')
-        .eq('telegram_chat_id', telegramChatId)
-        .eq('company_id', companyId)
-        .eq('status', 'pending')
-        .single()
-
-      if (existingRequest) {
-        await sendMessage(botToken, chatId, 
-          '⚠️ لديك طلب قيد المراجعة بالفعل!\n\n' +
-          'يمكنك التحقق من حالة طلبك بالضغط على "حالة طلبي"'
-        )
-        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
-      }
-
-      // Create join request
-      await supabase.from('join_requests').insert({
-        company_id: companyId,
-        telegram_chat_id: telegramChatId,
-        telegram_username: username,
-        full_name: fullName,
-        email: email || null,
-        phone: phone || null,
-        national_id: nationalId || null
-      })
-
-      await sendMessage(botToken, chatId, 
-        '✅ تم إرسال طلب الانضمام بنجاح!\n\n' +
-        '⏳ سيتم مراجعة طلبك من قبل الإدارة.\n' +
-        'يمكنك التحقق من حالة طلبك في أي وقت.'
-      )
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
 
@@ -400,7 +581,6 @@ serve(async (req) => {
 
       const [leaveType, startDate, endDate, reason] = parts
       
-      // Validate leave type
       const validTypes = ['vacation', 'sick', 'personal']
       if (!validTypes.includes(leaveType.toLowerCase())) {
         await sendMessage(botToken, chatId, 
@@ -410,7 +590,6 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
       }
 
-      // Calculate days
       const start = new Date(startDate)
       const end = new Date(endDate)
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -420,7 +599,6 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
       }
 
-      // Create leave request
       await supabase.from('leave_requests').insert({
         employee_id: employee.id,
         company_id: companyId,
@@ -463,6 +641,62 @@ serve(async (req) => {
 })
 
 // Helper functions
+async function submitRegistration(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  session: any,
+  telegramChatId: string,
+  username?: string
+) {
+  // Check if request already exists
+  const { data: existingRequest } = await supabase
+    .from('join_requests')
+    .select('id, status')
+    .eq('telegram_chat_id', telegramChatId)
+    .eq('company_id', session.companyId)
+    .eq('status', 'pending')
+    .single()
+
+  if (existingRequest) {
+    await sendMessage(botToken, chatId, 
+      '⚠️ لديك طلب قيد المراجعة بالفعل!\n\n' +
+      'يمكنك التحقق من حالة طلبك بالضغط على "حالة طلبي"'
+    )
+    return
+  }
+
+  // Create join request with all collected data
+  await supabase.from('join_requests').insert({
+    company_id: session.companyId,
+    telegram_chat_id: telegramChatId,
+    telegram_username: username,
+    full_name: session.data.full_name,
+    email: session.data.email,
+    phone: session.data.phone,
+  })
+
+  // Store additional data for when request is approved (in notes or metadata)
+  // For now, we'll send a summary and the admin will see this info
+
+  await sendMessage(botToken, chatId, 
+    '✅ <b>تم إرسال طلب الانضمام بنجاح!</b>\n\n' +
+    '📋 ملخص بياناتك:\n' +
+    `👤 الاسم: ${session.data.full_name}\n` +
+    `📧 البريد: ${session.data.email}\n` +
+    `📱 الهاتف: ${session.data.phone}\n` +
+    `⏰ وقت العمل: ${session.data.work_start_time?.substring(0, 5)} - ${session.data.work_end_time?.substring(0, 5)}\n` +
+    `📅 أيام الإجازة: ${session.data.weekend_days?.map((d: string) => getDayName(d)).join('، ')}\n\n` +
+    '⏳ سيتم مراجعة طلبك من قبل الإدارة.\n' +
+    'سنرسل لك إشعاراً فور الموافقة على طلبك.',
+    {
+      inline_keyboard: [
+        [{ text: '📋 حالة طلبي', callback_data: 'check_status' }]
+      ]
+    }
+  )
+}
+
 async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {
   const body: any = {
     chat_id: chatId,
@@ -505,14 +739,14 @@ async function sendWelcomeMessage(botToken: string, chatId: number, isEmployee: 
   } else {
     const keyboard = {
       inline_keyboard: [
-        [{ text: '📝 طلب انضمام', callback_data: 'join_request' }],
+        [{ text: '📝 تسجيل موظف جديد', callback_data: 'start_registration' }],
         [{ text: '📋 حالة طلبي', callback_data: 'check_status' }]
       ]
     }
     await sendMessage(botToken, chatId, 
-      'مرحباً! 👋\n\n' +
-      'يبدو أنك لست مسجلاً بعد.\n' +
-      'للانضمام، اضغط على "طلب انضمام" أدناه.',
+      '👋 مرحباً!\n\n' +
+      '❌ أنت غير مسجل كموظف.\n\n' +
+      'للتسجيل، اضغط على الزر أدناه وأكمل بياناتك.',
       keyboard
     )
   }
@@ -537,6 +771,48 @@ function getEmployeeKeyboard() {
       ]
     ]
   }
+}
+
+function getWeekendKeyboard(selectedDays: string[] = []) {
+  const days = [
+    { name: 'الجمعة', value: 'friday' },
+    { name: 'السبت', value: 'saturday' },
+    { name: 'الأحد', value: 'sunday' },
+    { name: 'الإثنين', value: 'monday' },
+    { name: 'الثلاثاء', value: 'tuesday' },
+    { name: 'الأربعاء', value: 'wednesday' },
+    { name: 'الخميس', value: 'thursday' },
+  ]
+
+  const dayButtons = days.map(day => ({
+    text: `${selectedDays.includes(day.value) ? '✅' : '⬜'} ${day.name}`,
+    callback_data: `weekend_${day.value}`
+  }))
+
+  return {
+    inline_keyboard: [
+      dayButtons.slice(0, 2),
+      dayButtons.slice(2, 4),
+      dayButtons.slice(4, 6),
+      [dayButtons[6]],
+      [{ text: '✅ استخدام الافتراضي (جمعة + سبت)', callback_data: 'use_default_weekend' }],
+      [{ text: '✅ تأكيد الاختيار', callback_data: 'confirm_weekend' }],
+      [{ text: '❌ إلغاء', callback_data: 'cancel_registration' }]
+    ]
+  }
+}
+
+function getDayName(day: string): string {
+  const days: Record<string, string> = {
+    'friday': 'الجمعة',
+    'saturday': 'السبت',
+    'sunday': 'الأحد',
+    'monday': 'الإثنين',
+    'tuesday': 'الثلاثاء',
+    'wednesday': 'الأربعاء',
+    'thursday': 'الخميس'
+  }
+  return days[day] || day
 }
 
 function getStatusText(status: string): string {
