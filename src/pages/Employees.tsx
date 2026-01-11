@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useEmployees, useCreateEmployee, useDeleteEmployee, useUpdateEmployee, CreateEmployeeData, Employee } from '@/hooks/useEmployees';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, CreateEmployeeData, Employee } from '@/hooks/useEmployees';
+import { useSoftDelete } from '@/hooks/useAuditLogs';
 import { useCompany } from '@/hooks/useCompany';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,7 +76,7 @@ const Employees = () => {
   const { data: employees = [], isLoading } = useEmployees();
   const { data: company } = useCompany();
   const createEmployee = useCreateEmployee();
-  const deleteEmployee = useDeleteEmployee();
+  const softDelete = useSoftDelete();
   const updateEmployee = useUpdateEmployee();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,7 +103,11 @@ const Employees = () => {
 
   const handleDelete = async () => {
     if (selectedEmployee) {
-      await deleteEmployee.mutateAsync(selectedEmployee.id);
+      await softDelete.mutateAsync({
+        tableName: 'employees',
+        recordId: selectedEmployee.id,
+        recordData: JSON.parse(JSON.stringify(selectedEmployee)),
+      });
       setDeleteDialogOpen(false);
       setSelectedEmployee(null);
     }
@@ -389,7 +394,7 @@ const Employees = () => {
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteEmployee.isPending ? (
+              {softDelete.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 t('common.delete')
