@@ -1253,7 +1253,7 @@ async function submitRegistration(
     return
   }
 
-  // Create join request with all collected data
+  // Create join request with all collected data including work schedule
   await supabase.from('join_requests').insert({
     company_id: companyId,
     telegram_chat_id: telegramChatId,
@@ -1261,6 +1261,9 @@ async function submitRegistration(
     full_name: sessionData.full_name,
     email: sessionData.email,
     phone: sessionData.phone,
+    work_start_time: sessionData.work_start_time || null,
+    work_end_time: sessionData.work_end_time || null,
+    weekend_days: sessionData.weekend_days || ['friday', 'saturday'],
   })
 
   await sendMessage(botToken, chatId, 

@@ -475,6 +475,9 @@ export type Database = {
           telegram_chat_id: string
           telegram_username: string | null
           updated_at: string
+          weekend_days: string[] | null
+          work_end_time: string | null
+          work_start_time: string | null
         }
         Insert: {
           company_id: string
@@ -491,6 +494,9 @@ export type Database = {
           telegram_chat_id: string
           telegram_username?: string | null
           updated_at?: string
+          weekend_days?: string[] | null
+          work_end_time?: string | null
+          work_start_time?: string | null
         }
         Update: {
           company_id?: string
@@ -507,6 +513,9 @@ export type Database = {
           telegram_chat_id?: string
           telegram_username?: string | null
           updated_at?: string
+          weekend_days?: string[] | null
+          work_end_time?: string | null
+          work_start_time?: string | null
         }
         Relationships: [
           {

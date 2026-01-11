@@ -18,6 +18,9 @@ export interface JoinRequest {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+  work_start_time: string | null;
+  work_end_time: string | null;
+  weekend_days: string[] | null;
 }
 
 export function useJoinRequests() {
@@ -56,11 +59,21 @@ export function useApproveJoinRequest() {
         national_id?: string;
         department?: string;
         base_salary?: number;
+        work_start_time?: string | null;
+        work_end_time?: string | null;
+        weekend_days?: string[] | null;
       }
     }) => {
       if (!profile?.company_id) throw new Error('No company found');
 
-      // Create employee
+      // Get company default currency
+      const { data: company } = await supabase
+        .from('companies')
+        .select('default_currency')
+        .eq('id', profile.company_id)
+        .single();
+
+      // Create employee with work schedule and default currency
       const { error: employeeError } = await supabase
         .from('employees')
         .insert({
@@ -72,6 +85,10 @@ export function useApproveJoinRequest() {
           national_id: employeeData.national_id || null,
           department: employeeData.department || null,
           base_salary: employeeData.base_salary || 0,
+          work_start_time: employeeData.work_start_time || '09:00:00',
+          work_end_time: employeeData.work_end_time || '17:00:00',
+          weekend_days: employeeData.weekend_days || ['friday', 'saturday'],
+          currency: company?.default_currency || 'SAR',
         });
 
       if (employeeError) throw employeeError;
