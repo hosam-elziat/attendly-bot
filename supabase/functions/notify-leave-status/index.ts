@@ -36,7 +36,9 @@ serve(async (req) => {
           id,
           full_name,
           telegram_chat_id,
-          company_id
+          company_id,
+          leave_balance,
+          emergency_leave_balance
         )
       `)
       .eq('id', leave_request_id)
@@ -50,7 +52,7 @@ serve(async (req) => {
       )
     }
 
-    const employee = leaveRequest.employees
+    const employee = leaveRequest.employees as any
     if (!employee?.telegram_chat_id) {
       console.log('Employee has no telegram_chat_id, skipping notification')
       return new Response(
@@ -83,6 +85,10 @@ serve(async (req) => {
       'personal': 'شخصية'
     }
     const leaveTypeText = leaveTypeMap[leaveRequest.leave_type] || leaveRequest.leave_type
+    
+    // Get leave balance info
+    const leaveBalance = employee.leave_balance ?? 0
+    const emergencyBalance = employee.emergency_leave_balance ?? 0
 
     let message = ''
     if (status === 'approved') {
@@ -92,6 +98,9 @@ serve(async (req) => {
         (leaveRequest.start_date !== leaveRequest.end_date ? ` إلى ${leaveRequest.end_date}` : '') + `\n` +
         `📊 عدد الأيام: ${leaveRequest.days} يوم\n` +
         (leaveRequest.reason ? `📝 السبب: ${leaveRequest.reason}\n` : '') +
+        `\n📊 <b>رصيدك المتبقي:</b>\n` +
+        `• إجازات اعتيادية: ${leaveBalance} يوم\n` +
+        `• إجازات طارئة: ${emergencyBalance} يوم\n` +
         `\n🏠 إجازة سعيدة!`
     } else if (status === 'rejected') {
       message = `❌ <b>تم رفض طلب إجازتك</b>\n\n` +
@@ -99,6 +108,9 @@ serve(async (req) => {
         `📅 التاريخ: ${leaveRequest.start_date}` +
         (leaveRequest.start_date !== leaveRequest.end_date ? ` إلى ${leaveRequest.end_date}` : '') + `\n` +
         (leaveRequest.reason ? `📝 السبب: ${leaveRequest.reason}\n` : '') +
+        `\n📊 <b>رصيدك الحالي:</b>\n` +
+        `• إجازات اعتيادية: ${leaveBalance} يوم\n` +
+        `• إجازات طارئة: ${emergencyBalance} يوم\n` +
         `\n⚠️ يرجى التواصل مع الإدارة للمزيد من التفاصيل.`
     }
 
