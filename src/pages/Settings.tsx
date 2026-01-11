@@ -53,6 +53,10 @@ const Settings = () => {
   const [maxExcusedAbsenceDays, setMaxExcusedAbsenceDays] = useState(2);
   const [overtimeMultiplier, setOvertimeMultiplier] = useState(2);
   const [countryCode, setCountryCode] = useState('SA');
+  
+  // Leave policy states
+  const [annualLeaveDays, setAnnualLeaveDays] = useState(21);
+  const [emergencyLeaveDays, setEmergencyLeaveDays] = useState(7);
 
   const WEEKDAYS = [
     { id: 'sunday', label: t('common.sunday') },
@@ -84,6 +88,10 @@ const Settings = () => {
       setMaxExcusedAbsenceDays((company as any).max_excused_absence_days || 2);
       setOvertimeMultiplier((company as any).overtime_multiplier || 2);
       setCountryCode((company as any).country_code || 'SA');
+      
+      // Leave policy
+      setAnnualLeaveDays((company as any).annual_leave_days || 21);
+      setEmergencyLeaveDays((company as any).emergency_leave_days || 7);
     }
   }, [company]);
 
@@ -216,6 +224,8 @@ const Settings = () => {
           max_excused_absence_days: maxExcusedAbsenceDays,
           overtime_multiplier: overtimeMultiplier,
           country_code: countryCode,
+          annual_leave_days: annualLeaveDays,
+          emergency_leave_days: emergencyLeaveDays,
         } as any)
         .eq('id', company.id);
 
@@ -667,6 +677,47 @@ const Settings = () => {
                 </div>
               </div>
 
+              {/* Leave Policy Settings */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  إعدادات الإجازات
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-2 p-3 border rounded-lg bg-primary/5 border-primary/20">
+                    <Label htmlFor="annual-leave">إجمالي الإجازات السنوية (أيام)</Label>
+                    <Input 
+                      id="annual-leave" 
+                      type="number" 
+                      min={0}
+                      max={60}
+                      value={annualLeaveDays}
+                      onChange={(e) => setAnnualLeaveDays(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">العدد الإجمالي لأيام الإجازة السنوية</p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-amber-500/10 border-amber-500/30">
+                    <Label htmlFor="emergency-leave">الإجازات الطارئة (من الإجمالي)</Label>
+                    <Input 
+                      id="emergency-leave" 
+                      type="number" 
+                      min={0}
+                      max={annualLeaveDays}
+                      value={emergencyLeaveDays}
+                      onChange={(e) => setEmergencyLeaveDays(Math.min(annualLeaveDays, Math.max(0, parseInt(e.target.value) || 0)))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      إجازات تُوافق تلقائياً - المتبقي اعتيادية: {annualLeaveDays - emergencyLeaveDays} يوم
+                    </p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label>الإجازات الاعتيادية</Label>
+                    <div className="text-2xl font-bold text-primary">{annualLeaveDays - emergencyLeaveDays} يوم</div>
+                    <p className="text-xs text-muted-foreground">تحتاج موافقة مسبقة قبل 48 ساعة</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Policy Summary */}
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <h4 className="font-medium text-foreground mb-2">ملخص القوانين</h4>
@@ -680,6 +731,7 @@ const Settings = () => {
                   <li>أقصى غياب مسموح بإذن: {maxExcusedAbsenceDays} أيام شهرياً</li>
                   <li>معدل الوقت الإضافي: × {overtimeMultiplier}</li>
                   <li>دولة الشركة: {COUNTRIES.find(c => c.code === countryCode)?.name || countryCode}</li>
+                  <li className="text-primary font-medium">إجازات سنوية: {annualLeaveDays} يوم ({emergencyLeaveDays} طارئة + {annualLeaveDays - emergencyLeaveDays} اعتيادية)</li>
                 </ul>
               </div>
 

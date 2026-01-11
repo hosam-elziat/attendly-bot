@@ -200,11 +200,13 @@ export type Database = {
       companies: {
         Row: {
           absence_without_permission_deduction: number | null
+          annual_leave_days: number | null
           break_duration_minutes: number | null
           country_code: string | null
           created_at: string
           daily_late_allowance_minutes: number | null
           default_currency: string | null
+          emergency_leave_days: number | null
           id: string
           late_15_to_30_deduction: number | null
           late_over_30_deduction: number | null
@@ -223,11 +225,13 @@ export type Database = {
         }
         Insert: {
           absence_without_permission_deduction?: number | null
+          annual_leave_days?: number | null
           break_duration_minutes?: number | null
           country_code?: string | null
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
+          emergency_leave_days?: number | null
           id?: string
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
@@ -246,11 +250,13 @@ export type Database = {
         }
         Update: {
           absence_without_permission_deduction?: number | null
+          annual_leave_days?: number | null
           break_duration_minutes?: number | null
           country_code?: string | null
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
+          emergency_leave_days?: number | null
           id?: string
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
@@ -371,6 +377,7 @@ export type Database = {
           currency: string | null
           department: string | null
           email: string
+          emergency_leave_balance: number | null
           full_name: string
           hire_date: string | null
           id: string
@@ -397,6 +404,7 @@ export type Database = {
           currency?: string | null
           department?: string | null
           email: string
+          emergency_leave_balance?: number | null
           full_name: string
           hire_date?: string | null
           id?: string
@@ -423,6 +431,7 @@ export type Database = {
           currency?: string | null
           department?: string | null
           email?: string
+          emergency_leave_balance?: number | null
           full_name?: string
           hire_date?: string | null
           id?: string
@@ -1048,7 +1057,7 @@ export type Database = {
       attendance_status: "checked_in" | "on_break" | "checked_out" | "absent"
       audit_action: "insert" | "update" | "delete" | "restore"
       leave_status: "pending" | "approved" | "rejected"
-      leave_type: "vacation" | "sick" | "personal"
+      leave_type: "vacation" | "sick" | "personal" | "emergency" | "regular"
       salary_type: "monthly" | "daily"
       subscription_status: "active" | "inactive" | "trial" | "cancelled"
       user_role:
@@ -1188,7 +1197,7 @@ export const Constants = {
       attendance_status: ["checked_in", "on_break", "checked_out", "absent"],
       audit_action: ["insert", "update", "delete", "restore"],
       leave_status: ["pending", "approved", "rejected"],
-      leave_type: ["vacation", "sick", "personal"],
+      leave_type: ["vacation", "sick", "personal", "emergency", "regular"],
       salary_type: ["monthly", "daily"],
       subscription_status: ["active", "inactive", "trial", "cancelled"],
       user_role: [
