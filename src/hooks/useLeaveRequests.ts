@@ -87,7 +87,8 @@ export const useUpdateLeaveRequest = () => {
           employees (
             full_name,
             email,
-            leave_balance
+            leave_balance,
+            emergency_leave_balance
           )
         `)
         .single();
@@ -96,13 +97,31 @@ export const useUpdateLeaveRequest = () => {
 
       // If approved, deduct from employee's leave balance
       if (status === 'approved' && data.employee_id) {
-        const currentBalance = (data.employees as any)?.leave_balance || 21;
-        const newBalance = Math.max(0, currentBalance - data.days);
-        
-        await supabase
-          .from('employees')
-          .update({ leave_balance: newBalance })
-          .eq('id', data.employee_id);
+        if (data.leave_type === 'emergency') {
+          const currentBalance = (data.employees as any)?.emergency_leave_balance || 7;
+          const newBalance = Math.max(0, currentBalance - data.days);
+          await supabase
+            .from('employees')
+            .update({ emergency_leave_balance: newBalance })
+            .eq('id', data.employee_id);
+        } else {
+          const currentBalance = (data.employees as any)?.leave_balance || 21;
+          const newBalance = Math.max(0, currentBalance - data.days);
+          await supabase
+            .from('employees')
+            .update({ leave_balance: newBalance })
+            .eq('id', data.employee_id);
+        }
+      }
+
+      // Send Telegram notification to employee
+      try {
+        await supabase.functions.invoke('notify-leave-status', {
+          body: { leave_request_id: id, status }
+        });
+      } catch (notifyError) {
+        console.error('Failed to send notification:', notifyError);
+        // Don't fail the whole operation if notification fails
       }
 
       // Log the action
