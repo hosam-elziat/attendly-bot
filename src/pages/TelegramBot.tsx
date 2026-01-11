@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -17,6 +17,42 @@ const TelegramBot = () => {
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [isSettingWebhook, setIsSettingWebhook] = useState(false);
 
+  const NAME_COOLDOWN_STORAGE_KEY = 'telegram_bot_name_cooldown_until';
+
+  const [nameCooldownUntil, setNameCooldownUntil] = useState<number | null>(() => {
+    try {
+      const raw = localStorage.getItem(NAME_COOLDOWN_STORAGE_KEY);
+      const n = raw ? Number(raw) : NaN;
+      return Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!nameCooldownUntil) return;
+    if (nameCooldownUntil <= Date.now()) return;
+
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [nameCooldownUntil]);
+
+  const nameCooldownSecondsLeft =
+    nameCooldownUntil && nameCooldownUntil > nowMs
+      ? Math.ceil((nameCooldownUntil - nowMs) / 1000)
+      : 0;
+
+  const isNameCooldownActive = nameCooldownSecondsLeft > 0;
+
+  const formatCooldown = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h} س ${m} د`;
+    if (m > 0) return `${m} د`;
+    return `${seconds} ث`;
+  };
   const isConnected = company?.telegram_bot_connected || false;
   const botUsername = company?.telegram_bot_username;
   const botLink = botUsername ? `https://t.me/${botUsername}` : null;
@@ -70,6 +106,11 @@ const TelegramBot = () => {
   };
 
   const handleUpdateName = async () => {
+    if (isNameCooldownActive) {
+      toast.info(`محاولة تغيير الاسم متاحة بعد ${formatCooldown(nameCooldownSecondsLeft)}`);
+      return;
+    }
+
     setIsUpdatingName(true);
 
     try {
@@ -80,18 +121,12 @@ const TelegramBot = () => {
         return;
       }
 
-      const response = await fetch(`https://seqqfrtnrjngvqidtrcp.supabase.co/functions/v1/update-telegram-bot`, {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcXFmcnRucmpuZ3ZxaWR0cmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2NDQ0NDAsImV4cCI6MjA4MzIyMDQ0MH0.toSzt6hj1Q6ieNKfHe1kOcswGg2XGCz7wA_5IUa75TY'
+          Authorization: `Bearer ${sessionData.session.access_token}`,
         },
-        body: JSON.stringify({ action: 'update_name' })
+        body: { action: 'update_name' },
       });
-      
-      const data = await response.json();
-      const error = !response.ok ? new Error(data?.error || 'Request failed') : null;
 
       if (error) {
         console.error('Update name error:', error);
@@ -99,10 +134,24 @@ const TelegramBot = () => {
         return;
       }
 
+      // Telegram rate limit info
+      if (data?.retry_after_seconds) {
+        const seconds = Number(data.retry_after_seconds);
+        if (Number.isFinite(seconds) && seconds > 0) {
+          const until = Date.now() + seconds * 1000;
+          setNameCooldownUntil(until);
+          localStorage.setItem(NAME_COOLDOWN_STORAGE_KEY, String(until));
+        }
+      }
+
       if (data?.error) {
         toast.error(data.error);
         return;
       }
+
+      // Success → clear cooldown
+      setNameCooldownUntil(null);
+      localStorage.removeItem(NAME_COOLDOWN_STORAGE_KEY);
 
       toast.success(data?.message || 'تم تحديث اسم البوت بنجاح!');
 
@@ -125,18 +174,12 @@ const TelegramBot = () => {
         return;
       }
 
-      const response = await fetch(`https://seqqfrtnrjngvqidtrcp.supabase.co/functions/v1/update-telegram-bot`, {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcXFmcnRucmpuZ3ZxaWR0cmNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2NDQ0NDAsImV4cCI6MjA4MzIyMDQ0MH0.toSzt6hj1Q6ieNKfHe1kOcswGg2XGCz7wA_5IUa75TY'
+          Authorization: `Bearer ${sessionData.session.access_token}`,
         },
-        body: JSON.stringify({ action: 'set_webhook' })
+        body: { action: 'set_webhook' },
       });
-      
-      const data = await response.json();
-      const error = !response.ok ? new Error(data?.error || 'Request failed') : null;
 
       if (error) {
         console.error('Webhook setup error:', error);
@@ -254,12 +297,17 @@ const TelegramBot = () => {
                       <Button 
                         variant="outline" 
                         onClick={handleUpdateName}
-                        disabled={isUpdatingName}
+                        disabled={isUpdatingName || isNameCooldownActive}
                       >
                         {isUpdatingName ? (
                           <>
                             <Loader2 className="w-4 h-4 me-2 animate-spin" />
                             جاري التحديث...
+                          </>
+                        ) : isNameCooldownActive ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 me-2" />
+                            متاح بعد {formatCooldown(nameCooldownSecondsLeft)}
                           </>
                         ) : (
                           <>
