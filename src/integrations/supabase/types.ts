@@ -206,6 +206,7 @@ export type Database = {
           created_at: string
           daily_late_allowance_minutes: number | null
           default_currency: string | null
+          default_weekend_days: string[] | null
           emergency_leave_days: number | null
           id: string
           late_15_to_30_deduction: number | null
@@ -231,6 +232,7 @@ export type Database = {
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
+          default_weekend_days?: string[] | null
           emergency_leave_days?: number | null
           id?: string
           late_15_to_30_deduction?: number | null
@@ -256,6 +258,7 @@ export type Database = {
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
+          default_weekend_days?: string[] | null
           emergency_leave_days?: number | null
           id?: string
           late_15_to_30_deduction?: number | null
