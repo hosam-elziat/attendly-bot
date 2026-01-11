@@ -81,29 +81,65 @@ serve(async (req) => {
     }
 
     const botToken = bot.bot_token;
-    const formData = await req.formData();
-    const action = formData.get('action') as string;
+
+    let action: string | null = null;
+    let photoFile: File | null = null;
+
+    const contentType = req.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const body = await req.json().catch(() => ({}));
+      action = typeof (body as any)?.action === 'string' ? (body as any).action : null;
+    } else {
+      const formData = await req.formData();
+      action = (formData.get('action') as string) || null;
+      photoFile = (formData.get('photo') as File) || null;
+    }
+
+    if (!action) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid action' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (action === 'update_name') {
       const newBotName = `${company.name} - حضور وانصراف`;
-      
+
       // Update bot name
       const setNameResponse = await fetch(`https://api.telegram.org/bot${botToken}/setMyName`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newBotName.substring(0, 64) })
       });
-      
+
       const setNameResult = await setNameResponse.json();
       console.log('Set bot name result:', setNameResult);
 
+      if (!setNameResult?.ok) {
+        return new Response(
+          JSON.stringify({ error: 'فشل في تحديث اسم البوت: ' + (setNameResult?.description || 'خطأ غير معروف') }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Update description
       const description = `بوت ${company.name} لإدارة الحضور والانصراف`;
-      await fetch(`https://api.telegram.org/bot${botToken}/setMyDescription`, {
+      const setDescResponse = await fetch(`https://api.telegram.org/bot${botToken}/setMyDescription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: description.substring(0, 512) })
       });
+
+      const setDescResult = await setDescResponse.json();
+      console.log('Set bot description result:', setDescResult);
+
+      if (!setDescResult?.ok) {
+        return new Response(
+          JSON.stringify({ error: 'فشل في تحديث وصف البوت: ' + (setDescResult?.description || 'خطأ غير معروف') }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       // Update bot name in database
       await supabaseAdmin
@@ -112,13 +148,45 @@ serve(async (req) => {
         .eq('assigned_company_id', companyId);
 
       return new Response(
-        JSON.stringify({ success: true, message: 'تم تحديث اسم البوت بنجاح' }),
+        JSON.stringify({ success: true, message: 'تم تحديث اسم البوت بنجاح', bot_name: newBotName }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+
+    } else if (action === 'set_webhook') {
+      if (!company.telegram_bot_username) {
+        return new Response(
+          JSON.stringify({ error: 'Bot username not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const webhookUrl = `${supabaseUrl}/functions/v1/telegram-webhook?bot=${company.telegram_bot_username}`;
+
+      const setWebhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: webhookUrl,
+          allowed_updates: ['message', 'callback_query']
+        })
+      });
+
+      const setWebhookResult = await setWebhookResponse.json();
+      console.log('Set webhook result:', setWebhookResult);
+
+      if (!setWebhookResult?.ok) {
+        return new Response(
+          JSON.stringify({ error: 'فشل في إعداد الـ Webhook: ' + (setWebhookResult?.description || 'خطأ غير معروف') }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: 'تم إعداد الـ Webhook بنجاح' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } else if (action === 'update_photo') {
-      const photoFile = formData.get('photo') as File;
-      
       if (!photoFile) {
         return new Response(
           JSON.stringify({ error: 'لم يتم إرسال صورة' }),
