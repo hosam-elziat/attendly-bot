@@ -21,20 +21,15 @@ interface TelegramUpdate {
   };
 }
 
-// Registration session storage (in-memory for simplicity)
-const registrationSessions: Map<string, {
-  step: string;
-  data: {
-    full_name?: string;
-    email?: string;
-    phone?: string;
-    work_start_time?: string;
-    work_end_time?: string;
-    weekend_days?: string[];
-    use_company_defaults?: boolean;
-  };
-  companyId: string;
-}> = new Map();
+interface SessionData {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  work_start_time?: string;
+  work_end_time?: string;
+  weekend_days?: string[];
+  use_company_defaults?: boolean;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -89,7 +84,6 @@ serve(async (req) => {
     const botToken = bot.bot_token
     const companyId = bot.assigned_company_id
     const telegramChatId = String(chatId)
-    const sessionKey = `${telegramChatId}_${companyId}`
 
     // Get company info for defaults
     const { data: company } = await supabase
@@ -114,6 +108,44 @@ serve(async (req) => {
       .eq('is_active', true)
       .single()
 
+    // Helper functions for session management
+    async function getSession(): Promise<{ step: string; data: SessionData } | null> {
+      const { data } = await supabase
+        .from('registration_sessions')
+        .select('step, data')
+        .eq('telegram_chat_id', telegramChatId)
+        .eq('company_id', companyId)
+        .single()
+      
+      if (data) {
+        return { step: data.step, data: data.data as SessionData }
+      }
+      return null
+    }
+
+    async function setSession(step: string, sessionData: SessionData) {
+      await supabase
+        .from('registration_sessions')
+        .upsert({
+          telegram_chat_id: telegramChatId,
+          company_id: companyId,
+          step,
+          data: sessionData,
+          updated_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 3600000).toISOString() // 1 hour
+        }, {
+          onConflict: 'telegram_chat_id,company_id'
+        })
+    }
+
+    async function deleteSession() {
+      await supabase
+        .from('registration_sessions')
+        .delete()
+        .eq('telegram_chat_id', telegramChatId)
+        .eq('company_id', companyId)
+    }
+
     // Handle callback queries (button clicks)
     if (update.callback_query) {
       const callbackData = update.callback_query.data
@@ -121,15 +153,11 @@ serve(async (req) => {
 
       if (!employee) {
         // Handle registration flow for non-employees
-        const session = registrationSessions.get(sessionKey)
+        const session = await getSession()
 
         if (callbackData === 'start_registration') {
           // Start registration process
-          registrationSessions.set(sessionKey, {
-            step: 'full_name',
-            data: {},
-            companyId
-          })
+          await setSession('full_name', {})
           await sendMessage(botToken, chatId,
             '📝 <b>تسجيل موظف جديد</b>\n\n' +
             'الخطوة 1 من 5:\n' +
@@ -165,11 +193,13 @@ serve(async (req) => {
 
         // Handle work time selection
         if (callbackData === 'use_default_time' && session) {
-          session.data.use_company_defaults = true
-          session.data.work_start_time = companyDefaults.work_start_time
-          session.data.work_end_time = companyDefaults.work_end_time
-          session.step = 'weekend_days'
-          registrationSessions.set(sessionKey, session)
+          const newData = {
+            ...session.data,
+            use_company_defaults: true,
+            work_start_time: companyDefaults.work_start_time,
+            work_end_time: companyDefaults.work_end_time
+          }
+          await setSession('weekend_days', newData)
 
           await sendMessage(botToken, chatId,
             '✅ تم اختيار الوقت الافتراضي للشركة\n\n' +
@@ -181,8 +211,7 @@ serve(async (req) => {
         }
 
         if (callbackData === 'custom_time' && session) {
-          session.step = 'work_start_time'
-          registrationSessions.set(sessionKey, session)
+          await setSession('work_start_time', session.data)
 
           await sendMessage(botToken, chatId,
             '⏰ أرسل <b>وقت بدء العمل</b>\n\n' +
@@ -193,45 +222,44 @@ serve(async (req) => {
 
         // Handle weekend selection
         if (callbackData === 'use_default_weekend' && session) {
-          session.data.weekend_days = companyDefaults.weekend_days
-          await submitRegistration(supabase, botToken, chatId, session, telegramChatId, update.callback_query?.from.username)
-          registrationSessions.delete(sessionKey)
+          const newData = { ...session.data, weekend_days: companyDefaults.weekend_days }
+          await submitRegistration(supabase, botToken, chatId, newData, companyId, telegramChatId, update.callback_query?.from.username)
+          await deleteSession()
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
 
         if (callbackData.startsWith('weekend_') && session) {
           const day = callbackData.replace('weekend_', '')
-          if (!session.data.weekend_days) {
-            session.data.weekend_days = []
+          const currentDays = session.data.weekend_days || []
+          
+          const dayIndex = currentDays.indexOf(day)
+          if (dayIndex > -1) {
+            currentDays.splice(dayIndex, 1)
+          } else {
+            currentDays.push(day)
           }
           
-          const dayIndex = session.data.weekend_days.indexOf(day)
-          if (dayIndex > -1) {
-            session.data.weekend_days.splice(dayIndex, 1)
-          } else {
-            session.data.weekend_days.push(day)
-          }
-          registrationSessions.set(sessionKey, session)
+          const newData = { ...session.data, weekend_days: currentDays }
+          await setSession('weekend_days', newData)
 
           await sendMessage(botToken, chatId,
-            `📅 أيام الإجازة المختارة: ${session.data.weekend_days.length > 0 ? session.data.weekend_days.map(d => getDayName(d)).join('، ') : 'لم يتم اختيار أي يوم'}\n\n` +
+            `📅 أيام الإجازة المختارة: ${currentDays.length > 0 ? currentDays.map(d => getDayName(d)).join('، ') : 'لم يتم اختيار أي يوم'}\n\n` +
             'اختر المزيد أو اضغط "تأكيد":',
-            getWeekendKeyboard(session.data.weekend_days)
+            getWeekendKeyboard(currentDays)
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
 
         if (callbackData === 'confirm_weekend' && session) {
-          if (!session.data.weekend_days || session.data.weekend_days.length === 0) {
-            session.data.weekend_days = companyDefaults.weekend_days
-          }
-          await submitRegistration(supabase, botToken, chatId, session, telegramChatId, update.callback_query?.from.username)
-          registrationSessions.delete(sessionKey)
+          const weekendDays = session.data.weekend_days?.length ? session.data.weekend_days : companyDefaults.weekend_days
+          const newData = { ...session.data, weekend_days: weekendDays }
+          await submitRegistration(supabase, botToken, chatId, newData, companyId, telegramChatId, update.callback_query?.from.username)
+          await deleteSession()
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
 
         if (callbackData === 'cancel_registration') {
-          registrationSessions.delete(sessionKey)
+          await deleteSession()
           await sendWelcomeMessage(botToken, chatId, false)
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
@@ -260,7 +288,6 @@ serve(async (req) => {
             const now = new Date().toISOString()
             const checkInTime = now.split('T')[1].substring(0, 8)
             
-            // Check if late
             let status: 'checked_in' | 'on_break' | 'checked_out' | 'absent' = 'checked_in'
             let notes = ''
             
@@ -425,7 +452,7 @@ serve(async (req) => {
 
     // Handle /start command
     if (text === '/start') {
-      registrationSessions.delete(sessionKey) // Clear any pending session
+      await deleteSession() // Clear any pending session
       
       if (employee) {
         await sendMessage(botToken, chatId, 
@@ -439,22 +466,24 @@ serve(async (req) => {
     }
 
     // Handle registration flow text inputs
-    const session = registrationSessions.get(sessionKey)
+    const session = await getSession()
     if (session && !employee) {
+      console.log('Processing registration step:', session.step, 'with text:', text)
+      
       switch (session.step) {
         case 'full_name':
           // Validate full name (at least 2 words)
           const nameParts = text.split(' ').filter(p => p.length > 0)
           if (nameParts.length < 2) {
             await sendMessage(botToken, chatId,
-              '❌ يرجى إدخال الاسم الثلاثي على الأقل\n\n' +
-              'مثال: أحمد محمد علي'
+              '❌ يرجى إدخال الاسم الثنائي على الأقل\n\n' +
+              'مثال: أحمد محمد'
             )
             return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
           }
-          session.data.full_name = text
-          session.step = 'email'
-          registrationSessions.set(sessionKey, session)
+          
+          const newNameData = { ...session.data, full_name: text }
+          await setSession('email', newNameData)
 
           await sendMessage(botToken, chatId,
             '✅ تم حفظ الاسم\n\n' +
@@ -462,7 +491,7 @@ serve(async (req) => {
             'أرسل <b>بريدك الإلكتروني</b>\n\n' +
             'مثال: ahmed@email.com'
           )
-          break
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
 
         case 'email':
           // Validate email
@@ -474,9 +503,9 @@ serve(async (req) => {
             )
             return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
           }
-          session.data.email = text
-          session.step = 'phone'
-          registrationSessions.set(sessionKey, session)
+          
+          const newEmailData = { ...session.data, email: text }
+          await setSession('phone', newEmailData)
 
           await sendMessage(botToken, chatId,
             '✅ تم حفظ البريد الإلكتروني\n\n' +
@@ -484,7 +513,7 @@ serve(async (req) => {
             'أرسل <b>رقم هاتفك</b>\n\n' +
             'مثال: 0501234567'
           )
-          break
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
 
         case 'phone':
           // Basic phone validation
@@ -496,9 +525,9 @@ serve(async (req) => {
             )
             return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
           }
-          session.data.phone = text
-          session.step = 'work_time_choice'
-          registrationSessions.set(sessionKey, session)
+          
+          const newPhoneData = { ...session.data, phone: text }
+          await setSession('work_time_choice', newPhoneData)
 
           await sendMessage(botToken, chatId,
             '✅ تم حفظ رقم الهاتف\n\n' +
@@ -514,7 +543,7 @@ serve(async (req) => {
               ]
             }
           )
-          break
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
 
         case 'work_start_time':
           // Validate time format
@@ -527,16 +556,16 @@ serve(async (req) => {
             )
             return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
           }
-          session.data.work_start_time = text + ':00'
-          session.step = 'work_end_time'
-          registrationSessions.set(sessionKey, session)
+          
+          const newStartTimeData = { ...session.data, work_start_time: text + ':00' }
+          await setSession('work_end_time', newStartTimeData)
 
           await sendMessage(botToken, chatId,
             `✅ وقت البدء: ${text}\n\n` +
             'أرسل <b>وقت انتهاء العمل</b>\n\n' +
             'الصيغة: HH:MM (مثال: 17:00)'
           )
-          break
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
 
         case 'work_end_time':
           const endTimeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/
@@ -548,9 +577,9 @@ serve(async (req) => {
             )
             return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
           }
-          session.data.work_end_time = text + ':00'
-          session.step = 'weekend_days'
-          registrationSessions.set(sessionKey, session)
+          
+          const newEndTimeData = { ...session.data, work_end_time: text + ':00' }
+          await setSession('weekend_days', newEndTimeData)
 
           await sendMessage(botToken, chatId,
             `✅ وقت العمل: من ${session.data.work_start_time?.substring(0, 5)} إلى ${text}\n\n` +
@@ -558,10 +587,8 @@ serve(async (req) => {
             'اختر أيام الإجازة الأسبوعية:',
             getWeekendKeyboard()
           )
-          break
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
       }
-
-      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
 
     // Handle /leave command for employees
@@ -629,7 +656,14 @@ serve(async (req) => {
         getEmployeeKeyboard()
       )
     } else {
-      await sendWelcomeMessage(botToken, chatId, false)
+      // If there's a session but we're here, user might have sent unexpected input
+      if (session) {
+        await sendMessage(botToken, chatId,
+          '⚠️ يرجى اتباع التعليمات أو إرسال /start للبدء من جديد'
+        )
+      } else {
+        await sendWelcomeMessage(botToken, chatId, false)
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
@@ -645,7 +679,8 @@ async function submitRegistration(
   supabase: any,
   botToken: string,
   chatId: number,
-  session: any,
+  sessionData: SessionData,
+  companyId: string,
   telegramChatId: string,
   username?: string
 ) {
@@ -654,7 +689,7 @@ async function submitRegistration(
     .from('join_requests')
     .select('id, status')
     .eq('telegram_chat_id', telegramChatId)
-    .eq('company_id', session.companyId)
+    .eq('company_id', companyId)
     .eq('status', 'pending')
     .single()
 
@@ -668,25 +703,22 @@ async function submitRegistration(
 
   // Create join request with all collected data
   await supabase.from('join_requests').insert({
-    company_id: session.companyId,
+    company_id: companyId,
     telegram_chat_id: telegramChatId,
     telegram_username: username,
-    full_name: session.data.full_name,
-    email: session.data.email,
-    phone: session.data.phone,
+    full_name: sessionData.full_name,
+    email: sessionData.email,
+    phone: sessionData.phone,
   })
-
-  // Store additional data for when request is approved (in notes or metadata)
-  // For now, we'll send a summary and the admin will see this info
 
   await sendMessage(botToken, chatId, 
     '✅ <b>تم إرسال طلب الانضمام بنجاح!</b>\n\n' +
     '📋 ملخص بياناتك:\n' +
-    `👤 الاسم: ${session.data.full_name}\n` +
-    `📧 البريد: ${session.data.email}\n` +
-    `📱 الهاتف: ${session.data.phone}\n` +
-    `⏰ وقت العمل: ${session.data.work_start_time?.substring(0, 5)} - ${session.data.work_end_time?.substring(0, 5)}\n` +
-    `📅 أيام الإجازة: ${session.data.weekend_days?.map((d: string) => getDayName(d)).join('، ')}\n\n` +
+    `👤 الاسم: ${sessionData.full_name}\n` +
+    `📧 البريد: ${sessionData.email}\n` +
+    `📱 الهاتف: ${sessionData.phone}\n` +
+    `⏰ وقت العمل: ${sessionData.work_start_time?.substring(0, 5)} - ${sessionData.work_end_time?.substring(0, 5)}\n` +
+    `📅 أيام الإجازة: ${sessionData.weekend_days?.map((d: string) => getDayName(d)).join('، ')}\n\n` +
     '⏳ سيتم مراجعة طلبك من قبل الإدارة.\n' +
     'سنرسل لك إشعاراً فور الموافقة على طلبك.',
     {
