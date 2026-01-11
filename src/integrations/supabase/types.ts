@@ -936,7 +936,7 @@ export type Database = {
       is_saas_team_member: { Args: { p_user_id: string }; Returns: boolean }
     }
     Enums: {
-      attendance_status: "checked_in" | "on_break" | "checked_out"
+      attendance_status: "checked_in" | "on_break" | "checked_out" | "absent"
       audit_action: "insert" | "update" | "delete" | "restore"
       leave_status: "pending" | "approved" | "rejected"
       leave_type: "vacation" | "sick" | "personal"
@@ -1076,7 +1076,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      attendance_status: ["checked_in", "on_break", "checked_out"],
+      attendance_status: ["checked_in", "on_break", "checked_out", "absent"],
       audit_action: ["insert", "update", "delete", "restore"],
       leave_status: ["pending", "approved", "rejected"],
       leave_type: ["vacation", "sick", "personal"],
