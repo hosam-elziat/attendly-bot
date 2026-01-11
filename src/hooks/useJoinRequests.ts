@@ -88,6 +88,45 @@ export function useApproveJoinRequest() {
 
       if (updateError) throw updateError;
 
+      // Send Telegram notification to employee
+      try {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('telegram_bot_username')
+          .eq('id', profile.company_id)
+          .single();
+
+        if (company?.telegram_bot_username) {
+          const { data: bot } = await supabase
+            .from('telegram_bots')
+            .select('bot_token')
+            .eq('bot_username', company.telegram_bot_username)
+            .single();
+
+          if (bot?.bot_token) {
+            await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: employeeData.telegram_chat_id,
+                text: `🎉 مرحباً ${employeeData.full_name}!\n\nتم قبول طلب انضمامك بنجاح!\nيمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.\n\nأرسل /start للبدء.`,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+                    ]
+                  ]
+                }
+              })
+            });
+          }
+        }
+      } catch (notifyError) {
+        console.error('Failed to send Telegram notification:', notifyError);
+        // Don't throw - the main operation succeeded
+      }
+
       return { success: true };
     },
     onSuccess: () => {
@@ -104,10 +143,14 @@ export function useApproveJoinRequest() {
 
 export function useRejectJoinRequest() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ requestId, reason }: { requestId: string; reason?: string }) => {
+    mutationFn: async ({ requestId, reason, telegram_chat_id }: { 
+      requestId: string; 
+      reason?: string;
+      telegram_chat_id?: string;
+    }) => {
       const { error } = await supabase
         .from('join_requests')
         .update({
@@ -119,6 +162,43 @@ export function useRejectJoinRequest() {
         .eq('id', requestId);
 
       if (error) throw error;
+
+      // Send Telegram notification to the rejected user
+      if (telegram_chat_id && profile?.company_id) {
+        try {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('telegram_bot_username')
+            .eq('id', profile.company_id)
+            .single();
+
+          if (company?.telegram_bot_username) {
+            const { data: bot } = await supabase
+              .from('telegram_bots')
+              .select('bot_token')
+              .eq('bot_username', company.telegram_bot_username)
+              .single();
+
+            if (bot?.bot_token) {
+              const message = reason 
+                ? `❌ عذراً، تم رفض طلب انضمامك.\n\nالسبب: ${reason}`
+                : '❌ عذراً، تم رفض طلب انضمامك.';
+              
+              await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: telegram_chat_id,
+                  text: message
+                })
+              });
+            }
+          }
+        } catch (notifyError) {
+          console.error('Failed to send rejection notification:', notifyError);
+        }
+      }
+
       return { success: true };
     },
     onSuccess: () => {
