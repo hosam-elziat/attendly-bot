@@ -66,10 +66,10 @@ export function useApproveJoinRequest() {
     }) => {
       if (!profile?.company_id) throw new Error('No company found');
 
-      // Get company default currency
+      // Get company default settings
       const { data: company } = await supabase
         .from('companies')
-        .select('default_currency')
+        .select('default_currency, default_weekend_days, work_start_time, work_end_time')
         .eq('id', profile.company_id)
         .single();
 
@@ -85,10 +85,10 @@ export function useApproveJoinRequest() {
           national_id: employeeData.national_id || null,
           department: employeeData.department || null,
           base_salary: employeeData.base_salary || 0,
-          work_start_time: employeeData.work_start_time || '09:00:00',
-          work_end_time: employeeData.work_end_time || '17:00:00',
-          weekend_days: employeeData.weekend_days || ['friday', 'saturday'],
-          currency: company?.default_currency || 'SAR',
+          work_start_time: employeeData.work_start_time || (company as any)?.work_start_time || '09:00:00',
+          work_end_time: employeeData.work_end_time || (company as any)?.work_end_time || '17:00:00',
+          weekend_days: employeeData.weekend_days || (company as any)?.default_weekend_days || ['friday'],
+          currency: (company as any)?.default_currency || 'SAR',
         });
 
       if (employeeError) throw employeeError;

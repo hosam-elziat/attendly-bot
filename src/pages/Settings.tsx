@@ -40,7 +40,7 @@ const Settings = () => {
   const [workStart, setWorkStart] = useState('09:00');
   const [workEnd, setWorkEnd] = useState('17:00');
   const [breakDuration, setBreakDuration] = useState(60);
-  const [weekendDays, setWeekendDays] = useState<string[]>(['friday', 'saturday']);
+  const [weekendDays, setWeekendDays] = useState<string[]>(['friday']);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   // Attendance policy states
@@ -92,6 +92,9 @@ const Settings = () => {
       // Leave policy
       setAnnualLeaveDays((company as any).annual_leave_days || 21);
       setEmergencyLeaveDays((company as any).emergency_leave_days || 7);
+      
+      // Default weekend days
+      setWeekendDays((company as any).default_weekend_days || ['friday']);
     }
   }, [company]);
 
@@ -142,6 +145,39 @@ const Settings = () => {
       
       await refetch();
       toast.success('تم حفظ إعدادات الشركة');
+    } catch (error: any) {
+      console.error('Save error:', error);
+      toast.error('فشل في الحفظ: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveWeekendDays = async () => {
+    if (!company?.id) {
+      toast.error('لم يتم العثور على الشركة');
+      return;
+    }
+
+    if (weekendDays.length === 0) {
+      toast.error('يجب اختيار يوم عطلة واحد على الأقل');
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          default_weekend_days: weekendDays,
+        } as any)
+        .eq('id', company.id);
+
+      if (error) throw error;
+      
+      await refetch();
+      toast.success('تم حفظ أيام العطلة الافتراضية');
     } catch (error: any) {
       console.error('Save error:', error);
       toast.error('فشل في الحفظ: ' + error.message);
@@ -504,6 +540,14 @@ const Settings = () => {
               <p className="text-sm text-muted-foreground mt-4">
                 {t('settings.weekendNote')}
               </p>
+              <Button 
+                onClick={handleSaveWeekendDays} 
+                className="btn-primary-gradient mt-4" 
+                disabled={saving}
+              >
+                {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                {t('common.save')}
+              </Button>
             </CardContent>
           </Card>
         </motion.div>
