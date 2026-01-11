@@ -6,6 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees, useCreateEmployee, useUpdateEmployee, CreateEmployeeData, Employee } from '@/hooks/useEmployees';
 import { useSoftDelete } from '@/hooks/useAuditLogs';
 import { useCompany } from '@/hooks/useCompany';
+import { useSubscriptionLimit } from '@/hooks/useSubscriptionLimit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,7 +36,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,6 +79,7 @@ const Employees = () => {
   const createEmployee = useCreateEmployee();
   const softDelete = useSoftDelete();
   const updateEmployee = useUpdateEmployee();
+  const { canAddEmployee, isOverLimit, employeesOverLimit, maxEmployees, nextPlan, activeEmployeeCount, isUnlimited } = useSubscriptionLimit();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -140,9 +142,17 @@ const Employees = () => {
             </p>
           </div>
           
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={(open) => {
+            if (open && !canAddEmployee) {
+              return; // Don't open if at hard limit
+            }
+            setDialogOpen(open);
+          }}>
             <DialogTrigger asChild>
-              <Button className="btn-primary-gradient">
+              <Button 
+                className="btn-primary-gradient"
+                disabled={!canAddEmployee}
+              >
                 <Plus className="w-4 h-4 me-2" />
                 {t('employees.add')}
               </Button>
@@ -151,6 +161,25 @@ const Employees = () => {
               <DialogHeader>
                 <DialogTitle>{t('employees.add')}</DialogTitle>
               </DialogHeader>
+              
+              {/* Warning when over limit */}
+              {isOverLimit && nextPlan && (
+                <div className="p-4 rounded-lg bg-warning/10 border border-warning/20 mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-warning mt-0.5" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {t('subscription.overLimitWarning') || 'تجاوزت الحد الأقصى للموظفين'}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {t('subscription.upgradeNotice') || 'لديك'} {activeEmployeeCount}/{maxEmployees} {t('subscription.employees') || 'موظف'}. 
+                        {t('subscription.nextMonthUpgrade') || 'من الشهر القادم سيتم ترقيتك تلقائياً إلى باقة'} <strong>{nextPlan.name_ar || nextPlan.name}</strong> {t('subscription.atPrice') || 'بسعر'} <strong>{nextPlan.price_monthly} {nextPlan.currency}</strong> {t('subscription.perMonth') || 'شهرياً'}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <AddEmployeeForm 
                 defaultCurrency={defaultCurrency}
                 onClose={() => setDialogOpen(false)} 
@@ -163,6 +192,39 @@ const Employees = () => {
             </DialogContent>
           </Dialog>
         </motion.div>
+
+        {/* Subscription Limit Warning Banner */}
+        {isOverLimit && nextPlan && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
+          >
+            <Card className="border-warning/30 bg-warning/5">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-warning" />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">
+                      {t('subscription.limitReached') || 'وصلت للحد الأقصى من الموظفين'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('subscription.currentlyUsing') || 'أنت تستخدم'} {activeEmployeeCount} {t('subscription.outOf') || 'من'} {maxEmployees} {t('subscription.employees') || 'موظف'}. 
+                      {employeesOverLimit > 0 && ` (${employeesOverLimit} ${t('subscription.extra') || 'إضافي'})`}
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="border-warning text-warning hover:bg-warning/10"
+                    onClick={() => navigate('/dashboard/subscription')}
+                  >
+                    {t('subscription.upgrade') || 'ترقية الباقة'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Search and Filters */}
         <motion.div
