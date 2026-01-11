@@ -428,16 +428,14 @@ const Salaries = () => {
         </motion.div>
       </div>
 
-      {selectedEmployee && (
-        <EditDeductionDialog
-          open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
-          employeeId={selectedEmployee.id}
-          employeeName={selectedEmployee.name}
-          month={format(startOfMonth(new Date(selectedMonth + '-01')), 'yyyy-MM-dd')}
-          onSuccess={fetchSalaryData}
-        />
-      )}
+      <EditDeductionDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        employeeId={selectedEmployee?.id || ''}
+        employeeName={selectedEmployee?.name || ''}
+        month={selectedMonth}
+        onSuccess={fetchSalaryData}
+      />
     </DashboardLayout>
   );
 };

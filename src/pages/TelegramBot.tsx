@@ -236,10 +236,12 @@ const TelegramBot = () => {
                         <Button size="sm" variant="outline" onClick={copyBotLink}>
                           <Copy className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={botLink} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => window.open(botLink, '_blank')}
+                        >
+                          <ExternalLink className="w-4 h-4" />
                         </Button>
                       </div>
                       <p className="text-sm text-muted-foreground mt-3">
