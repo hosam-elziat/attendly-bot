@@ -70,6 +70,9 @@ const JoinRequests = () => {
         national_id: selectedRequest.national_id || undefined,
         department: employeeData.department || undefined,
         base_salary: employeeData.base_salary || 0,
+        work_start_time: selectedRequest.work_start_time,
+        work_end_time: selectedRequest.work_end_time,
+        weekend_days: selectedRequest.weekend_days,
       },
     }, {
       onSuccess: () => {
