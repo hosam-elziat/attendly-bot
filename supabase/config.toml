@@ -20,3 +20,9 @@ verify_jwt = false
 
 [functions.telegram-join-request]
 verify_jwt = false
+
+[functions.attendance-reminders]
+verify_jwt = false
+
+[functions.notify-employee]
+verify_jwt = false

@@ -10,6 +10,7 @@ import { Loader2, DollarSign, Plus, Minus } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLogAction } from '@/hooks/useAuditLogs';
 
 interface EditDeductionDialogProps {
@@ -18,25 +19,56 @@ interface EditDeductionDialogProps {
   employeeId: string;
   employeeName: string;
   month: string;
+  baseSalary?: number;
   onSuccess: () => void;
 }
 
-const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, month, onSuccess }: EditDeductionDialogProps) => {
+const DAY_OPTIONS = [
+  { value: '0.25', label: 'ربع يوم', labelEn: 'Quarter Day' },
+  { value: '0.5', label: 'نصف يوم', labelEn: 'Half Day' },
+  { value: '1', label: 'يوم واحد', labelEn: '1 Day' },
+  { value: '2', label: 'يومين', labelEn: '2 Days' },
+  { value: '3', label: '3 أيام', labelEn: '3 Days' },
+  { value: 'custom', label: 'مبلغ محدد', labelEn: 'Custom Amount' },
+];
+
+const EditDeductionDialog = ({ 
+  open, 
+  onOpenChange, 
+  employeeId, 
+  employeeName, 
+  month, 
+  baseSalary = 0,
+  onSuccess 
+}: EditDeductionDialogProps) => {
   const { language } = useLanguage();
   const { profile } = useAuth();
   const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
-  const [bonus, setBonus] = useState('');
-  const [deduction, setDeduction] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
+  const [selectedDays, setSelectedDays] = useState('custom');
   const [description, setDescription] = useState('');
   const [activeTab, setActiveTab] = useState('bonus');
+
+  // Calculate daily rate (monthly salary / 30)
+  const dailyRate = baseSalary / 30;
+
+  // Calculate amount based on selected days
+  const calculateAmount = (): number => {
+    if (selectedDays === 'custom') {
+      return parseFloat(customAmount) || 0;
+    }
+    const days = parseFloat(selectedDays);
+    return days * dailyRate;
+  };
 
   const handleSave = async () => {
     if (!profile?.company_id) return;
 
-    const amount = activeTab === 'bonus' ? parseFloat(bonus) : parseFloat(deduction);
+    const amount = calculateAmount();
+    const days = selectedDays !== 'custom' ? parseFloat(selectedDays) : null;
     
-    if (isNaN(amount) || amount <= 0) {
+    if (amount <= 0) {
       toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
       return;
     }
@@ -53,7 +85,10 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
         month: monthDate,
         bonus: activeTab === 'bonus' ? amount : 0,
         deduction: activeTab === 'deduction' ? amount : 0,
+        adjustment_days: days,
         description: description || null,
+        added_by: profile.user_id,
+        added_by_name: profile.full_name,
       };
 
       const { data, error } = await supabase
@@ -63,6 +98,36 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
         .single();
 
       if (error) throw error;
+
+      // Get totals for this month
+      const { data: monthAdjustments } = await supabase
+        .from('salary_adjustments')
+        .select('bonus, deduction')
+        .eq('employee_id', employeeId)
+        .gte('month', monthDate)
+        .lt('month', `${month.substring(0, 4)}-${(parseInt(month.substring(5, 7)) + 1).toString().padStart(2, '0')}-01`);
+
+      const totalDeductions = monthAdjustments?.reduce((sum, a) => sum + (a.deduction || 0), 0) || 0;
+      const totalBonuses = monthAdjustments?.reduce((sum, a) => sum + (a.bonus || 0), 0) || 0;
+
+      // Notify employee via Telegram
+      try {
+        await supabase.functions.invoke('notify-employee', {
+          body: {
+            employee_id: employeeId,
+            type: activeTab,
+            amount,
+            days,
+            description,
+            added_by_name: profile.full_name,
+            total_deductions: totalDeductions,
+            total_bonuses: totalBonuses,
+          }
+        });
+      } catch (notifyError) {
+        console.error('Failed to notify employee:', notifyError);
+        // Don't fail the whole operation if notification fails
+      }
 
       // Log the action
       await logAction.mutateAsync({
@@ -79,8 +144,8 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
       );
       
       onOpenChange(false);
-      setBonus('');
-      setDeduction('');
+      setCustomAmount('');
+      setSelectedDays('custom');
       setDescription('');
       onSuccess();
     } catch (error) {
@@ -90,6 +155,8 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
       setSubmitting(false);
     }
   };
+
+  const currentAmount = calculateAmount();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -105,6 +172,11 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
           <div className="p-3 rounded-lg bg-accent/50">
             <p className="font-medium text-foreground">{employeeName}</p>
             <p className="text-sm text-muted-foreground">{month}</p>
+            {baseSalary > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {language === 'ar' ? 'تكلفة اليوم:' : 'Daily rate:'} {dailyRate.toFixed(2)}
+              </p>
+            )}
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -119,35 +191,61 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="bonus" className="space-y-4 mt-4">
+            <div className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'مبلغ المكافأة' : 'Bonus Amount'}</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={bonus}
-                  onChange={(e) => setBonus(e.target.value)}
-                  placeholder="0.00"
-                  className="text-success"
-                />
+                <Label>
+                  {language === 'ar' 
+                    ? (activeTab === 'bonus' ? 'نوع المكافأة' : 'نوع الخصم')
+                    : (activeTab === 'bonus' ? 'Bonus Type' : 'Deduction Type')
+                  }
+                </Label>
+                <Select value={selectedDays} onValueChange={setSelectedDays}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {language === 'ar' ? option.label : option.labelEn}
+                        {option.value !== 'custom' && baseSalary > 0 && (
+                          <span className="text-muted-foreground ms-2">
+                            ({(parseFloat(option.value) * dailyRate).toFixed(2)})
+                          </span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </TabsContent>
 
-            <TabsContent value="deduction" className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>{language === 'ar' ? 'مبلغ الخصم' : 'Deduction Amount'}</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={deduction}
-                  onChange={(e) => setDeduction(e.target.value)}
-                  placeholder="0.00"
-                  className="text-destructive"
-                />
-              </div>
-            </TabsContent>
+              {selectedDays === 'custom' && (
+                <div className="space-y-2">
+                  <Label>
+                    {language === 'ar' 
+                      ? (activeTab === 'bonus' ? 'مبلغ المكافأة' : 'مبلغ الخصم')
+                      : (activeTab === 'bonus' ? 'Bonus Amount' : 'Deduction Amount')
+                    }
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value)}
+                    placeholder="0.00"
+                    className={activeTab === 'bonus' ? 'text-success' : 'text-destructive'}
+                  />
+                </div>
+              )}
+
+              {currentAmount > 0 && (
+                <div className={`p-3 rounded-lg ${activeTab === 'bonus' ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                  <p className={`text-lg font-bold ${activeTab === 'bonus' ? 'text-success' : 'text-destructive'}`}>
+                    {language === 'ar' ? 'المبلغ:' : 'Amount:'} {currentAmount.toFixed(2)}
+                  </p>
+                </div>
+              )}
+            </div>
           </Tabs>
 
           <div className="space-y-2">
@@ -163,7 +261,7 @@ const EditDeductionDialog = ({ open, onOpenChange, employeeId, employeeName, mon
           <div className="flex gap-2 pt-4">
             <Button 
               onClick={handleSave} 
-              disabled={submitting}
+              disabled={submitting || currentAmount <= 0}
               className={`flex-1 ${activeTab === 'bonus' ? 'bg-success hover:bg-success/90' : 'bg-destructive hover:bg-destructive/90'}`}
             >
               {submitting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}

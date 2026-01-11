@@ -698,6 +698,9 @@ export type Database = {
       }
       salary_adjustments: {
         Row: {
+          added_by: string | null
+          added_by_name: string | null
+          adjustment_days: number | null
           bonus: number | null
           company_id: string
           created_at: string
@@ -708,6 +711,9 @@ export type Database = {
           month: string
         }
         Insert: {
+          added_by?: string | null
+          added_by_name?: string | null
+          adjustment_days?: number | null
           bonus?: number | null
           company_id: string
           created_at?: string
@@ -718,6 +724,9 @@ export type Database = {
           month: string
         }
         Update: {
+          added_by?: string | null
+          added_by_name?: string | null
+          adjustment_days?: number | null
           bonus?: number | null
           company_id?: string
           created_at?: string
