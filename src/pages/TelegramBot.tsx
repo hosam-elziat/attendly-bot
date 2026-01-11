@@ -15,6 +15,7 @@ const TelegramBot = () => {
   const { data: company, refetch } = useCompany();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [isSettingWebhook, setIsSettingWebhook] = useState(false);
 
   const isConnected = company?.telegram_bot_connected || false;
   const botUsername = company?.telegram_bot_username;
@@ -104,6 +105,56 @@ const TelegramBot = () => {
       toast.error('فشل في التحديث: ' + error.message);
     } finally {
       setIsUpdatingName(false);
+    }
+  };
+
+  const handleSetWebhook = async () => {
+    setIsSettingWebhook(true);
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        toast.error('يجب تسجيل الدخول أولاً');
+        return;
+      }
+
+      // Get the bot token from telegram_bots table
+      const { data: bot, error: botError } = await supabase
+        .from('telegram_bots')
+        .select('bot_token, bot_username')
+        .eq('bot_username', botUsername)
+        .single();
+
+      if (botError || !bot) {
+        toast.error('لم يتم العثور على البوت');
+        return;
+      }
+
+      // Set webhook via Telegram API
+      const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-webhook?bot=${bot.bot_username}`;
+      const response = await fetch(`https://api.telegram.org/bot${bot.bot_token}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          url: webhookUrl,
+          allowed_updates: ['message', 'callback_query']
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.ok) {
+        toast.success('تم إعداد الـ Webhook بنجاح! البوت جاهز للاستخدام');
+      } else {
+        toast.error('فشل في إعداد الـ Webhook: ' + result.description);
+      }
+
+    } catch (error: any) {
+      console.error('Webhook setup error:', error);
+      toast.error('فشل في الإعداد: ' + error.message);
+    } finally {
+      setIsSettingWebhook(false);
     }
   };
 
@@ -216,9 +267,26 @@ const TelegramBot = () => {
                           </>
                         )}
                       </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={handleSetWebhook}
+                        disabled={isSettingWebhook}
+                      >
+                        {isSettingWebhook ? (
+                          <>
+                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            جاري الإعداد...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4 me-2" />
+                            تفعيل البوت
+                          </>
+                        )}
+                      </Button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      سيتم تحديث اسم البوت إلى "{company?.name} - حضور وانصراف"
+                      اضغط "تفعيل البوت" إذا لم يستجب البوت للرسائل
                     </p>
                   </div>
 
