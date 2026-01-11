@@ -100,36 +100,45 @@ serve(async (req) => {
 
     const botToken = bot.bot_token;
 
-     let action: string | null = null;
-     let photoFile: File | null = null;
+    let action: string | null = null;
+    let photoFile: File | null = null;
 
-     // Robust body parsing:
-     // - Try JSON first (even if content-type is missing/wrong)
-     // - Fallback to multipart/form-data
-     const cloned = req.clone();
-     try {
-       const body = await req.json().catch(() => ({}));
-       action = typeof (body as any)?.action === 'string' ? (body as any).action : null;
-     } catch (_) {
-       // ignore
-     }
+    const contentType = req.headers.get('content-type') || '';
+    console.log('Request content-type:', contentType);
 
-     if (!action) {
-       try {
-         const formData = await cloned.formData();
-         action = (formData.get('action') as string) || null;
-         photoFile = (formData.get('photo') as File) || null;
-       } catch (error) {
-         console.error('Failed to parse request body', {
-           contentType: req.headers.get('content-type'),
-           error,
-         });
-         return new Response(
-           JSON.stringify({ error: 'تعذر قراءة بيانات الطلب. حاول مرة أخرى.' }),
-           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-         );
-       }
-     }
+    // Check if it's multipart/form-data (for photo upload)
+    if (contentType.includes('multipart/form-data')) {
+      try {
+        const formData = await req.formData();
+        action = (formData.get('action') as string) || null;
+        photoFile = (formData.get('photo') as File) || null;
+        console.log('Parsed FormData - action:', action);
+      } catch (error) {
+        console.error('Failed to parse FormData:', error);
+        return new Response(
+          JSON.stringify({ error: 'تعذر قراءة بيانات الطلب. حاول مرة أخرى.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      // Try JSON parsing
+      try {
+        const bodyText = await req.text();
+        console.log('Request body text:', bodyText);
+        
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          action = typeof body?.action === 'string' ? body.action : null;
+          console.log('Parsed JSON - action:', action);
+        }
+      } catch (error) {
+        console.error('Failed to parse JSON:', error);
+        return new Response(
+          JSON.stringify({ error: 'تعذر قراءة بيانات الطلب. حاول مرة أخرى.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
      if (!action) {
        return new Response(
