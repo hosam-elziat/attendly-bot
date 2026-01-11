@@ -112,6 +112,56 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: Database["public"]["Enums"]["audit_action"]
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string
+          table_name: string
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["audit_action"]
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id: string
+          table_name: string
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["audit_action"]
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string
+          table_name?: string
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_logs: {
         Row: {
           attendance_id: string
@@ -218,6 +268,50 @@ export type Database = {
           work_start_time?: string | null
         }
         Relationships: []
+      }
+      deleted_records: {
+        Row: {
+          company_id: string
+          deleted_at: string
+          deleted_by: string
+          id: string
+          is_restored: boolean | null
+          record_data: Json
+          record_id: string
+          restored_at: string | null
+          table_name: string
+        }
+        Insert: {
+          company_id: string
+          deleted_at?: string
+          deleted_by: string
+          id?: string
+          is_restored?: boolean | null
+          record_data: Json
+          record_id: string
+          restored_at?: string | null
+          table_name: string
+        }
+        Update: {
+          company_id?: string
+          deleted_at?: string
+          deleted_by?: string
+          id?: string
+          is_restored?: boolean | null
+          record_data?: Json
+          record_id?: string
+          restored_at?: string | null
+          table_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_records_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       discount_codes: {
         Row: {
@@ -840,6 +934,7 @@ export type Database = {
     }
     Enums: {
       attendance_status: "checked_in" | "on_break" | "checked_out"
+      audit_action: "insert" | "update" | "delete" | "restore"
       leave_status: "pending" | "approved" | "rejected"
       leave_type: "vacation" | "sick" | "personal"
       salary_type: "monthly" | "daily"
@@ -979,6 +1074,7 @@ export const Constants = {
   public: {
     Enums: {
       attendance_status: ["checked_in", "on_break", "checked_out"],
+      audit_action: ["insert", "update", "delete", "restore"],
       leave_status: ["pending", "approved", "rejected"],
       leave_type: ["vacation", "sick", "personal"],
       salary_type: ["monthly", "daily"],
