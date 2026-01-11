@@ -86,6 +86,7 @@ const JoinRequests = () => {
     rejectRequest.mutate({
       requestId: selectedRequest.id,
       reason: rejectionReason,
+      telegram_chat_id: selectedRequest.telegram_chat_id,
     }, {
       onSuccess: () => {
         setShowRejectDialog(false);

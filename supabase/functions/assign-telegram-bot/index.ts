@@ -129,6 +129,20 @@ serve(async (req) => {
         body: JSON.stringify({ description: description.substring(0, 512) })
       });
 
+      // Set webhook for the bot
+      const webhookUrl = `${supabaseUrl}/functions/v1/telegram-webhook?bot=${availableBot.bot_username}`;
+      const setWebhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          url: webhookUrl,
+          allowed_updates: ['message', 'callback_query']
+        })
+      });
+      
+      const webhookResult = await setWebhookResponse.json();
+      console.log('Set webhook result:', webhookResult);
+
     } catch (telegramError) {
       console.error('Telegram API error:', telegramError);
       // Continue even if Telegram API fails - we can update the name later
