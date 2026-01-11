@@ -82,7 +82,8 @@ const TelegramBot = () => {
 
       const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
         headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json'
         },
         body: { action: 'update_name' }
       });
@@ -121,7 +122,8 @@ const TelegramBot = () => {
 
       const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
         headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          'Content-Type': 'application/json'
         },
         body: { action: 'set_webhook' }
       });

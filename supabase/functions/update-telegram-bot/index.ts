@@ -6,6 +6,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function extractRetryAfterSeconds(result: any): number | null {
+  const seconds = result?.parameters?.retry_after;
+  if (typeof seconds === 'number' && Number.isFinite(seconds)) return seconds;
+
+  const desc = typeof result?.description === 'string' ? result.description : '';
+  const m = desc.match(/retry after (\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
+function formatRetryAfterHint(seconds: number | null): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return ` (جرّب بعد حوالي ${hours} س ${minutes} د)`;
+  if (minutes > 0) return ` (جرّب بعد حوالي ${minutes} دقيقة)`;
+  return ` (جرّب بعد ${seconds} ثانية)`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -82,26 +100,43 @@ serve(async (req) => {
 
     const botToken = bot.bot_token;
 
-    let action: string | null = null;
-    let photoFile: File | null = null;
+     let action: string | null = null;
+     let photoFile: File | null = null;
 
-    const contentType = req.headers.get('content-type') || '';
+     // Robust body parsing:
+     // - Try JSON first (even if content-type is missing/wrong)
+     // - Fallback to multipart/form-data
+     const cloned = req.clone();
+     try {
+       const body = await req.json().catch(() => ({}));
+       action = typeof (body as any)?.action === 'string' ? (body as any).action : null;
+     } catch (_) {
+       // ignore
+     }
 
-    if (contentType.includes('application/json')) {
-      const body = await req.json().catch(() => ({}));
-      action = typeof (body as any)?.action === 'string' ? (body as any).action : null;
-    } else {
-      const formData = await req.formData();
-      action = (formData.get('action') as string) || null;
-      photoFile = (formData.get('photo') as File) || null;
-    }
+     if (!action) {
+       try {
+         const formData = await cloned.formData();
+         action = (formData.get('action') as string) || null;
+         photoFile = (formData.get('photo') as File) || null;
+       } catch (error) {
+         console.error('Failed to parse request body', {
+           contentType: req.headers.get('content-type'),
+           error,
+         });
+         return new Response(
+           JSON.stringify({ error: 'تعذر قراءة بيانات الطلب. حاول مرة أخرى.' }),
+           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+         );
+       }
+     }
 
-    if (!action) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid action' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+     if (!action) {
+       return new Response(
+         JSON.stringify({ error: 'Invalid action' }),
+         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+       );
+     }
 
     if (action === 'update_name') {
       const newBotName = `${company.name} - حضور وانصراف`;
@@ -117,9 +152,15 @@ serve(async (req) => {
       console.log('Set bot name result:', setNameResult);
 
       if (!setNameResult?.ok) {
+        const retryAfterSeconds = extractRetryAfterSeconds(setNameResult);
+        const hint = formatRetryAfterHint(retryAfterSeconds);
         return new Response(
-          JSON.stringify({ error: 'فشل في تحديث اسم البوت: ' + (setNameResult?.description || 'خطأ غير معروف') }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            error: 'فشل في تحديث اسم البوت: ' + (setNameResult?.description || 'خطأ غير معروف') + hint,
+            retry_after_seconds: retryAfterSeconds,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -135,9 +176,15 @@ serve(async (req) => {
       console.log('Set bot description result:', setDescResult);
 
       if (!setDescResult?.ok) {
+        const retryAfterSeconds = extractRetryAfterSeconds(setDescResult);
+        const hint = formatRetryAfterHint(retryAfterSeconds);
         return new Response(
-          JSON.stringify({ error: 'فشل في تحديث وصف البوت: ' + (setDescResult?.description || 'خطأ غير معروف') }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            error: 'فشل في تحديث وصف البوت: ' + (setDescResult?.description || 'خطأ غير معروف') + hint,
+            retry_after_seconds: retryAfterSeconds,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -175,9 +222,15 @@ serve(async (req) => {
       console.log('Set webhook result:', setWebhookResult);
 
       if (!setWebhookResult?.ok) {
+        const retryAfterSeconds = extractRetryAfterSeconds(setWebhookResult);
+        const hint = formatRetryAfterHint(retryAfterSeconds);
         return new Response(
-          JSON.stringify({ error: 'فشل في إعداد الـ Webhook: ' + (setWebhookResult?.description || 'خطأ غير معروف') }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            error: 'فشل في إعداد الـ Webhook: ' + (setWebhookResult?.description || 'خطأ غير معروف') + hint,
+            retry_after_seconds: retryAfterSeconds,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -207,9 +260,15 @@ serve(async (req) => {
       console.log('Set bot photo result:', setPhotoResult);
 
       if (!setPhotoResult.ok) {
+        const retryAfterSeconds = extractRetryAfterSeconds(setPhotoResult);
+        const hint = formatRetryAfterHint(retryAfterSeconds);
         return new Response(
-          JSON.stringify({ error: 'فشل في تحديث صورة البوت: ' + (setPhotoResult.description || 'خطأ غير معروف') }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            error: 'فشل في تحديث صورة البوت: ' + (setPhotoResult.description || 'خطأ غير معروف') + hint,
+            retry_after_seconds: retryAfterSeconds,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
