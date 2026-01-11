@@ -469,24 +469,34 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
     text,
     parse_mode: 'HTML'
   }
-  
+
   if (keyboard) {
     body.reply_markup = keyboard
   }
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    console.error('telegram-webhook: sendMessage failed', { status: res.status, body: txt })
+  }
 }
 
 async function answerCallbackQuery(botToken: string, callbackQueryId: string) {
-  await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ callback_query_id: callbackQueryId })
   })
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    console.error('telegram-webhook: answerCallbackQuery failed', { status: res.status, body: txt })
+  }
 }
 
 async function sendWelcomeMessage(botToken: string, chatId: number, isEmployee: boolean) {
