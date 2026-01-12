@@ -6,6 +6,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper function to get current time in a specific timezone
+function getLocalTime(timezone: string = 'Africa/Cairo'): { date: string; time: string; isoString: string } {
+  const now = new Date()
+  
+  // Format date and time in the specified timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  })
+  
+  const parts = formatter.formatToParts(now)
+  const getValue = (type: string) => parts.find(p => p.type === type)?.value || ''
+  
+  const date = `${getValue('year')}-${getValue('month')}-${getValue('day')}`
+  const time = `${getValue('hour')}:${getValue('minute')}:${getValue('second')}`
+  const isoString = `${date}T${time}`
+  
+  return { date, time, isoString }
+}
+
 interface TelegramUpdate {
   message?: {
     chat: { id: number };
@@ -92,10 +118,12 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone')
       .eq('id', companyId)
       .single()
 
+    const companyTimezone = company?.timezone || 'Africa/Cairo'
+    
     const companyDefaults = {
       work_start_time: company?.work_start_time || '09:00:00',
       work_end_time: company?.work_end_time || '17:00:00',
@@ -275,7 +303,8 @@ serve(async (req) => {
       }
 
       // Employee actions
-      const today = new Date().toISOString().split('T')[0]
+      const localTime = getLocalTime(companyTimezone)
+      const today = localTime.date
       
       // Get today's attendance
       const { data: attendance } = await supabase
@@ -305,8 +334,9 @@ serve(async (req) => {
           if (attendance) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!')
           } else {
-            const now = new Date().toISOString()
-            const checkInTime = now.split('T')[1].substring(0, 8)
+            const currentTime = getLocalTime(companyTimezone)
+            const now = currentTime.isoString
+            const checkInTime = currentTime.time
             
             let status: 'checked_in' | 'on_break' | 'checked_out' | 'absent' = 'checked_in'
             let notes = ''
@@ -449,8 +479,9 @@ serve(async (req) => {
           } else if (attendance.check_out_time) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك اليوم بالفعل!')
           } else {
-            const now = new Date().toISOString()
-            const checkOutTime = now.split('T')[1].substring(0, 8)
+            const currentTime = getLocalTime(companyTimezone)
+            const now = currentTime.isoString
+            const checkOutTime = currentTime.time
             
             // Calculate overtime
             let overtimeMessage = ''
@@ -517,7 +548,8 @@ serve(async (req) => {
           } else if (attendance.check_out_time) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك اليوم!')
           } else {
-            const now = new Date().toISOString()
+            const currentTime = getLocalTime(companyTimezone)
+            const now = currentTime.isoString
             
             await supabase.from('break_logs').insert({
               attendance_id: attendance.id,
@@ -530,7 +562,7 @@ serve(async (req) => {
               .eq('id', attendance.id)
 
             await sendMessage(botToken, chatId, 
-              `☕ بدأت الاستراحة\n\n⏰ الوقت: ${now.split('T')[1].substring(0, 8)}`,
+              `☕ بدأت الاستراحة\n\n⏰ الوقت: ${currentTime.time}`,
               getEmployeeKeyboard()
             )
           }
@@ -542,7 +574,8 @@ serve(async (req) => {
           } else if (attendance.status !== 'on_break') {
             await sendMessage(botToken, chatId, '⚠️ أنت لست في استراحة!')
           } else {
-            const now = new Date().toISOString()
+            const currentTime = getLocalTime(companyTimezone)
+            const now = currentTime.isoString
             
             const { data: activeBreak } = await supabase
               .from('break_logs')
@@ -571,7 +604,7 @@ serve(async (req) => {
               .eq('id', attendance.id)
 
             await sendMessage(botToken, chatId, 
-              `✅ انتهت الاستراحة\n\n⏰ الوقت: ${now.split('T')[1].substring(0, 8)}`,
+              `✅ انتهت الاستراحة\n\n⏰ الوقت: ${currentTime.time}`,
               getEmployeeKeyboard()
             )
           }
@@ -1077,7 +1110,7 @@ serve(async (req) => {
             .single()
           
           const leaveType = session.data.leave_type === 'emergency' ? 'emergency' : 'regular'
-          const leaveDate = session.data.leave_date || new Date().toISOString().split('T')[0]
+          const leaveDate = session.data.leave_date || getLocalTime(companyTimezone).date
           const typeText = leaveType === 'emergency' ? 'طارئة' : 'اعتيادية'
           
           // For emergency leave with balance - auto-approve
