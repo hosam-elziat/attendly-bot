@@ -6,6 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees, Employee } from '@/hooks/useEmployees';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useEmployeeSalaryStats, SalaryFilterPeriod } from '@/hooks/useEmployeeSalaryStats';
+import { useEmployeeAdjustments } from '@/hooks/useSalaryAdjustments';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,10 +39,14 @@ import {
   Gift,
   Minus,
   Timer,
-  MessageCircle
+  MessageCircle,
+  ListOrdered,
+  Edit
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, differenceInMinutes, parseISO, isWithinInterval } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import AdjustmentsList from '@/components/salaries/AdjustmentsList';
+import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
 
 // Arab countries with timezones
 export const ARAB_COUNTRIES = [
@@ -102,6 +107,11 @@ const EmployeeDetails = () => {
   const { data: attendanceLogs = [] } = useAttendance();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('month');
   const [salaryPeriod, setSalaryPeriod] = useState<SalaryFilterPeriod>('this_month');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // Get adjustments for this employee
+  const currentMonth = format(new Date(), 'yyyy-MM');
+  const { data: employeeAdjustments = [], refetch: refetchAdjustments } = useEmployeeAdjustments(id, currentMonth);
 
   const employee = employees.find(e => e.id === id) as Employee & {
     phone?: string;
@@ -555,8 +565,38 @@ const EmployeeDetails = () => {
                       <p className="text-2xl font-bold text-destructive">{stats.absentDays}</p>
                     </div>
                   </div>
+
+                  {/* Adjustments List */}
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-medium flex items-center gap-2">
+                        <ListOrdered className="w-4 h-4" />
+                        {direction === 'rtl' ? 'سجل المكافآت والخصومات' : 'Bonuses & Deductions Log'}
+                      </h4>
+                      <Button size="sm" onClick={() => setEditDialogOpen(true)}>
+                        <Edit className="w-4 h-4 me-1" />
+                        {direction === 'rtl' ? 'إضافة' : 'Add'}
+                      </Button>
+                    </div>
+                    <AdjustmentsList
+                      adjustments={employeeAdjustments}
+                      onRefresh={() => refetchAdjustments()}
+                      showEmployeeName={false}
+                      emptyMessage={direction === 'rtl' ? 'لا توجد تعديلات لهذا الشهر' : 'No adjustments this month'}
+                    />
+                  </div>
                 </CardContent>
               </Card>
+
+              <EditDeductionDialog
+                open={editDialogOpen}
+                onOpenChange={setEditDialogOpen}
+                employeeId={employee.id}
+                employeeName={employee.full_name}
+                month={currentMonth}
+                baseSalary={employee.base_salary}
+                onSuccess={() => refetchAdjustments()}
+              />
             </TabsContent>
           </Tabs>
         </motion.div>

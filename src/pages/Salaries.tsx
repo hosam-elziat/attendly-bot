@@ -21,10 +21,13 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { DollarSign, Download, TrendingUp, TrendingDown, Minus, Edit, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DollarSign, Download, TrendingUp, TrendingDown, Minus, Edit, Loader2, ListOrdered } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfMonth } from 'date-fns';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
+import AdjustmentsList from '@/components/salaries/AdjustmentsList';
+import { useSalaryAdjustments } from '@/hooks/useSalaryAdjustments';
 
 interface EmployeeWithSalary {
   id: string;
@@ -44,6 +47,10 @@ const Salaries = () => {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Use the adjustments hook
+  const { data: adjustments = [], isLoading: adjustmentsLoading, refetch: refetchAdjustments } = useSalaryAdjustments(selectedMonth);
 
   const fetchSalaryData = async () => {
     if (!profile?.company_id) return;
@@ -63,7 +70,7 @@ const Salaries = () => {
       if (empError) throw empError;
 
       // Fetch salary adjustments for the month
-      const { data: adjustments, error: adjError } = await supabase
+      const { data: adjustmentsData, error: adjError } = await supabase
         .from('salary_adjustments')
         .select('employee_id, bonus, deduction')
         .eq('company_id', profile.company_id)
@@ -84,7 +91,7 @@ const Salaries = () => {
 
       // Aggregate data per employee
       const employeeSalaries = (employeesData || []).map(emp => {
-        const empAdjustments = (adjustments || []).filter(a => a.employee_id === emp.id);
+        const empAdjustments = (adjustmentsData || []).filter(a => a.employee_id === emp.id);
         const totalBonus = empAdjustments.reduce((sum, a) => sum + (a.bonus || 0), 0);
         const totalDeduction = empAdjustments.reduce((sum, a) => sum + (a.deduction || 0), 0);
         
@@ -114,6 +121,7 @@ const Salaries = () => {
 
   useEffect(() => {
     fetchSalaryData();
+    refetchAdjustments();
   }, [profile?.company_id, selectedMonth]);
 
   const totalPayroll = employees.reduce((sum, e) => sum + ((e.base_salary || 0) + e.total_bonus - e.total_deduction), 0);
@@ -123,6 +131,11 @@ const Salaries = () => {
   const handleEditClick = (employee: EmployeeWithSalary) => {
     setSelectedEmployee({ id: employee.id, name: employee.full_name });
     setEditDialogOpen(true);
+  };
+
+  const handleAdjustmentRefresh = () => {
+    refetchAdjustments();
+    fetchSalaryData();
   };
 
   const getStatusBadge = (workDays: number) => {
@@ -254,177 +267,215 @@ const Salaries = () => {
           </Card>
         </motion.div>
 
-        {/* Salary Table */}
+        {/* Tabs for Overview and Adjustments List */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.5 }}
         >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-primary" />
-                {t('salaries.breakdown')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                </div>
-              ) : employees.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                  <DollarSign className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-base sm:text-lg font-medium text-foreground mb-1">
-                    {language === 'ar' ? 'لا توجد بيانات رواتب' : 'No salary data'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {language === 'ar' ? 'قم بإضافة موظفين لعرض بيانات الرواتب' : 'Add employees to view salary data'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                {/* Mobile Cards View */}
-                <div className="block sm:hidden p-3 space-y-3">
-                  {employees.map((employee) => {
-                    const netSalary = (employee.base_salary || 0) + employee.total_bonus - employee.total_deduction;
-                    return (
-                      <Card key={employee.id}>
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-                                <span className="text-xs font-medium text-accent-foreground">
-                                  {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                </span>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="overview" className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
+                {language === 'ar' ? 'ملخص الرواتب' : 'Salary Overview'}
+              </TabsTrigger>
+              <TabsTrigger value="adjustments" className="flex items-center gap-2">
+                <ListOrdered className="w-4 h-4" />
+                {language === 'ar' ? 'سجل التعديلات' : 'Adjustments Log'}
+                {adjustments.length > 0 && (
+                  <Badge variant="secondary" className="ms-1">{adjustments.length}</Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-primary" />
+                    {t('salaries.breakdown')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                  ) : employees.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                      <DollarSign className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground/50 mb-4" />
+                      <h3 className="text-base sm:text-lg font-medium text-foreground mb-1">
+                        {language === 'ar' ? 'لا توجد بيانات رواتب' : 'No salary data'}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
+                        {language === 'ar' ? 'قم بإضافة موظفين لعرض بيانات الرواتب' : 'Add employees to view salary data'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                    {/* Mobile Cards View */}
+                    <div className="block sm:hidden p-3 space-y-3">
+                      {employees.map((employee) => {
+                        const netSalary = (employee.base_salary || 0) + employee.total_bonus - employee.total_deduction;
+                        return (
+                          <Card key={employee.id}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                                    <span className="text-xs font-medium text-accent-foreground">
+                                      {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    </span>
+                                  </div>
+                                  <span className="font-medium text-foreground text-sm">{employee.full_name}</span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditClick(employee)}
+                                  className="text-primary hover:text-primary/80 h-8 w-8 p-0"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
                               </div>
-                              <span className="font-medium text-foreground text-sm">{employee.full_name}</span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditClick(employee)}
-                              className="text-primary hover:text-primary/80 h-8 w-8 p-0"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <p className="text-muted-foreground">{t('salaries.workDays')}</p>
-                              <p className="font-medium">{employee.work_days}/22</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">{t('salaries.baseSalary')}</p>
-                              <p className="font-medium">{(employee.base_salary || 0).toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">{t('salaries.bonus')}</p>
-                              <p className={employee.total_bonus > 0 ? 'text-success font-medium' : 'text-muted-foreground'}>
-                                {employee.total_bonus > 0 ? `+${employee.total_bonus}` : '0'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">{t('salaries.deductions')}</p>
-                              <p className={employee.total_deduction > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-                                {employee.total_deduction > 0 ? `-${employee.total_deduction}` : '0'}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between mt-3 pt-2 border-t">
-                            <span className="text-xs text-muted-foreground">{t('salaries.netSalary')}</span>
-                            <span className="font-bold text-foreground">{netSalary.toLocaleString()} {employee.currency || 'SAR'}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-                
-                {/* Desktop Table View */}
-                <Table className="hidden sm:table">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('salaries.employee')}</TableHead>
-                      <TableHead>{t('salaries.workDays')}</TableHead>
-                      <TableHead>{t('salaries.baseSalary')}</TableHead>
-                      <TableHead>{t('salaries.bonus')}</TableHead>
-                      <TableHead>{t('salaries.deductions')}</TableHead>
-                      <TableHead>{t('salaries.netSalary')}</TableHead>
-                      <TableHead>{t('employees.status')}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employees.map((employee) => {
-                      const netSalary = (employee.base_salary || 0) + employee.total_bonus - employee.total_deduction;
-                      return (
-                        <TableRow key={employee.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
-                                <span className="text-xs font-medium text-accent-foreground">
-                                  {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                </span>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <p className="text-muted-foreground">{t('salaries.workDays')}</p>
+                                  <p className="font-medium">{employee.work_days}/22</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">{t('salaries.baseSalary')}</p>
+                                  <p className="font-medium">{(employee.base_salary || 0).toLocaleString()}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">{t('salaries.bonus')}</p>
+                                  <p className={employee.total_bonus > 0 ? 'text-success font-medium' : 'text-muted-foreground'}>
+                                    {employee.total_bonus > 0 ? `+${employee.total_bonus}` : '0'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">{t('salaries.deductions')}</p>
+                                  <p className={employee.total_deduction > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                                    {employee.total_deduction > 0 ? `-${employee.total_deduction}` : '0'}
+                                  </p>
+                                </div>
                               </div>
-                              <span className="font-medium text-foreground">{employee.full_name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {employee.work_days}/22
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {(employee.base_salary || 0).toLocaleString()} {employee.currency || 'SAR'}
-                          </TableCell>
-                          <TableCell>
-                            {employee.total_bonus > 0 ? (
-                              <span className="text-success flex items-center gap-1">
-                                <TrendingUp className="w-3 h-3" />
-                                +{employee.total_bonus}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground flex items-center gap-1">
-                                <Minus className="w-3 h-3" />
-                                0
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {employee.total_deduction > 0 ? (
-                              <span className="text-destructive flex items-center gap-1">
-                                <TrendingDown className="w-3 h-3" />
-                                -{employee.total_deduction}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground flex items-center gap-1">
-                                <Minus className="w-3 h-3" />
-                                0
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-bold text-foreground">
-                            {netSalary.toLocaleString()} {employee.currency || 'SAR'}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(employee.work_days)}</TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditClick(employee)}
-                              className="text-primary hover:text-primary/80"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
+                              <div className="flex items-center justify-between mt-3 pt-2 border-t">
+                                <span className="text-xs text-muted-foreground">{t('salaries.netSalary')}</span>
+                                <span className="font-bold text-foreground">{netSalary.toLocaleString()} {employee.currency || 'SAR'}</span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Desktop Table View */}
+                    <Table className="hidden sm:table">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('salaries.employee')}</TableHead>
+                          <TableHead>{t('salaries.workDays')}</TableHead>
+                          <TableHead>{t('salaries.baseSalary')}</TableHead>
+                          <TableHead>{t('salaries.bonus')}</TableHead>
+                          <TableHead>{t('salaries.deductions')}</TableHead>
+                          <TableHead>{t('salaries.netSalary')}</TableHead>
+                          <TableHead>{t('employees.status')}</TableHead>
+                          <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {employees.map((employee) => {
+                          const netSalary = (employee.base_salary || 0) + employee.total_bonus - employee.total_deduction;
+                          return (
+                            <TableRow key={employee.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                                    <span className="text-xs font-medium text-accent-foreground">
+                                      {employee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    </span>
+                                  </div>
+                                  <span className="font-medium text-foreground">{employee.full_name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {employee.work_days}/22
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {(employee.base_salary || 0).toLocaleString()} {employee.currency || 'SAR'}
+                              </TableCell>
+                              <TableCell>
+                                {employee.total_bonus > 0 ? (
+                                  <span className="text-success flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" />
+                                    +{employee.total_bonus}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground flex items-center gap-1">
+                                    <Minus className="w-3 h-3" />
+                                    0
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {employee.total_deduction > 0 ? (
+                                  <span className="text-destructive flex items-center gap-1">
+                                    <TrendingDown className="w-3 h-3" />
+                                    -{employee.total_deduction}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground flex items-center gap-1">
+                                    <Minus className="w-3 h-3" />
+                                    0
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-bold text-foreground">
+                                {netSalary.toLocaleString()} {employee.currency || 'SAR'}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(employee.work_days)}</TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditClick(employee)}
+                                  className="text-primary hover:text-primary/80"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="adjustments">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ListOrdered className="w-5 h-5 text-primary" />
+                    {language === 'ar' ? 'سجل المكافآت والخصومات' : 'Bonuses & Deductions Log'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <AdjustmentsList
+                    adjustments={adjustments}
+                    loading={adjustmentsLoading}
+                    onRefresh={handleAdjustmentRefresh}
+                    showEmployeeName={true}
+                    emptyMessage={language === 'ar' ? 'لا توجد تعديلات لهذا الشهر' : 'No adjustments for this month'}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </motion.div>
       </div>
 
@@ -435,7 +486,7 @@ const Salaries = () => {
         employeeName={selectedEmployee?.name || ''}
         month={selectedMonth}
         baseSalary={employees.find(e => e.id === selectedEmployee?.id)?.base_salary || 0}
-        onSuccess={fetchSalaryData}
+        onSuccess={handleAdjustmentRefresh}
       />
     </DashboardLayout>
   );

@@ -728,6 +728,7 @@ export type Database = {
           added_by: string | null
           added_by_name: string | null
           adjustment_days: number | null
+          attendance_log_id: string | null
           bonus: number | null
           company_id: string
           created_at: string
@@ -735,12 +736,15 @@ export type Database = {
           description: string | null
           employee_id: string
           id: string
+          is_auto_generated: boolean | null
           month: string
+          updated_at: string | null
         }
         Insert: {
           added_by?: string | null
           added_by_name?: string | null
           adjustment_days?: number | null
+          attendance_log_id?: string | null
           bonus?: number | null
           company_id: string
           created_at?: string
@@ -748,12 +752,15 @@ export type Database = {
           description?: string | null
           employee_id: string
           id?: string
+          is_auto_generated?: boolean | null
           month: string
+          updated_at?: string | null
         }
         Update: {
           added_by?: string | null
           added_by_name?: string | null
           adjustment_days?: number | null
+          attendance_log_id?: string | null
           bonus?: number | null
           company_id?: string
           created_at?: string
@@ -761,9 +768,18 @@ export type Database = {
           description?: string | null
           employee_id?: string
           id?: string
+          is_auto_generated?: boolean | null
           month?: string
+          updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "salary_adjustments_attendance_log_id_fkey"
+            columns: ["attendance_log_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_logs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "salary_adjustments_company_id_fkey"
             columns: ["company_id"]
