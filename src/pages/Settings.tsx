@@ -307,6 +307,7 @@ const Settings = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
+          data-tour="language-select"
         >
           <Card>
             <CardHeader>
@@ -345,6 +346,7 @@ const Settings = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
+          data-tour="theme-select"
         >
           <Card>
             <CardHeader>
@@ -386,6 +388,7 @@ const Settings = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.3 }}
+          data-tour="company-info"
         >
           <Card>
             <CardHeader>
@@ -455,6 +458,7 @@ const Settings = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.4 }}
+          data-tour="work-hours"
         >
           <Card>
             <CardHeader>
@@ -557,6 +561,7 @@ const Settings = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.6 }}
+          data-tour="deductions-section"
         >
           <Card>
             <CardHeader>

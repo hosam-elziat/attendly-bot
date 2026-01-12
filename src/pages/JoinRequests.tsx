@@ -137,7 +137,7 @@ const JoinRequests = () => {
         </div>
 
         {/* Pending Requests */}
-        <Card>
+        <Card data-tour="join-requests">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />

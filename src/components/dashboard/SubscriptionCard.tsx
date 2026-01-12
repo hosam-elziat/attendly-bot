@@ -104,7 +104,7 @@ const SubscriptionCard = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="subscription-card">
       {/* Current Subscription */}
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-2">
