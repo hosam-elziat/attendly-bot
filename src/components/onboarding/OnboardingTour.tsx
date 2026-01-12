@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Joyride, { CallBackProps, STATUS, Step, ACTIONS, EVENTS } from 'react-joyride';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -7,15 +7,21 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface OnboardingTourProps {
   onComplete: () => void;
+  initialStepIndex?: number;
+  onStepIndexChange?: (nextIndex: number) => void;
 }
 
-const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
+const OnboardingTour = ({
+  onComplete,
+  initialStepIndex = 0,
+  onStepIndexChange,
+}: OnboardingTourProps) => {
   const { language } = useLanguage();
   const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [run, setRun] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(initialStepIndex);
   const [isNavigating, setIsNavigating] = useState(false);
 
   const isRTL = language === 'ar';
@@ -174,23 +180,29 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
     },
   ];
 
-  // Start tour after component mounts
+  // Start tour after component mounts (do NOT restart when step changes)
+  const initialIndexRef = useRef(initialStepIndex);
+
   useEffect(() => {
+    setStepIndex(initialIndexRef.current);
     const timer = setTimeout(() => {
       setRun(true);
-    }, 800);
+    }, 300);
     return () => clearTimeout(timer);
   }, []);
 
   // Navigate to the correct route when step changes
   const navigateToStep = useCallback((nextIndex: number) => {
+    onStepIndexChange?.(nextIndex);
+
     const nextStep = tourSteps[nextIndex];
     if (nextStep?.route && location.pathname !== nextStep.route) {
       setIsNavigating(true);
       setRun(false);
       navigate(nextStep.route);
-      
-      // Wait for navigation and DOM to update
+
+      // This component may unmount after navigate (because each page mounts its own layout).
+      // Persisting stepIndex before navigate ensures the tour resumes on the next page.
       setTimeout(() => {
         setStepIndex(nextIndex);
         setIsNavigating(false);
@@ -199,7 +211,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
     } else {
       setStepIndex(nextIndex);
     }
-  }, [location.pathname, navigate, tourSteps]);
+  }, [location.pathname, navigate, onStepIndexChange, tourSteps]);
 
   const handleJoyrideCallback = async (data: CallBackProps) => {
     const { status, action, index, type } = data;
@@ -216,6 +228,11 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
       }
     }
 
+    // If target isn't found (page still loading / element not mounted), move forward automatically
+    if (type === EVENTS.TARGET_NOT_FOUND) {
+      navigateToStep(index + 1);
+    }
+
     // Handle close button
     if (action === ACTIONS.CLOSE) {
       setRun(false);
@@ -225,17 +242,19 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
     // Handle tour completion or skip
     if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as any)) {
       setRun(false);
-      
+
+      onStepIndexChange?.(tourSteps.length);
+
       if (profile?.user_id) {
         await supabase
           .from('profiles')
-          .update({ 
+          .update({
             onboarding_completed: true,
-            onboarding_step: tourSteps.length 
+            onboarding_step: tourSteps.length,
           })
           .eq('user_id', profile.user_id);
       }
-      
+
       onComplete();
     }
   };
