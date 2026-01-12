@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Joyride, { CallBackProps, STATUS, Step, ACTIONS, EVENTS } from 'react-joyride';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -16,6 +16,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
   const location = useLocation();
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const isRTL = language === 'ar';
 
@@ -38,6 +39,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '✨ هنا يمكنك رؤية باقتك الحالية. اضغط لاختيار باقة واحصل على 3 أشهر مجانية!'
         : '✨ Here you can see your current plan. Click to choose a plan and get 3 months free!',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard',
     },
     // Step 2: Navigate to Subscription
@@ -47,6 +49,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🎁 اختر الباقة المناسبة لحجم فريقك. جميع الباقات تأتي مع 3 أشهر مجانية!'
         : '🎁 Choose the plan that fits your team size. All plans come with 3 months free!',
       placement: 'top',
+      disableBeacon: true,
       route: '/dashboard/subscription',
     },
     // Step 3: Settings - Language
@@ -56,6 +59,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🌍 اختر لغتك المفضلة - العربية أو الإنجليزية'
         : '🌍 Choose your preferred language - Arabic or English',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/settings',
     },
     // Step 4: Settings - Theme
@@ -65,6 +69,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🌓 هل تفضل المظهر الفاتح أم الداكن؟ اختر ما يناسبك!'
         : '🌓 Do you prefer light or dark mode? Choose what suits you!',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/settings',
     },
     // Step 5: Company Info
@@ -74,6 +79,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🏢 أدخل معلومات شركتك: الاسم، المنطقة الزمنية، والعملة'
         : '🏢 Enter your company info: name, timezone, and currency',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/settings',
     },
     // Step 6: Work Hours
@@ -83,6 +89,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '⏰ حدد ساعات العمل الرسمية وأيام العطلة الأسبوعية'
         : '⏰ Set your official work hours and weekend days',
       placement: 'top',
+      disableBeacon: true,
       route: '/dashboard/settings',
     },
     // Step 7: Deductions
@@ -92,6 +99,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '💰 حدد قواعد الخصومات للتأخير والغياب'
         : '💰 Set deduction rules for late arrivals and absences',
       placement: 'top',
+      disableBeacon: true,
       route: '/dashboard/settings',
     },
     // Step 8: Telegram Bot
@@ -101,6 +109,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🤖 فعّل بوت التليجرام! هذا هو قلب النظام - موظفوك سيستخدمونه لتسجيل الحضور'
         : '🤖 Activate the Telegram bot! This is the heart of the system - your employees will use it for attendance',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/telegram',
     },
     // Step 9: Bot Link
@@ -110,6 +119,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '📤 انسخ رابط البوت وشاركه مع موظفيك ليسجلوا بياناتهم'
         : '📤 Copy the bot link and share it with your employees to register',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/telegram',
     },
     // Step 10: Add Employee
@@ -119,6 +129,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '👤 أضف موظفين يدوياً من هنا، أو دعهم يسجلون عبر البوت'
         : '👤 Add employees manually here, or let them register via the bot',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/employees',
     },
     // Step 11: Join Requests
@@ -128,6 +139,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '📋 هنا ستظهر طلبات انضمام الموظفين الجدد عبر البوت. راجعها ووافق عليها!'
         : '📋 New employee join requests via bot will appear here. Review and approve them!',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/join-requests',
     },
     // Step 12: Leaves
@@ -137,6 +149,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🏖️ إدارة طلبات الإجازات - راجع، وافق، أو ارفض الطلبات'
         : '🏖️ Manage leave requests - review, approve, or reject them',
       placement: 'bottom',
+      disableBeacon: true,
       route: '/dashboard/leaves',
     },
     // Step 13: Sidebar Navigation
@@ -146,6 +159,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '📱 استخدم القائمة الجانبية للتنقل بين صفحات النظام'
         : '📱 Use the sidebar to navigate between system pages',
       placement: 'right',
+      disableBeacon: true,
       route: '/dashboard',
     },
     // Step 14: Complete
@@ -155,6 +169,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
         ? '🎊 تهانينا! أنت جاهز للبدء. شارك رابط البوت مع موظفيك وابدأ في تتبع الحضور!'
         : '🎊 Congratulations! You are ready to start. Share the bot link with your employees and start tracking attendance!',
       placement: 'center',
+      disableBeacon: true,
       route: '/dashboard',
     },
   ];
@@ -163,45 +178,48 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setRun(true);
-    }, 500);
+    }, 800);
     return () => clearTimeout(timer);
   }, []);
 
-  // Handle route changes for steps
-  useEffect(() => {
-    const currentStep = tourSteps[stepIndex];
-    if (currentStep?.route && location.pathname !== currentStep.route) {
-      navigate(currentStep.route);
+  // Navigate to the correct route when step changes
+  const navigateToStep = useCallback((nextIndex: number) => {
+    const nextStep = tourSteps[nextIndex];
+    if (nextStep?.route && location.pathname !== nextStep.route) {
+      setIsNavigating(true);
+      setRun(false);
+      navigate(nextStep.route);
+      
+      // Wait for navigation and DOM to update
+      setTimeout(() => {
+        setStepIndex(nextIndex);
+        setIsNavigating(false);
+        setRun(true);
+      }, 600);
+    } else {
+      setStepIndex(nextIndex);
     }
-  }, [stepIndex]);
+  }, [location.pathname, navigate, tourSteps]);
 
   const handleJoyrideCallback = async (data: CallBackProps) => {
     const { status, action, index, type } = data;
 
+    // Don't process events while navigating
+    if (isNavigating) return;
+
     // Handle step changes
     if (type === EVENTS.STEP_AFTER) {
       if (action === ACTIONS.NEXT) {
-        const nextStep = tourSteps[index + 1];
-        if (nextStep?.route && location.pathname !== nextStep.route) {
-          navigate(nextStep.route);
-          // Wait for navigation before moving to next step
-          setTimeout(() => {
-            setStepIndex(index + 1);
-          }, 300);
-        } else {
-          setStepIndex(index + 1);
-        }
+        navigateToStep(index + 1);
       } else if (action === ACTIONS.PREV) {
-        const prevStep = tourSteps[index - 1];
-        if (prevStep?.route && location.pathname !== prevStep.route) {
-          navigate(prevStep.route);
-          setTimeout(() => {
-            setStepIndex(index - 1);
-          }, 300);
-        } else {
-          setStepIndex(index - 1);
-        }
+        navigateToStep(index - 1);
       }
+    }
+
+    // Handle close button
+    if (action === ACTIONS.CLOSE) {
+      setRun(false);
+      onComplete();
     }
 
     // Handle tour completion or skip
@@ -231,7 +249,7 @@ const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
       showProgress
       showSkipButton
       disableOverlayClose
-      spotlightClicks
+      spotlightClicks={false}
       callback={handleJoyrideCallback}
       locale={{
         back: isRTL ? 'السابق' : 'Back',
