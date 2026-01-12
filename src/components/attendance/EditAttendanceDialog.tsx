@@ -38,10 +38,23 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
   const [checkOutTime, setCheckOutTime] = useState('');
   const [status, setStatus] = useState('');
 
+  // Extract time in HH:mm format without timezone conversion issues
+  const extractTimeFromTimestamp = (timestamp: string | null): string => {
+    if (!timestamp) return '';
+    // Parse the time part directly from the ISO string to avoid timezone shifts
+    const match = timestamp.match(/T(\d{2}):(\d{2})/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
+    }
+    // Fallback: use Date parsing
+    const date = new Date(timestamp);
+    return format(date, "HH:mm");
+  };
+
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && record) {
-      setCheckInTime(record.check_in_time ? format(new Date(record.check_in_time), "HH:mm") : '');
-      setCheckOutTime(record.check_out_time ? format(new Date(record.check_out_time), "HH:mm") : '');
+      setCheckInTime(extractTimeFromTimestamp(record.check_in_time));
+      setCheckOutTime(extractTimeFromTimestamp(record.check_out_time));
       setStatus(record.status || 'checked_in');
     }
     onOpenChange(isOpen);
