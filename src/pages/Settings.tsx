@@ -35,7 +35,7 @@ const Settings = () => {
   
   const [saving, setSaving] = useState(false);
   const [companyName, setCompanyName] = useState('');
-  const [timezone, setTimezone] = useState('UTC+2');
+  const [timezone, setTimezone] = useState('Africa/Cairo');
   const [defaultCurrency, setDefaultCurrency] = useState('EGP');
   const [workStart, setWorkStart] = useState('09:00');
   const [workEnd, setWorkEnd] = useState('17:00');
