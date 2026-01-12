@@ -43,13 +43,17 @@ const Attendance = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const today = new Date();
+  const todayStr = format(today, 'yyyy-MM-dd');
+  const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+
   // Fetch all attendance based on date filter
+  // For "today" filter, also include yesterday's records that are still active (night shifts)
   const { data: attendance = [], isLoading } = useQuery({
     queryKey: ['attendance-all', profile?.company_id, dateFilter],
     queryFn: async () => {
       if (!profile?.company_id) return [];
       
-      const today = new Date();
       let startDate: Date;
       let endDate: Date = today;
       
@@ -68,6 +72,48 @@ const Attendance = () => {
         default:
           startDate = today;
           break;
+      }
+      
+      // For today filter, also fetch yesterday's active records (night shifts)
+      if (dateFilter === 'today') {
+        const [todayData, yesterdayActiveData] = await Promise.all([
+          supabase
+            .from('attendance_logs')
+            .select(`
+              *,
+              employees (
+                full_name,
+                email
+              )
+            `)
+            .eq('company_id', profile.company_id)
+            .eq('date', todayStr)
+            .order('check_in_time', { ascending: false }),
+          supabase
+            .from('attendance_logs')
+            .select(`
+              *,
+              employees (
+                full_name,
+                email
+              )
+            `)
+            .eq('company_id', profile.company_id)
+            .eq('date', yesterdayStr)
+            .in('status', ['checked_in', 'on_break'])
+            .order('check_in_time', { ascending: false }),
+        ]);
+
+        if (todayData.error) throw todayData.error;
+        if (yesterdayActiveData.error) throw yesterdayActiveData.error;
+
+        // Mark yesterday's records as night shift
+        const markedYesterdayData = (yesterdayActiveData.data || []).map(record => ({
+          ...record,
+          isNightShift: true,
+        }));
+
+        return [...(todayData.data || []), ...markedYesterdayData];
       }
       
       const { data, error } = await supabase
@@ -93,7 +139,7 @@ const Attendance = () => {
 
   // Filter by status and search
   const filteredAttendance = useMemo(() => {
-    return attendance.filter(record => {
+    return attendance.filter((record: any) => {
       const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
       const matchesSearch = !searchQuery || 
         record.employees?.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -112,12 +158,28 @@ const Attendance = () => {
     queryClient.invalidateQueries({ queryKey: ['attendance-stats'] });
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, isNightShift?: boolean) => {
+    const nightShiftLabel = isNightShift ? (
+      <span className="ms-1 text-xs text-muted-foreground">
+        ({language === 'ar' ? 'وردية ليلية' : 'Night'})
+      </span>
+    ) : null;
+
     switch (status) {
       case 'checked_in':
-        return <Badge className="bg-success hover:bg-success/90">{t('attendance.present')}</Badge>;
+        return (
+          <div className="flex items-center gap-1">
+            <Badge className="bg-success hover:bg-success/90">{t('attendance.present')}</Badge>
+            {nightShiftLabel}
+          </div>
+        );
       case 'on_break':
-        return <Badge variant="secondary">{t('attendance.onBreak')}</Badge>;
+        return (
+          <div className="flex items-center gap-1">
+            <Badge variant="secondary">{t('attendance.onBreak')}</Badge>
+            {nightShiftLabel}
+          </div>
+        );
       case 'checked_out':
         return <Badge variant="outline">{t('attendance.left')}</Badge>;
       case 'absent':
@@ -282,7 +344,7 @@ const Attendance = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredAttendance.map((record) => (
+                      {filteredAttendance.map((record: any) => (
                         <TableRow key={record.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
@@ -308,7 +370,7 @@ const Attendance = () => {
                           <TableCell className="text-muted-foreground">
                             {formatTime(record.check_out_time)}
                           </TableCell>
-                          <TableCell>{getStatusBadge(record.status)}</TableCell>
+                          <TableCell>{getStatusBadge(record.status, record.isNightShift)}</TableCell>
                           <TableCell>
                             <Button
                               variant="ghost"
