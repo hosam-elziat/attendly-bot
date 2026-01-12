@@ -306,14 +306,42 @@ serve(async (req) => {
       const localTime = getLocalTime(companyTimezone)
       const today = localTime.date
       
-      // Get today's attendance
-      const { data: attendance } = await supabase
+      // Calculate yesterday's date for night shifts
+      const todayDate = new Date(today)
+      const yesterdayDate = new Date(todayDate)
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+      const yesterday = yesterdayDate.toISOString().split('T')[0]
+      
+      // Get today's attendance first
+      const { data: todayAttendance } = await supabase
         .from('attendance_logs')
         .select('*')
         .eq('employee_id', employee.id)
         .eq('company_id', companyId)
         .eq('date', today)
         .single()
+      
+      // If no today attendance or today attendance is already checked out,
+      // check for an open attendance from yesterday (for night shifts)
+      let attendance = todayAttendance
+      let attendanceDate = today
+      
+      if (!todayAttendance || todayAttendance.status === 'checked_out') {
+        // Look for open attendance from yesterday
+        const { data: yesterdayAttendance } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .eq('employee_id', employee.id)
+          .eq('company_id', companyId)
+          .eq('date', yesterday)
+          .in('status', ['checked_in', 'on_break'])
+          .single()
+        
+        if (yesterdayAttendance) {
+          attendance = yesterdayAttendance
+          attendanceDate = yesterday
+        }
+      }
 
       // Get company late policies
       const { data: companyPolicies } = await supabase
@@ -331,7 +359,8 @@ serve(async (req) => {
 
       switch (callbackData) {
         case 'check_in':
-          if (attendance) {
+          // For check_in, only check today's attendance (not yesterday's open shift)
+          if (todayAttendance) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!')
           } else {
             const localTime = getLocalTime(companyTimezone)
@@ -475,19 +504,23 @@ serve(async (req) => {
 
         case 'check_out':
           if (!attendance) {
-            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك اليوم بعد!')
+            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.')
           } else if (attendance.check_out_time) {
-            await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك اليوم بالفعل!')
+            await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك بالفعل!')
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString() // Store UTC in database
             const checkOutTime = localTime.time // Use local time for display
             
+            // Check if this is a night shift (attendance from yesterday)
+            const isNightShift = attendanceDate !== today
+            const nightShiftNote = isNightShift ? `\n🌙 <i>وردية ليلية - حضور من ${attendanceDate}</i>` : ''
+            
             // Calculate overtime
             let overtimeMessage = ''
             const workEndTime = employee.work_end_time || companyDefaults.work_end_time
             
-            if (workEndTime && checkOutTime > workEndTime && attendance.check_in_time) {
+            if (workEndTime && checkOutTime > workEndTime && attendance.check_in_time && !isNightShift) {
               const [endH, endM] = workEndTime.split(':').map(Number)
               const [checkH, checkM] = checkOutTime.split(':').map(Number)
               const overtimeMinutes = (checkH * 60 + checkM) - (endH * 60 + endM)
@@ -531,8 +564,9 @@ serve(async (req) => {
 
             await sendMessage(botToken, chatId, 
               `✅ تم تسجيل انصرافك بنجاح!\n\n` +
-              `📅 التاريخ: ${today}\n` +
+              `📅 التاريخ: ${attendanceDate}\n` +
               `⏰ وقت الانصراف: ${checkOutTime}` +
+              nightShiftNote +
               workHoursMessage +
               overtimeMessage,
               getEmployeeKeyboard()
@@ -542,14 +576,18 @@ serve(async (req) => {
 
         case 'start_break':
           if (!attendance) {
-            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك اليوم بعد!')
+            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.')
           } else if (attendance.status === 'on_break') {
             await sendMessage(botToken, chatId, '⚠️ أنت في استراحة بالفعل!')
           } else if (attendance.check_out_time) {
-            await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك اليوم!')
+            await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك بالفعل!')
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
+            
+            // Check if this is a night shift
+            const isNightShift = attendanceDate !== today
+            const nightShiftNote = isNightShift ? `\n🌙 <i>وردية ليلية - حضور من ${attendanceDate}</i>` : ''
             
             await supabase.from('break_logs').insert({
               attendance_id: attendance.id,
@@ -562,7 +600,7 @@ serve(async (req) => {
               .eq('id', attendance.id)
 
             await sendMessage(botToken, chatId, 
-              `☕ بدأت الاستراحة\n\n⏰ الوقت: ${localTime.time}`,
+              `☕ بدأت الاستراحة\n\n⏰ الوقت: ${localTime.time}${nightShiftNote}`,
               getEmployeeKeyboard()
             )
           }
@@ -570,12 +608,16 @@ serve(async (req) => {
 
         case 'end_break':
           if (!attendance) {
-            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك اليوم بعد!')
+            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.')
           } else if (attendance.status !== 'on_break') {
             await sendMessage(botToken, chatId, '⚠️ أنت لست في استراحة!')
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
+            
+            // Check if this is a night shift
+            const isNightShift = attendanceDate !== today
+            const nightShiftNote = isNightShift ? `\n🌙 <i>وردية ليلية - حضور من ${attendanceDate}</i>` : ''
             
             const { data: activeBreak } = await supabase
               .from('break_logs')
@@ -604,7 +646,7 @@ serve(async (req) => {
               .eq('id', attendance.id)
 
             await sendMessage(botToken, chatId, 
-              `✅ انتهت الاستراحة\n\n⏰ الوقت: ${localTime.time}`,
+              `✅ انتهت الاستراحة\n\n⏰ الوقت: ${localTime.time}${nightShiftNote}`,
               getEmployeeKeyboard()
             )
           }
