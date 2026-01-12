@@ -72,6 +72,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: newCompanyId,
           name: defaultCompanyName,
           owner_id: userId,
+          country_code: 'EG',
+          timezone: 'UTC+2',
+          default_currency: 'EGP',
         });
 
       if (companyError) throw companyError;
@@ -127,6 +130,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: newCompanyId,
           name: defaultCompanyName,
           owner_id: userId,
+          country_code: 'EG',
+          timezone: 'UTC+2',
+          default_currency: 'EGP',
         });
 
       if (companyError) throw companyError;
@@ -267,6 +273,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: companyId,
           name: companyName,
           owner_id: userId,
+          country_code: 'EG',
+          timezone: 'UTC+2',
+          default_currency: 'EGP',
         });
 
       if (companyError) throw companyError;
