@@ -59,7 +59,7 @@ const Subscription = () => {
             .from('subscriptions')
             .select('status, plan_name, max_employees, current_period_end, current_period_start, billing_cycle, plan_id')
             .eq('company_id', profile.company_id)
-            .single(),
+            .maybeSingle(),
           supabase
             .from('subscription_plans')
             .select('id, name, name_ar, description, price_monthly, price_quarterly, price_yearly, min_employees, max_employees, is_unlimited, currency, features')
