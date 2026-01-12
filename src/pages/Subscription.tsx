@@ -40,47 +40,75 @@ interface PlanInfo {
 }
 
 const Subscription = () => {
-  const { profile } = useAuth();
+  const { profile, session, loading: authLoading } = useAuth();
   const { language } = useLanguage();
+
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [plans, setPlans] = useState<PlanInfo[]>([]);
   const [employeeCount, setEmployeeCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+
+  // Keep plans independent from company/profile so they appear without needing a refresh.
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    let retryCount = 0;
-    const maxRetries = 5;
 
-    const fetchData = async () => {
-      // Wait for profile to be available
+    const fetchPlans = async () => {
+      try {
+        setPlansLoading(true);
+
+        const { data, error } = await supabase
+          .from('subscription_plans')
+          .select('id, name, name_ar, description, price_monthly, price_quarterly, price_yearly, min_employees, max_employees, is_unlimited, currency, features')
+          .eq('is_active', true)
+          .order('min_employees');
+
+        if (error) throw error;
+        if (isMounted) setPlans((data as PlanInfo[]) || []);
+      } catch (error) {
+        console.error('Error fetching plans:', error);
+        if (isMounted) setPlans([]);
+      } finally {
+        if (isMounted) setPlansLoading(false);
+      }
+    };
+
+    fetchPlans();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.access_token]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchSubscriptionAndEmployees = async () => {
+      // Wait for auth hydration so new accounts have profile/company_id ready.
+      if (authLoading) return;
+
       if (!profile?.company_id) {
-        // Retry a few times with delay for new accounts
-        if (retryCount < maxRetries) {
-          retryCount++;
-          setTimeout(() => {
-            if (isMounted) fetchData();
-          }, 500);
-        } else {
-          if (isMounted) setLoading(false);
+        if (isMounted) {
+          setSubscription(null);
+          setEmployeeCount(0);
+          setSubscriptionLoading(false);
         }
         return;
       }
 
       try {
-        const [subRes, plansRes, empRes] = await Promise.all([
+        setSubscriptionLoading(true);
+
+        const [subRes, empRes] = await Promise.all([
           supabase
             .from('subscriptions')
             .select('status, plan_name, max_employees, current_period_end, current_period_start, billing_cycle, plan_id')
             .eq('company_id', profile.company_id)
             .maybeSingle(),
-          supabase
-            .from('subscription_plans')
-            .select('id, name, name_ar, description, price_monthly, price_quarterly, price_yearly, min_employees, max_employees, is_unlimited, currency, features')
-            .eq('is_active', true)
-            .order('min_employees'),
           supabase
             .from('employees')
             .select('id', { count: 'exact' })
@@ -89,23 +117,22 @@ const Subscription = () => {
         ]);
 
         if (isMounted) {
-          if (subRes.data) setSubscription(subRes.data);
-          if (plansRes.data) setPlans(plansRes.data);
+          setSubscription((subRes.data as SubscriptionInfo | null) ?? null);
           if (empRes.count !== null) setEmployeeCount(empRes.count);
         }
       } catch (error) {
         console.error('Error fetching subscription:', error);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) setSubscriptionLoading(false);
       }
     };
 
-    fetchData();
+    fetchSubscriptionAndEmployees();
 
     return () => {
       isMounted = false;
     };
-  }, [profile?.company_id]);
+  }, [authLoading, profile?.company_id]);
 
   const handleUpgrade = async (planId: string, planName: string, plan: PlanInfo) => {
     setUpgrading(planId);
@@ -199,7 +226,7 @@ const Subscription = () => {
     ? Math.max(0, Math.ceil((new Date(subscription.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  if (loading) {
+  if (plansLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
@@ -237,6 +264,9 @@ const Subscription = () => {
               <CardTitle className="flex items-center gap-2">
                 <Crown className="w-5 h-5 text-primary" />
                 {language === 'ar' ? 'اشتراكك الحالي' : 'Your Current Subscription'}
+                {subscriptionLoading && (
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
