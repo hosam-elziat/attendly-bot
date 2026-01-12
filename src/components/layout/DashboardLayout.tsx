@@ -69,7 +69,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         "fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border lg:hidden",
         "flex items-center justify-around py-2 px-1"
       )}>
-        {navItems.slice(0, 5).map((item) => {
+        {navItems.slice(0, 4).map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
@@ -93,6 +93,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         >
           <Menu className="w-5 h-5" />
           <span className="text-[10px] font-medium">{language === 'ar' ? 'المزيد' : 'More'}</span>
+        </button>
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center gap-1 px-2 py-1 rounded-lg text-destructive min-w-[56px]"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="text-[10px] font-medium">{language === 'ar' ? 'خروج' : 'Logout'}</span>
         </button>
       </nav>
 
