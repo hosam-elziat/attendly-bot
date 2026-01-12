@@ -50,8 +50,24 @@ const Subscription = () => {
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 5;
+
     const fetchData = async () => {
-      if (!profile?.company_id) return;
+      // Wait for profile to be available
+      if (!profile?.company_id) {
+        // Retry a few times with delay for new accounts
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(() => {
+            if (isMounted) fetchData();
+          }, 500);
+        } else {
+          if (isMounted) setLoading(false);
+        }
+        return;
+      }
 
       try {
         const [subRes, plansRes, empRes] = await Promise.all([
@@ -72,17 +88,23 @@ const Subscription = () => {
             .eq('is_active', true),
         ]);
 
-        if (subRes.data) setSubscription(subRes.data);
-        if (plansRes.data) setPlans(plansRes.data);
-        if (empRes.count !== null) setEmployeeCount(empRes.count);
+        if (isMounted) {
+          if (subRes.data) setSubscription(subRes.data);
+          if (plansRes.data) setPlans(plansRes.data);
+          if (empRes.count !== null) setEmployeeCount(empRes.count);
+        }
       } catch (error) {
         console.error('Error fetching subscription:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [profile?.company_id]);
 
   const handleUpgrade = async (planId: string, planName: string, plan: PlanInfo) => {
