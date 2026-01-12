@@ -152,6 +152,7 @@ const Employees = () => {
               <Button 
                 className="btn-primary-gradient"
                 disabled={!canAddEmployee}
+                data-tour="add-employee"
               >
                 <Plus className="w-4 h-4 me-2" />
                 {t('employees.add')}

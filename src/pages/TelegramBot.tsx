@@ -250,6 +250,7 @@ const TelegramBot = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
+          data-tour="telegram-connect"
         >
           <Card>
             <CardHeader>
@@ -341,7 +342,7 @@ const TelegramBot = () => {
 
                   {/* Bot Link Section */}
                   {botLink && (
-                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20" data-tour="bot-link">
                       <div className="flex items-center gap-2 text-primary mb-3">
                         <Link2 className="w-5 h-5" />
                         <span className="font-medium">رابط البوت</span>

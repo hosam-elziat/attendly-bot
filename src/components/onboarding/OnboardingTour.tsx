@@ -1,334 +1,295 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import Joyride, { CallBackProps, STATUS, Step, ACTIONS, EVENTS } from 'react-joyride';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  CreditCard, 
-  Globe, 
-  Moon, 
-  Sun, 
-  Building, 
-  Clock, 
-  Bot, 
-  UserPlus,
-  Percent,
-  Share2,
-  Users,
-  CheckCircle,
-  Sparkles
-} from 'lucide-react';
-
-interface OnboardingStep {
-  id: number;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  route: string;
-  action?: string;
-  highlight?: string;
-}
 
 interface OnboardingTourProps {
   onComplete: () => void;
 }
 
 const OnboardingTour = ({ onComplete }: OnboardingTourProps) => {
-  const { t, language, setLanguage, direction } = useLanguage();
+  const { language } = useLanguage();
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
+  const location = useLocation();
+  const [run, setRun] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
 
-  const steps: OnboardingStep[] = [
+  const isRTL = language === 'ar';
+
+  // Define all steps with their target routes and elements
+  const tourSteps: (Step & { route?: string })[] = [
+    // Step 0: Welcome
     {
-      id: 1,
-      title: language === 'ar' ? 'اختر باقتك' : 'Choose Your Plan',
-      description: language === 'ar' 
-        ? '🎉 احصل على 3 أشهر مجانية! اختر الباقة المناسبة لحجم فريقك' 
-        : '🎉 Get 3 months free! Choose the plan that fits your team size',
-      icon: <CreditCard className="w-6 h-6" />,
+      target: 'body',
+      content: isRTL 
+        ? '🎉 مرحباً بك في AttendEase! دعنا نأخذك في جولة سريعة لتتعرف على النظام ونساعدك في إعداده.'
+        : '🎉 Welcome to AttendEase! Let us take you on a quick tour to help you set up.',
+      placement: 'center',
+      disableBeacon: true,
+      route: '/dashboard',
+    },
+    // Step 1: Subscription Card
+    {
+      target: '[data-tour="subscription-card"]',
+      content: isRTL 
+        ? '✨ هنا يمكنك رؤية باقتك الحالية. اضغط لاختيار باقة واحصل على 3 أشهر مجانية!'
+        : '✨ Here you can see your current plan. Click to choose a plan and get 3 months free!',
+      placement: 'bottom',
+      route: '/dashboard',
+    },
+    // Step 2: Navigate to Subscription
+    {
+      target: '[data-tour="plan-cards"]',
+      content: isRTL 
+        ? '🎁 اختر الباقة المناسبة لحجم فريقك. جميع الباقات تأتي مع 3 أشهر مجانية!'
+        : '🎁 Choose the plan that fits your team size. All plans come with 3 months free!',
+      placement: 'top',
       route: '/dashboard/subscription',
-      action: language === 'ar' ? 'اختر باقة' : 'Choose Plan',
-      highlight: 'subscription-card'
     },
+    // Step 3: Settings - Language
     {
-      id: 2,
-      title: language === 'ar' ? 'اختر اللغة' : 'Choose Language',
-      description: language === 'ar' 
-        ? 'حدد اللغة المناسبة لك - العربية أو الإنجليزية' 
-        : 'Select your preferred language - Arabic or English',
-      icon: <Globe className="w-6 h-6" />,
+      target: '[data-tour="language-select"]',
+      content: isRTL 
+        ? '🌍 اختر لغتك المفضلة - العربية أو الإنجليزية'
+        : '🌍 Choose your preferred language - Arabic or English',
+      placement: 'bottom',
       route: '/dashboard/settings',
-      action: language === 'ar' ? 'تغيير اللغة' : 'Change Language'
     },
+    // Step 4: Settings - Theme
     {
-      id: 3,
-      title: language === 'ar' ? 'اختر المظهر' : 'Choose Theme',
-      description: language === 'ar' 
-        ? 'هل تفضل المظهر الفاتح أم الداكن؟' 
-        : 'Do you prefer light or dark mode?',
-      icon: <Moon className="w-6 h-6" />,
+      target: '[data-tour="theme-select"]',
+      content: isRTL 
+        ? '🌓 هل تفضل المظهر الفاتح أم الداكن؟ اختر ما يناسبك!'
+        : '🌓 Do you prefer light or dark mode? Choose what suits you!',
+      placement: 'bottom',
       route: '/dashboard/settings',
-      action: language === 'ar' ? 'تغيير المظهر' : 'Change Theme'
     },
+    // Step 5: Company Info
     {
-      id: 4,
-      title: language === 'ar' ? 'معلومات الشركة' : 'Company Info',
-      description: language === 'ar' 
-        ? 'أدخل اسم شركتك والمنطقة الزمنية والعملة' 
-        : 'Enter your company name, timezone, and currency',
-      icon: <Building className="w-6 h-6" />,
+      target: '[data-tour="company-info"]',
+      content: isRTL 
+        ? '🏢 أدخل معلومات شركتك: الاسم، المنطقة الزمنية، والعملة'
+        : '🏢 Enter your company info: name, timezone, and currency',
+      placement: 'bottom',
       route: '/dashboard/settings',
-      action: language === 'ar' ? 'إعداد الشركة' : 'Setup Company'
     },
+    // Step 6: Work Hours
     {
-      id: 5,
-      title: language === 'ar' ? 'ساعات العمل' : 'Work Hours',
-      description: language === 'ar' 
-        ? 'حدد أوقات بداية ونهاية الدوام وأيام الإجازة' 
-        : 'Set your work start/end times and weekend days',
-      icon: <Clock className="w-6 h-6" />,
+      target: '[data-tour="work-hours"]',
+      content: isRTL 
+        ? '⏰ حدد ساعات العمل الرسمية وأيام العطلة الأسبوعية'
+        : '⏰ Set your official work hours and weekend days',
+      placement: 'top',
       route: '/dashboard/settings',
-      action: language === 'ar' ? 'ضبط الساعات' : 'Set Hours'
     },
+    // Step 7: Deductions
     {
-      id: 6,
-      title: language === 'ar' ? 'تفعيل البوت' : 'Activate Bot',
-      description: language === 'ar' 
-        ? 'فعّل بوت التليجرام وغيّر اسمه ليناسب شركتك' 
-        : 'Activate the Telegram bot and customize its name',
-      icon: <Bot className="w-6 h-6" />,
+      target: '[data-tour="deductions-section"]',
+      content: isRTL 
+        ? '💰 حدد قواعد الخصومات للتأخير والغياب'
+        : '💰 Set deduction rules for late arrivals and absences',
+      placement: 'top',
+      route: '/dashboard/settings',
+    },
+    // Step 8: Telegram Bot
+    {
+      target: '[data-tour="telegram-connect"]',
+      content: isRTL 
+        ? '🤖 فعّل بوت التليجرام! هذا هو قلب النظام - موظفوك سيستخدمونه لتسجيل الحضور'
+        : '🤖 Activate the Telegram bot! This is the heart of the system - your employees will use it for attendance',
+      placement: 'bottom',
       route: '/dashboard/telegram',
-      action: language === 'ar' ? 'تفعيل البوت' : 'Activate Bot'
     },
+    // Step 9: Bot Link
     {
-      id: 7,
-      title: language === 'ar' ? 'أضف موظفين' : 'Add Employees',
-      description: language === 'ar' 
-        ? 'أضف أول موظف لديك يدوياً أو دعهم يسجلون عبر البوت' 
-        : 'Add your first employee manually or let them register via bot',
-      icon: <UserPlus className="w-6 h-6" />,
+      target: '[data-tour="bot-link"]',
+      content: isRTL 
+        ? '📤 انسخ رابط البوت وشاركه مع موظفيك ليسجلوا بياناتهم'
+        : '📤 Copy the bot link and share it with your employees to register',
+      placement: 'bottom',
+      route: '/dashboard/telegram',
+    },
+    // Step 10: Add Employee
+    {
+      target: '[data-tour="add-employee"]',
+      content: isRTL 
+        ? '👤 أضف موظفين يدوياً من هنا، أو دعهم يسجلون عبر البوت'
+        : '👤 Add employees manually here, or let them register via the bot',
+      placement: 'bottom',
       route: '/dashboard/employees',
-      action: language === 'ar' ? 'إضافة موظف' : 'Add Employee'
     },
+    // Step 11: Join Requests
     {
-      id: 8,
-      title: language === 'ar' ? 'إعداد الخصومات' : 'Setup Deductions',
-      description: language === 'ar' 
-        ? 'حدد قواعد خصومات التأخير والغياب' 
-        : 'Set up late arrival and absence deduction rules',
-      icon: <Percent className="w-6 h-6" />,
-      route: '/dashboard/settings',
-      action: language === 'ar' ? 'إعداد الخصومات' : 'Setup Deductions'
-    },
-    {
-      id: 9,
-      title: language === 'ar' ? 'شارك رابط البوت' : 'Share Bot Link',
-      description: language === 'ar' 
-        ? 'شارك رابط البوت مع موظفيك ليسجلوا بياناتهم' 
-        : 'Share the bot link with your employees to register',
-      icon: <Share2 className="w-6 h-6" />,
-      route: '/dashboard/telegram',
-      action: language === 'ar' ? 'نسخ الرابط' : 'Copy Link'
-    },
-    {
-      id: 10,
-      title: language === 'ar' ? 'إدارة طلبات الانضمام' : 'Manage Join Requests',
-      description: language === 'ar' 
-        ? 'راجع طلبات انضمام الموظفين الجدد ووافق عليها' 
-        : 'Review and approve new employee join requests',
-      icon: <Users className="w-6 h-6" />,
+      target: '[data-tour="join-requests"]',
+      content: isRTL 
+        ? '📋 هنا ستظهر طلبات انضمام الموظفين الجدد عبر البوت. راجعها ووافق عليها!'
+        : '📋 New employee join requests via bot will appear here. Review and approve them!',
+      placement: 'bottom',
       route: '/dashboard/join-requests',
-      action: language === 'ar' ? 'عرض الطلبات' : 'View Requests'
     },
+    // Step 12: Leaves
     {
-      id: 11,
-      title: language === 'ar' ? 'إدارة الإجازات' : 'Manage Leaves',
-      description: language === 'ar' 
-        ? 'راجع طلبات الإجازات ووافق عليها أو ارفضها' 
-        : 'Review leave requests and approve or reject them',
-      icon: <CheckCircle className="w-6 h-6" />,
+      target: '[data-tour="leaves-section"]',
+      content: isRTL 
+        ? '🏖️ إدارة طلبات الإجازات - راجع، وافق، أو ارفض الطلبات'
+        : '🏖️ Manage leave requests - review, approve, or reject them',
+      placement: 'bottom',
       route: '/dashboard/leaves',
-      action: language === 'ar' ? 'عرض الإجازات' : 'View Leaves'
-    }
+    },
+    // Step 13: Sidebar Navigation
+    {
+      target: '[data-tour="sidebar-nav"]',
+      content: isRTL 
+        ? '📱 استخدم القائمة الجانبية للتنقل بين صفحات النظام'
+        : '📱 Use the sidebar to navigate between system pages',
+      placement: 'right',
+      route: '/dashboard',
+    },
+    // Step 14: Complete
+    {
+      target: 'body',
+      content: isRTL 
+        ? '🎊 تهانينا! أنت جاهز للبدء. شارك رابط البوت مع موظفيك وابدأ في تتبع الحضور!'
+        : '🎊 Congratulations! You are ready to start. Share the bot link with your employees and start tracking attendance!',
+      placement: 'center',
+      route: '/dashboard',
+    },
   ];
 
-  const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-      navigate(steps[currentStep + 1].route);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-      navigate(steps[currentStep - 1].route);
-    }
-  };
-
-  const handleSkip = () => {
-    handleComplete();
-  };
-
-  const handleComplete = async () => {
-    setIsVisible(false);
-    
-    if (profile?.user_id) {
-      await supabase
-        .from('profiles')
-        .update({ 
-          onboarding_completed: true,
-          onboarding_step: steps.length 
-        })
-        .eq('user_id', profile.user_id);
-    }
-    
-    onComplete();
-  };
-
-  const handleGoToStep = (stepIndex: number) => {
-    setCurrentStep(stepIndex);
-    navigate(steps[stepIndex].route);
-  };
-
+  // Start tour after component mounts
   useEffect(() => {
-    navigate(steps[currentStep].route);
+    const timer = setTimeout(() => {
+      setRun(true);
+    }, 500);
+    return () => clearTimeout(timer);
   }, []);
 
-  if (!isVisible) return null;
+  // Handle route changes for steps
+  useEffect(() => {
+    const currentStep = tourSteps[stepIndex];
+    if (currentStep?.route && location.pathname !== currentStep.route) {
+      navigate(currentStep.route);
+    }
+  }, [stepIndex]);
 
-  const currentStepData = steps[currentStep];
-  const progress = ((currentStep + 1) / steps.length) * 100;
+  const handleJoyrideCallback = async (data: CallBackProps) => {
+    const { status, action, index, type } = data;
+
+    // Handle step changes
+    if (type === EVENTS.STEP_AFTER) {
+      if (action === ACTIONS.NEXT) {
+        const nextStep = tourSteps[index + 1];
+        if (nextStep?.route && location.pathname !== nextStep.route) {
+          navigate(nextStep.route);
+          // Wait for navigation before moving to next step
+          setTimeout(() => {
+            setStepIndex(index + 1);
+          }, 300);
+        } else {
+          setStepIndex(index + 1);
+        }
+      } else if (action === ACTIONS.PREV) {
+        const prevStep = tourSteps[index - 1];
+        if (prevStep?.route && location.pathname !== prevStep.route) {
+          navigate(prevStep.route);
+          setTimeout(() => {
+            setStepIndex(index - 1);
+          }, 300);
+        } else {
+          setStepIndex(index - 1);
+        }
+      }
+    }
+
+    // Handle tour completion or skip
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as any)) {
+      setRun(false);
+      
+      if (profile?.user_id) {
+        await supabase
+          .from('profiles')
+          .update({ 
+            onboarding_completed: true,
+            onboarding_step: tourSteps.length 
+          })
+          .eq('user_id', profile.user_id);
+      }
+      
+      onComplete();
+    }
+  };
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
-        dir={direction}
-      >
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          className="w-full max-w-lg"
-        >
-          <Card className="p-6 shadow-2xl border-primary/20 bg-background">
-            {/* Progress Bar */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'خطوة' : 'Step'} {currentStep + 1} / {steps.length}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSkip}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  {language === 'ar' ? 'تخطي الجولة' : 'Skip Tour'}
-                </Button>
-              </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
-            </div>
-
-            {/* Step Content */}
-            <motion.div
-              key={currentStep}
-              initial={{ opacity: 0, x: direction === 'rtl' ? -20 : 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: direction === 'rtl' ? 20 : -20 }}
-              className="text-center mb-6"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                {currentStepData.icon}
-              </div>
-              
-              <h2 className="text-xl font-bold text-foreground mb-2 flex items-center justify-center gap-2">
-                {currentStepData.title}
-                {currentStep === 0 && <Sparkles className="w-5 h-5 text-yellow-500" />}
-              </h2>
-              
-              <p className="text-muted-foreground">
-                {currentStepData.description}
-              </p>
-
-              {/* Special highlight for first step */}
-              {currentStep === 0 && (
-                <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30">
-                  <p className="text-sm font-medium text-primary">
-                    {language === 'ar' ? '✨ عرض حصري: 3 أشهر مجانية!' : '✨ Exclusive: 3 Months Free!'}
-                  </p>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Step Indicators */}
-            <div className="flex justify-center gap-1.5 mb-6 flex-wrap">
-              {steps.map((step, index) => (
-                <button
-                  key={step.id}
-                  onClick={() => handleGoToStep(index)}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    index === currentStep 
-                      ? 'w-6 bg-primary' 
-                      : index < currentStep 
-                        ? 'bg-primary/50' 
-                        : 'bg-muted'
-                  }`}
-                />
-              ))}
-            </div>
-
-            {/* Navigation */}
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={handlePrev}
-                disabled={currentStep === 0}
-                className="flex-1"
-              >
-                {direction === 'rtl' ? <ChevronRight className="w-4 h-4 me-1" /> : <ChevronLeft className="w-4 h-4 me-1" />}
-                {language === 'ar' ? 'السابق' : 'Previous'}
-              </Button>
-              
-              <Button
-                onClick={handleNext}
-                className="flex-1 btn-primary-gradient"
-              >
-                {currentStep === steps.length - 1 
-                  ? (language === 'ar' ? 'إنهاء الجولة' : 'Finish Tour')
-                  : (language === 'ar' ? 'التالي' : 'Next')
-                }
-                {currentStep < steps.length - 1 && (
-                  direction === 'rtl' 
-                    ? <ChevronLeft className="w-4 h-4 ms-1" /> 
-                    : <ChevronRight className="w-4 h-4 ms-1" />
-                )}
-              </Button>
-            </div>
-          </Card>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    <Joyride
+      steps={tourSteps}
+      run={run}
+      stepIndex={stepIndex}
+      continuous
+      showProgress
+      showSkipButton
+      disableOverlayClose
+      spotlightClicks
+      callback={handleJoyrideCallback}
+      locale={{
+        back: isRTL ? 'السابق' : 'Back',
+        close: isRTL ? 'إغلاق' : 'Close',
+        last: isRTL ? 'إنهاء' : 'Finish',
+        next: isRTL ? 'التالي' : 'Next',
+        skip: isRTL ? 'تخطي الجولة' : 'Skip Tour',
+      }}
+      styles={{
+        options: {
+          primaryColor: 'hsl(var(--primary))',
+          backgroundColor: 'hsl(var(--background))',
+          textColor: 'hsl(var(--foreground))',
+          arrowColor: 'hsl(var(--background))',
+          overlayColor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 10000,
+        },
+        tooltip: {
+          borderRadius: '12px',
+          padding: '20px',
+          fontSize: '15px',
+          direction: isRTL ? 'rtl' : 'ltr',
+        },
+        tooltipContainer: {
+          textAlign: isRTL ? 'right' : 'left',
+        },
+        tooltipContent: {
+          padding: '10px 0',
+        },
+        tooltipTitle: {
+          fontSize: '18px',
+          fontWeight: 'bold',
+        },
+        buttonNext: {
+          backgroundColor: 'hsl(var(--primary))',
+          borderRadius: '8px',
+          padding: '10px 20px',
+          fontSize: '14px',
+        },
+        buttonBack: {
+          color: 'hsl(var(--muted-foreground))',
+          marginRight: isRTL ? 0 : 10,
+          marginLeft: isRTL ? 10 : 0,
+        },
+        buttonSkip: {
+          color: 'hsl(var(--muted-foreground))',
+        },
+        spotlight: {
+          borderRadius: '12px',
+        },
+        beacon: {
+          display: 'none',
+        },
+      }}
+      floaterProps={{
+        disableAnimation: false,
+      }}
+    />
   );
 };
 

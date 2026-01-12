@@ -340,7 +340,7 @@ const Subscription = () => {
               </div>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
-              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" data-tour="plan-cards">
                 {plans.map((plan, index) => {
                   const isCurrentPlan = subscription?.plan_id === plan.id;
                   const features = Array.isArray(plan.features) ? plan.features : [];
