@@ -41,8 +41,23 @@ const SubscriptionCard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 5;
+
     const fetchData = async () => {
-      if (!profile?.company_id) return;
+      // Wait for profile to be available
+      if (!profile?.company_id) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(() => {
+            if (isMounted) fetchData();
+          }, 500);
+        } else {
+          if (isMounted) setLoading(false);
+        }
+        return;
+      }
 
       try {
         const [subRes, plansRes, empRes] = await Promise.all([
@@ -50,7 +65,7 @@ const SubscriptionCard = () => {
             .from('subscriptions')
             .select('status, plan_name, max_employees, current_period_end, billing_cycle')
             .eq('company_id', profile.company_id)
-            .single(),
+            .maybeSingle(),
           supabase
             .from('subscription_plans')
             .select('id, name, name_ar, price_monthly, price_quarterly, price_yearly, min_employees, max_employees, is_unlimited, currency')
@@ -63,17 +78,23 @@ const SubscriptionCard = () => {
             .eq('is_active', true),
         ]);
 
-        if (subRes.data) setSubscription(subRes.data);
-        if (plansRes.data) setPlans(plansRes.data);
-        if (empRes.count !== null) setEmployeeCount(empRes.count);
+        if (isMounted) {
+          if (subRes.data) setSubscription(subRes.data);
+          if (plansRes.data) setPlans(plansRes.data);
+          if (empRes.count !== null) setEmployeeCount(empRes.count);
+        }
       } catch (error) {
         console.error('Error fetching subscription:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [profile?.company_id]);
 
   const getStatusBadge = (status: string) => {
