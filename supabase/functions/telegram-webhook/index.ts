@@ -334,9 +334,9 @@ serve(async (req) => {
           if (attendance) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!')
           } else {
-            const currentTime = getLocalTime(companyTimezone)
-            const now = currentTime.isoString
-            const checkInTime = currentTime.time
+            const localTime = getLocalTime(companyTimezone)
+            const nowUtc = new Date().toISOString() // Store UTC in database
+            const checkInTime = localTime.time // Use local time for display and comparison
             
             let status: 'checked_in' | 'on_break' | 'checked_out' | 'absent' = 'checked_in'
             let notes = ''
@@ -458,7 +458,7 @@ serve(async (req) => {
               employee_id: employee.id,
               company_id: companyId,
               date: today,
-              check_in_time: now,
+              check_in_time: nowUtc,
               status,
               notes: notes || null
             })
@@ -479,9 +479,9 @@ serve(async (req) => {
           } else if (attendance.check_out_time) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك اليوم بالفعل!')
           } else {
-            const currentTime = getLocalTime(companyTimezone)
-            const now = currentTime.isoString
-            const checkOutTime = currentTime.time
+            const localTime = getLocalTime(companyTimezone)
+            const nowUtc = new Date().toISOString() // Store UTC in database
+            const checkOutTime = localTime.time // Use local time for display
             
             // Calculate overtime
             let overtimeMessage = ''
@@ -514,7 +514,7 @@ serve(async (req) => {
             let workHoursMessage = ''
             if (attendance.check_in_time) {
               const checkInDate = new Date(attendance.check_in_time)
-              const checkOutDate = new Date(now)
+              const checkOutDate = new Date(nowUtc)
               const totalMinutes = Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 60000)
               const hours = Math.floor(totalMinutes / 60)
               const mins = totalMinutes % 60
@@ -524,7 +524,7 @@ serve(async (req) => {
             await supabase
               .from('attendance_logs')
               .update({ 
-                check_out_time: now, 
+                check_out_time: nowUtc, 
                 status: 'checked_out' 
               })
               .eq('id', attendance.id)
@@ -548,12 +548,12 @@ serve(async (req) => {
           } else if (attendance.check_out_time) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك اليوم!')
           } else {
-            const currentTime = getLocalTime(companyTimezone)
-            const now = currentTime.isoString
+            const localTime = getLocalTime(companyTimezone)
+            const nowUtc = new Date().toISOString()
             
             await supabase.from('break_logs').insert({
               attendance_id: attendance.id,
-              start_time: now
+              start_time: nowUtc
             })
 
             await supabase
@@ -562,7 +562,7 @@ serve(async (req) => {
               .eq('id', attendance.id)
 
             await sendMessage(botToken, chatId, 
-              `☕ بدأت الاستراحة\n\n⏰ الوقت: ${currentTime.time}`,
+              `☕ بدأت الاستراحة\n\n⏰ الوقت: ${localTime.time}`,
               getEmployeeKeyboard()
             )
           }
@@ -574,8 +574,8 @@ serve(async (req) => {
           } else if (attendance.status !== 'on_break') {
             await sendMessage(botToken, chatId, '⚠️ أنت لست في استراحة!')
           } else {
-            const currentTime = getLocalTime(companyTimezone)
-            const now = currentTime.isoString
+            const localTime = getLocalTime(companyTimezone)
+            const nowUtc = new Date().toISOString()
             
             const { data: activeBreak } = await supabase
               .from('break_logs')
@@ -586,13 +586,13 @@ serve(async (req) => {
 
             if (activeBreak) {
               const startTime = new Date(activeBreak.start_time)
-              const endTime = new Date(now)
+              const endTime = new Date(nowUtc)
               const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
 
               await supabase
                 .from('break_logs')
                 .update({ 
-                  end_time: now, 
+                  end_time: nowUtc, 
                   duration_minutes: durationMinutes 
                 })
                 .eq('id', activeBreak.id)
@@ -604,7 +604,7 @@ serve(async (req) => {
               .eq('id', attendance.id)
 
             await sendMessage(botToken, chatId, 
-              `✅ انتهت الاستراحة\n\n⏰ الوقت: ${currentTime.time}`,
+              `✅ انتهت الاستراحة\n\n⏰ الوقت: ${localTime.time}`,
               getEmployeeKeyboard()
             )
           }
