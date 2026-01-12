@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: defaultCompanyName,
           owner_id: userId,
           country_code: 'EG',
-          timezone: 'UTC+2',
+          timezone: 'Africa/Cairo',
           default_currency: 'EGP',
         });
 
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: defaultCompanyName,
           owner_id: userId,
           country_code: 'EG',
-          timezone: 'UTC+2',
+          timezone: 'Africa/Cairo',
           default_currency: 'EGP',
         });
 
@@ -274,7 +274,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: companyName,
           owner_id: userId,
           country_code: 'EG',
-          timezone: 'UTC+2',
+          timezone: 'Africa/Cairo',
           default_currency: 'EGP',
         });
 

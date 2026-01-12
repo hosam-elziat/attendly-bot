@@ -72,7 +72,7 @@ const Settings = () => {
   useEffect(() => {
     if (company) {
       setCompanyName(company.name || '');
-      setTimezone(company.timezone || 'UTC+2');
+      setTimezone(company.timezone || 'Africa/Cairo');
       setDefaultCurrency((company as any).default_currency || 'EGP');
       setWorkStart(company.work_start_time?.slice(0, 5) || '09:00');
       setWorkEnd(company.work_end_time?.slice(0, 5) || '17:00');
