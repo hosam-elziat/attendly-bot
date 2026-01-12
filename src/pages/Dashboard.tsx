@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -5,6 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAttendanceStats } from '@/hooks/useAttendance';
 import { useAdvancedStats, COUNTRIES } from '@/hooks/useAdvancedStats';
 import { usePublicHolidays } from '@/hooks/usePublicHolidays';
+import { useRealtimeNotifications, usePendingCounts } from '@/hooks/useRealtimeNotifications';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Users, 
@@ -19,21 +23,31 @@ import {
   Coffee,
   Timer,
   Percent,
-  Flag
+  Flag,
+  UserPlus,
+  CalendarCheck
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
+import AbsentEmployeesDialog from '@/components/dashboard/AbsentEmployeesDialog';
 
 const Dashboard = () => {
   const { t, language } = useLanguage();
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const { data: stats, isLoading } = useAttendanceStats();
   const { data: advancedStats, isLoading: advancedLoading } = useAdvancedStats();
   const { data: holidays, isLoading: holidaysLoading } = usePublicHolidays();
+  const [absentDialogOpen, setAbsentDialogOpen] = useState(false);
   
+  // Enable realtime notifications
+  useRealtimeNotifications();
+
+  // Get pending counts for quick actions
+  const { data: pendingCounts } = useQuery(usePendingCounts());
 
   const firstName = profile?.full_name?.split(' ')[0] || 'هناك';
 
@@ -44,6 +58,30 @@ const Dashboard = () => {
       return `${hours} ${language === 'ar' ? 'ساعة' : 'h'} ${mins > 0 ? `${mins} ${language === 'ar' ? 'د' : 'm'}` : ''}`;
     }
     return `${mins} ${language === 'ar' ? 'دقيقة' : 'min'}`;
+  };
+
+  // Navigation handlers for stat cards
+  const handleStatClick = (type: string) => {
+    switch (type) {
+      case 'checkedInToday':
+      case 'present':
+      case 'onBreak':
+        navigate('/dashboard/attendance');
+        break;
+      case 'absent':
+        setAbsentDialogOpen(true);
+        break;
+      case 'pending':
+        // Go to leaves if there are pending leave requests, otherwise go to join requests
+        if ((pendingCounts?.leaveRequests || 0) > 0) {
+          navigate('/dashboard/leaves');
+        } else if ((pendingCounts?.joinRequests || 0) > 0) {
+          navigate('/dashboard/join-requests');
+        } else {
+          navigate('/dashboard/leaves');
+        }
+        break;
+    }
   };
 
   return (
@@ -79,6 +117,7 @@ const Dashboard = () => {
                 subtitle={`${stats?.totalEmployees ?? 0} ${t('dashboard.totalEmployees')}`}
                 color="text-primary"
                 delay={0}
+                onClick={() => handleStatClick('checkedInToday')}
               />
               <StatCard
                 icon={Users}
@@ -87,6 +126,7 @@ const Dashboard = () => {
                 subtitle={t('dashboard.currentlyPresent') || 'Currently Present'}
                 color="text-success"
                 delay={0.1}
+                onClick={() => handleStatClick('present')}
               />
               <StatCard
                 icon={Users}
@@ -95,6 +135,7 @@ const Dashboard = () => {
                 subtitle={t('dashboard.notCheckedIn')}
                 color="text-destructive"
                 delay={0.2}
+                onClick={() => handleStatClick('absent')}
               />
               <StatCard
                 icon={Coffee}
@@ -103,6 +144,7 @@ const Dashboard = () => {
                 subtitle={t('dashboard.currentlyOnBreak')}
                 color="text-warning"
                 delay={0.3}
+                onClick={() => handleStatClick('onBreak')}
               />
               <StatCard
                 icon={AlertCircle}
@@ -111,6 +153,7 @@ const Dashboard = () => {
                 subtitle={t('dashboard.leaveRequests')}
                 color="text-primary"
                 delay={0.4}
+                onClick={() => handleStatClick('pending')}
               />
             </div>
 
@@ -330,13 +373,25 @@ const Dashboard = () => {
                   description={t('dashboard.manageEmployeesDesc')}
                   actionLabel={t('dashboard.view')}
                   link="/dashboard/employees"
+                  icon={Users}
+                />
+                <QuickActionCard 
+                  title={language === 'ar' ? 'طلبات الانضمام' : 'Join Requests'}
+                  count={pendingCounts?.joinRequests ?? 0}
+                  description={language === 'ar' ? 'طلبات انضمام جديدة عبر تيليجرام' : 'New join requests via Telegram'}
+                  actionLabel={t('dashboard.review')}
+                  link="/dashboard/join-requests"
+                  icon={UserPlus}
+                  isWarning={(pendingCounts?.joinRequests ?? 0) > 0}
                 />
                 <QuickActionCard 
                   title={t('dashboard.pendingLeaves')}
-                  count={stats?.pendingLeaves ?? 0}
+                  count={pendingCounts?.leaveRequests ?? 0}
                   description={t('dashboard.pendingLeavesDesc')}
                   actionLabel={t('dashboard.review')}
                   link="/dashboard/leaves"
+                  icon={CalendarCheck}
+                  isWarning={(pendingCounts?.leaveRequests ?? 0) > 0}
                 />
                 <QuickActionCard 
                   title={t('dashboard.viewAttendance')}
@@ -344,6 +399,7 @@ const Dashboard = () => {
                   description={t('dashboard.viewAttendanceDesc')}
                   actionLabel={t('dashboard.view')}
                   link="/dashboard/attendance"
+                  icon={Clock}
                 />
                 <QuickActionCard 
                   title={t('dashboard.telegramBot')}
@@ -403,6 +459,12 @@ const Dashboard = () => {
           </motion.div>
         )}
       </div>
+
+      {/* Absent Employees Dialog */}
+      <AbsentEmployeesDialog 
+        open={absentDialogOpen} 
+        onOpenChange={setAbsentDialogOpen} 
+      />
     </DashboardLayout>
   );
 };
@@ -414,15 +476,19 @@ interface StatCardProps {
   subtitle: string;
   color: string;
   delay: number;
+  onClick?: () => void;
 }
 
-const StatCard = ({ icon: Icon, label, value, subtitle, color, delay }: StatCardProps) => (
+const StatCard = ({ icon: Icon, label, value, subtitle, color, delay, onClick }: StatCardProps) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.4, delay }}
   >
-    <Card className="card-hover">
+    <Card 
+      className={`card-hover ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-primary/20' : ''}`}
+      onClick={onClick}
+    >
       <CardHeader className="flex flex-row items-center justify-between pb-1 sm:pb-2 pt-3 sm:pt-4 px-3 sm:px-6">
         <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground line-clamp-1">
           {label}
@@ -443,14 +509,21 @@ interface QuickActionCardProps {
   description: string;
   actionLabel: string;
   link: string;
+  icon?: React.ElementType;
   isSuccess?: boolean;
+  isWarning?: boolean;
 }
 
-const QuickActionCard = ({ title, count, description, actionLabel, link, isSuccess }: QuickActionCardProps) => (
+const QuickActionCard = ({ title, count, description, actionLabel, link, icon: Icon, isSuccess, isWarning }: QuickActionCardProps) => (
   <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
     <div className="flex items-center gap-3">
-      {!isSuccess && count > 0 && (
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-warning text-warning-foreground text-xs font-bold">
+      {isWarning && count > 0 && (
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-warning text-warning-foreground text-xs font-bold animate-pulse">
+          {count}
+        </span>
+      )}
+      {!isWarning && !isSuccess && count > 0 && (
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold">
           {count}
         </span>
       )}
@@ -459,9 +532,9 @@ const QuickActionCard = ({ title, count, description, actionLabel, link, isSucce
           ✓
         </span>
       )}
-      {!isSuccess && count === 0 && (
+      {!isSuccess && !isWarning && count === 0 && (
         <span className="flex items-center justify-center w-6 h-6 rounded-full bg-muted-foreground/20 text-muted-foreground text-xs">
-          0
+          {Icon ? <Icon className="w-3 h-3" /> : '0'}
         </span>
       )}
       <div>
