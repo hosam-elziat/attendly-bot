@@ -9,7 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { SuperAdminProvider } from "@/contexts/SuperAdminContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SuperAdminProtectedRoute from "@/components/super-admin/SuperAdminProtectedRoute";
-import OnboardingGate from "@/components/onboarding/OnboardingGate";
+
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -47,7 +47,7 @@ const App = () => (
               <Toaster />
               <Sonner />
               <BrowserRouter>
-                <OnboardingGate />
+                
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/auth" element={<Auth />} />
