@@ -35,8 +35,8 @@ const Settings = () => {
   
   const [saving, setSaving] = useState(false);
   const [companyName, setCompanyName] = useState('');
-  const [timezone, setTimezone] = useState('UTC+0');
-  const [defaultCurrency, setDefaultCurrency] = useState('SAR');
+  const [timezone, setTimezone] = useState('UTC+2');
+  const [defaultCurrency, setDefaultCurrency] = useState('EGP');
   const [workStart, setWorkStart] = useState('09:00');
   const [workEnd, setWorkEnd] = useState('17:00');
   const [breakDuration, setBreakDuration] = useState(60);
@@ -52,7 +52,7 @@ const Settings = () => {
   const [absenceWithoutPermissionDeduction, setAbsenceWithoutPermissionDeduction] = useState(2);
   const [maxExcusedAbsenceDays, setMaxExcusedAbsenceDays] = useState(2);
   const [overtimeMultiplier, setOvertimeMultiplier] = useState(2);
-  const [countryCode, setCountryCode] = useState('SA');
+  const [countryCode, setCountryCode] = useState('EG');
   
   // Leave policy states
   const [annualLeaveDays, setAnnualLeaveDays] = useState(21);
@@ -72,8 +72,8 @@ const Settings = () => {
   useEffect(() => {
     if (company) {
       setCompanyName(company.name || '');
-      setTimezone(company.timezone || 'UTC+0');
-      setDefaultCurrency((company as any).default_currency || 'SAR');
+      setTimezone(company.timezone || 'UTC+2');
+      setDefaultCurrency((company as any).default_currency || 'EGP');
       setWorkStart(company.work_start_time?.slice(0, 5) || '09:00');
       setWorkEnd(company.work_end_time?.slice(0, 5) || '17:00');
       setBreakDuration(company.break_duration_minutes || 60);
@@ -87,7 +87,7 @@ const Settings = () => {
       setAbsenceWithoutPermissionDeduction((company as any).absence_without_permission_deduction || 2);
       setMaxExcusedAbsenceDays((company as any).max_excused_absence_days || 2);
       setOvertimeMultiplier((company as any).overtime_multiplier || 2);
-      setCountryCode((company as any).country_code || 'SA');
+      setCountryCode((company as any).country_code || 'EG');
       
       // Leave policy
       setAnnualLeaveDays((company as any).annual_leave_days || 21);
