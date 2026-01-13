@@ -23,6 +23,7 @@ import JoinRequests from "./pages/JoinRequests";
 import Settings from "./pages/Settings";
 import Subscription from "./pages/Subscription";
 import History from "./pages/History";
+import Organization from "./pages/Organization";
 import NotFound from "./pages/NotFound";
 
 // Super Admin Pages
@@ -83,6 +84,9 @@ const App = () => (
                   } />
                   <Route path="/dashboard/history" element={
                     <ProtectedRoute><History /></ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/organization" element={
+                    <ProtectedRoute><Organization /></ProtectedRoute>
                   } />
                   
                   {/* Super Admin Routes */}

@@ -20,7 +20,8 @@ import {
   Moon,
   CreditCard,
   History,
-  UserPlus
+  UserPlus,
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AISummaryButton from '@/components/ai/AISummaryButton';
@@ -40,6 +41,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/dashboard' },
     { icon: Users, label: t('nav.employees'), path: '/dashboard/employees' },
+    { icon: Building2, label: language === 'ar' ? 'الهيكل التنظيمي' : 'Organization', path: '/dashboard/organization' },
     { icon: Clock, label: t('nav.attendance'), path: '/dashboard/attendance' },
     { icon: Calendar, label: t('nav.leaves'), path: '/dashboard/leaves' },
     { icon: DollarSign, label: t('nav.salaries'), path: '/dashboard/salaries' },
