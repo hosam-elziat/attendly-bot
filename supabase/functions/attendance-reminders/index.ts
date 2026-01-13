@@ -33,11 +33,14 @@ serve(async (req) => {
         work_start_time,
         work_end_time,
         weekend_days,
+        break_duration_minutes,
         company_id,
         companies!inner (
+          id,
           telegram_bot_username,
           work_start_time,
-          work_end_time
+          work_end_time,
+          break_duration_minutes
         )
       `)
       .eq('is_active', true)
@@ -53,10 +56,26 @@ serve(async (req) => {
 
     console.log(`Found ${employees?.length || 0} employees with telegram`)
 
+    // Get approved leave requests for today
+    const { data: approvedLeaves } = await supabase
+      .from('leave_requests')
+      .select('employee_id')
+      .eq('status', 'approved')
+      .lte('start_date', today)
+      .gte('end_date', today)
+
+    const employeesOnLeave = new Set((approvedLeaves || []).map(l => l.employee_id))
+
     let checkInReminders = 0
     let checkOutReminders = 0
+    let breakEndReminders = 0
 
     for (const emp of employees || []) {
+      // Skip if employee is on approved leave
+      if (employeesOnLeave.has(emp.id)) {
+        continue
+      }
+
       // Skip if today is a weekend day for this employee
       const weekendDays = emp.weekend_days || ['friday', 'saturday']
       if (weekendDays.includes(currentDayName)) {
@@ -66,6 +85,7 @@ serve(async (req) => {
       const company = emp.companies as any
       const workStartTime = emp.work_start_time || company?.work_start_time || '09:00:00'
       const workEndTime = emp.work_end_time || company?.work_end_time || '17:00:00'
+      const breakDuration = emp.break_duration_minutes || company?.break_duration_minutes || 60
       
       // Calculate 5 minutes after start time
       const startParts = workStartTime.substring(0, 5).split(':')
@@ -81,10 +101,6 @@ serve(async (req) => {
       const shouldCheckIn = currentTime === reminderStartTime
       const shouldCheckOut = currentTime === reminderEndTime
 
-      if (!shouldCheckIn && !shouldCheckOut) {
-        continue
-      }
-
       // Get bot token
       const { data: bot } = await supabase
         .from('telegram_bots')
@@ -99,19 +115,20 @@ serve(async (req) => {
       // Check today's attendance
       const { data: attendance } = await supabase
         .from('attendance_logs')
-        .select('id, check_in_time, check_out_time')
+        .select('id, check_in_time, check_out_time, status')
         .eq('employee_id', emp.id)
         .eq('date', today)
         .single()
 
-      // Send check-in reminder
+      // Send check-in reminder (5 min after work start if not checked in)
       if (shouldCheckIn && !attendance) {
         await sendMessage(
           bot.bot_token,
           parseInt(emp.telegram_chat_id),
           `⏰ <b>تذكير بتسجيل الحضور</b>\n\n` +
           `مرحباً ${emp.full_name}!\n` +
-          `لم تقم بتسجيل حضورك اليوم بعد.\n\n` +
+          `لم تقم بتسجيل حضورك اليوم بعد.\n` +
+          `موعد العمل: ${workStartTime.substring(0, 5)}\n\n` +
           `⚠️ يرجى تسجيل الحضور الآن.`,
           getCheckInKeyboard()
         )
@@ -119,19 +136,74 @@ serve(async (req) => {
         console.log(`Sent check-in reminder to ${emp.full_name}`)
       }
 
-      // Send check-out reminder
+      // Send check-out reminder (5 min after work end if not checked out)
       if (shouldCheckOut && attendance && !attendance.check_out_time) {
         await sendMessage(
           bot.bot_token,
           parseInt(emp.telegram_chat_id),
           `⏰ <b>تذكير بتسجيل الانصراف</b>\n\n` +
           `مرحباً ${emp.full_name}!\n` +
-          `لم تقم بتسجيل انصرافك بعد.\n\n` +
-          `⚠️ يرجى تسجيل الانصراف الآن.`,
+          `لم تقم بتسجيل انصرافك بعد.\n` +
+          `موعد الانصراف: ${workEndTime.substring(0, 5)}\n\n` +
+          `⚠️ يرجى تسجيل الانصراف الآن.\n\n` +
+          `💡 <i>تجاهل هذه الرسالة إذا كنت تعمل وقت إضافي.</i>`,
           getCheckOutKeyboard()
         )
         checkOutReminders++
         console.log(`Sent check-out reminder to ${emp.full_name}`)
+      }
+
+      // Check for employees on break - auto-end break after break_duration_minutes
+      if (attendance && attendance.status === 'on_break') {
+        // Get the break log to check duration
+        const { data: breakLog } = await supabase
+          .from('break_logs')
+          .select('id, start_time')
+          .eq('attendance_id', attendance.id)
+          .is('end_time', null)
+          .order('start_time', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (breakLog) {
+          const breakStart = new Date(breakLog.start_time)
+          const breakDurationMs = (now.getTime() - breakStart.getTime())
+          const breakMinutesElapsed = Math.floor(breakDurationMs / 60000)
+
+          // If break exceeded the allowed duration, auto-end it
+          if (breakMinutesElapsed >= breakDuration) {
+            const nowUtc = now.toISOString()
+            
+            // Update break log
+            await supabase
+              .from('break_logs')
+              .update({ 
+                end_time: nowUtc,
+                duration_minutes: breakMinutesElapsed
+              })
+              .eq('id', breakLog.id)
+
+            // Update attendance status
+            await supabase
+              .from('attendance_logs')
+              .update({ status: 'checked_in' })
+              .eq('id', attendance.id)
+
+            // Notify employee
+            await sendMessage(
+              bot.bot_token,
+              parseInt(emp.telegram_chat_id),
+              `☕ <b>انتهت الاستراحة تلقائياً</b>\n\n` +
+              `مرحباً ${emp.full_name}!\n` +
+              `انتهت فترة الاستراحة المسموحة (${breakDuration} دقيقة).\n` +
+              `تم تحويل حالتك تلقائياً إلى "حاضر".\n\n` +
+              `🟢 أنت الآن في وضع العمل.`,
+              getEmployeeKeyboard()
+            )
+            breakEndReminders++
+            console.log(`Auto-ended break for ${emp.full_name} after ${breakMinutesElapsed} minutes`)
+          }
+        }
       }
     }
 
@@ -140,6 +212,7 @@ serve(async (req) => {
         success: true, 
         checkInReminders,
         checkOutReminders,
+        breakEndReminders,
         time: currentTime 
       }), 
       { headers: corsHeaders }
@@ -188,7 +261,26 @@ function getCheckInKeyboard() {
 function getCheckOutKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🔴 تسجيل انصراف الآن', callback_data: 'check_out' }]
+      [{ text: '🔴 تسجيل انصراف الآن', callback_data: 'check_out' }],
+      [{ text: '⏰ مكمل وقت إضافي', callback_data: 'dismiss_checkout_reminder' }]
+    ]
+  }
+}
+
+function getEmployeeKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+        { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+      ],
+      [
+        { text: '☕ بدء استراحة', callback_data: 'start_break' },
+        { text: '🔙 إنهاء استراحة', callback_data: 'end_break' }
+      ],
+      [
+        { text: '📋 حالتي', callback_data: 'my_status' }
+      ]
     ]
   }
 }

@@ -22,14 +22,26 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2 } from 'lucide-react';
 import { format, subDays, startOfWeek, startOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { toast } from 'sonner';
 import EditAttendanceDialog from '@/components/attendance/EditAttendanceDialog';
 import AddAttendanceDialog from '@/components/attendance/AddAttendanceDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const Attendance = () => {
   const { t, language } = useLanguage();
@@ -39,6 +51,9 @@ const Attendance = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [dateFilter, setDateFilter] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -156,6 +171,70 @@ const Attendance = () => {
     queryClient.invalidateQueries({ queryKey: ['attendance-all'] });
     queryClient.invalidateQueries({ queryKey: ['attendance'] });
     queryClient.invalidateQueries({ queryKey: ['attendance-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['salary-adjustments'] });
+    queryClient.invalidateQueries({ queryKey: ['employee-adjustments'] });
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setDeleteId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId || !profile?.company_id) return;
+    
+    setDeleting(true);
+    try {
+      // First, delete any linked salary adjustments (soft delete via deleted_records table)
+      const { data: linkedAdjustments } = await supabase
+        .from('salary_adjustments')
+        .select('id')
+        .eq('attendance_log_id', deleteId);
+      
+      if (linkedAdjustments && linkedAdjustments.length > 0) {
+        // Delete linked salary adjustments
+        await supabase
+          .from('salary_adjustments')
+          .delete()
+          .eq('attendance_log_id', deleteId);
+      }
+
+      // Get attendance record for logging
+      const { data: recordToDelete } = await supabase
+        .from('attendance_logs')
+        .select('*, employees(full_name)')
+        .eq('id', deleteId)
+        .single();
+
+      // Save to deleted_records for potential recovery
+      if (recordToDelete) {
+        await supabase.from('deleted_records').insert({
+          company_id: profile.company_id,
+          table_name: 'attendance_logs',
+          record_id: deleteId,
+          record_data: recordToDelete,
+          deleted_by: profile.user_id,
+        });
+      }
+
+      // Delete the attendance record
+      const { error } = await supabase
+        .from('attendance_logs')
+        .delete()
+        .eq('id', deleteId);
+
+      if (error) throw error;
+
+      toast.success(language === 'ar' ? 'تم حذف سجل الحضور بنجاح' : 'Attendance record deleted');
+      handleSuccess();
+    } catch (error) {
+      console.error('Error deleting attendance:', error);
+      toast.error(language === 'ar' ? 'فشل في حذف سجل الحضور' : 'Failed to delete attendance');
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setDeleteId(null);
+    }
   };
 
   const getStatusBadge = (status: string, isNightShift?: boolean) => {
@@ -372,14 +451,24 @@ const Attendance = () => {
                           </TableCell>
                           <TableCell>{getStatusBadge(record.status, record.isNightShift)}</TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditClick(record)}
-                              className="text-primary hover:text-primary/80"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditClick(record)}
+                                className="text-primary hover:text-primary/80 h-8 w-8 p-0"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteClick(record.id)}
+                                className="text-destructive hover:text-destructive/80 h-8 w-8 p-0"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -404,6 +493,36 @@ const Attendance = () => {
         onOpenChange={setAddDialogOpen}
         onSuccess={handleSuccess}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === 'ar' ? 'حذف سجل الحضور' : 'Delete Attendance Record'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {language === 'ar' 
+                ? 'هل أنت متأكد من حذف هذا السجل؟ سيتم حذف أي خصومات تلقائية مرتبطة به. يمكن استرجاع السجل لاحقاً من سجل المحذوفات.'
+                : 'Are you sure you want to delete this record? Any linked automatic deductions will also be removed. The record can be recovered later from the deleted records log.'
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+              {language === 'ar' ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
