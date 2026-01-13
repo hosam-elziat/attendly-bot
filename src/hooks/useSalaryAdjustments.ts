@@ -56,14 +56,12 @@ export function useSalaryAdjustments(month?: string) {
         .order('created_at', { ascending: false });
 
       if (month) {
-        // Month can be in format 'YYYY-MM' or 'YYYY-MM-DD'
-        // We need to match both old format (YYYY-MM) and new format (YYYY-MM-01)
-        const monthStart = startOfMonth(new Date(month + '-01'));
-        const monthEnd = endOfMonth(monthStart);
-        const monthPrefix = format(monthStart, 'yyyy-MM');
-        
-        // Use LIKE query to match both 'YYYY-MM' and 'YYYY-MM-DD' formats
-        query = query.or(`month.eq.${monthPrefix},month.gte.${format(monthStart, 'yyyy-MM-dd')}.and.month.lte.${format(monthEnd, 'yyyy-MM-dd')}`);
+        // We store month as the first day of the month: YYYY-MM-01
+        // Older records might have been stored as YYYY-MM, so we support both.
+        const monthPrefix = month.length >= 7 ? month.slice(0, 7) : month;
+        const monthKey = `${monthPrefix}-01`;
+
+        query = query.in('month', [monthKey, monthPrefix]);
       }
 
       const { data, error } = await query;
@@ -110,13 +108,12 @@ export function useEmployeeAdjustments(employeeId?: string, month?: string) {
         .order('created_at', { ascending: false });
 
       if (month) {
-        // Month can be in format 'YYYY-MM' or 'YYYY-MM-DD'
-        const monthStart = startOfMonth(new Date(month + '-01'));
-        const monthEnd = endOfMonth(monthStart);
-        const monthPrefix = format(monthStart, 'yyyy-MM');
-        
-        // Use LIKE query to match both 'YYYY-MM' and 'YYYY-MM-DD' formats
-        query = query.or(`month.eq.${monthPrefix},month.gte.${format(monthStart, 'yyyy-MM-dd')}.and.month.lte.${format(monthEnd, 'yyyy-MM-dd')}`);
+        // We store month as the first day of the month: YYYY-MM-01
+        // Older records might have been stored as YYYY-MM, so we support both.
+        const monthPrefix = month.length >= 7 ? month.slice(0, 7) : month;
+        const monthKey = `${monthPrefix}-01`;
+
+        query = query.in('month', [monthKey, monthPrefix]);
       }
 
       const { data, error } = await query;
