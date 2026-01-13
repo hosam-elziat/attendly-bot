@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useEmployees, Employee } from '@/hooks/useEmployees';
+import { useEmployees, Employee, useUpdateEmployee } from '@/hooks/useEmployees';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useEmployeeSalaryStats, SalaryFilterPeriod } from '@/hooks/useEmployeeSalaryStats';
 import { useEmployeeAdjustments } from '@/hooks/useSalaryAdjustments';
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import { 
   Select, 
   SelectContent, 
@@ -41,12 +42,15 @@ import {
   Timer,
   MessageCircle,
   ListOrdered,
-  Edit
+  Edit,
+  Save,
+  Hourglass
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, differenceInMinutes, parseISO, isWithinInterval } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
+import { toast } from 'sonner';
 
 // Arab countries with timezones
 export const ARAB_COUNTRIES = [
@@ -103,11 +107,14 @@ const EmployeeDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, direction } = useLanguage();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [], refetch: refetchEmployees } = useEmployees();
   const { data: attendanceLogs = [] } = useAttendance();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('month');
   const [salaryPeriod, setSalaryPeriod] = useState<SalaryFilterPeriod>('this_month');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingLateBalance, setEditingLateBalance] = useState(false);
+  const [lateBalanceValue, setLateBalanceValue] = useState<number>(0);
+  const updateEmployee = useUpdateEmployee();
 
   // Get adjustments for this employee
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -120,6 +127,7 @@ const EmployeeDetails = () => {
     hire_date?: string;
     currency?: string;
     notes?: string;
+    monthly_late_balance_minutes?: number;
   };
 
   // Use salary stats hook
@@ -554,8 +562,8 @@ const EmployeeDetails = () => {
                     </div>
                   </div>
 
-                  {/* Late Arrivals & Absences */}
-                  <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
+                  {/* Late Balance & Stats */}
+                  <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
                     <div className="text-center p-4 rounded-lg bg-muted/50">
                       <p className="text-sm text-muted-foreground">{t('employeeDetails.lateArrivals')}</p>
                       <p className="text-2xl font-bold text-warning">{stats.lateArrivals}</p>
@@ -563,6 +571,70 @@ const EmployeeDetails = () => {
                     <div className="text-center p-4 rounded-lg bg-muted/50">
                       <p className="text-sm text-muted-foreground">{t('employeeDetails.absentDays')}</p>
                       <p className="text-2xl font-bold text-destructive">{stats.absentDays}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Hourglass className="w-4 h-4 text-primary" />
+                          <p className="text-sm text-muted-foreground">
+                            {direction === 'rtl' ? 'رصيد التأخيرات' : 'Late Balance'}
+                          </p>
+                        </div>
+                        {!editingLateBalance ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => {
+                              setLateBalanceValue(employee?.monthly_late_balance_minutes ?? 15);
+                              setEditingLateBalance(true);
+                            }}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={async () => {
+                              if (!employee) return;
+                              try {
+                                await updateEmployee.mutateAsync({
+                                  id: employee.id,
+                                  monthly_late_balance_minutes: lateBalanceValue,
+                                  oldData: employee,
+                                });
+                                setEditingLateBalance(false);
+                                refetchEmployees();
+                              } catch (error) {
+                                toast.error(direction === 'rtl' ? 'فشل في التحديث' : 'Failed to update');
+                              }
+                            }}
+                          >
+                            <Save className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                      {editingLateBalance ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={lateBalanceValue}
+                            onChange={(e) => setLateBalanceValue(Number(e.target.value))}
+                            className="h-8 text-center"
+                            min={0}
+                          />
+                          <span className="text-sm">{direction === 'rtl' ? 'دقيقة' : 'min'}</span>
+                        </div>
+                      ) : (
+                        <p className="text-2xl font-bold text-primary text-center">
+                          {employee?.monthly_late_balance_minutes ?? 15}
+                          <span className="text-sm font-normal text-muted-foreground ms-1">
+                            {direction === 'rtl' ? 'دقيقة' : 'min'}
+                          </span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
