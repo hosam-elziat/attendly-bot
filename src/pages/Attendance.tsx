@@ -509,17 +509,17 @@ const Attendance = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </AlertDialogCancel>
-            <AlertDialogAction 
+            <Button 
               onClick={handleDeleteConfirm}
-              className="bg-destructive hover:bg-destructive/90"
+              variant="destructive"
               disabled={deleting}
             >
               {deleting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
               {language === 'ar' ? 'حذف' : 'Delete'}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
