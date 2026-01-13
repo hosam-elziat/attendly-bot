@@ -27,6 +27,9 @@ export interface Employee {
   hire_date: string | null;
   currency: string | null;
   notes: string | null;
+  monthly_late_balance_minutes: number | null;
+  leave_balance: number | null;
+  emergency_leave_balance: number | null;
   created_at: string;
   updated_at: string;
 }
