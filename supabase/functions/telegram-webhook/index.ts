@@ -460,16 +460,28 @@ serve(async (req) => {
                     deductionText = `تأخر أقل من 15 دقيقة`
                   }
                   
-                  if (deductionDays > 0 && empDetails?.base_salary) {
-                    const dailyRate = empDetails.base_salary / 30
+                  if (deductionDays > 0) {
+                    const baseSalary = empDetails?.base_salary ?? 0
+                    const dailyRate = baseSalary / 30
                     const deductionAmount = dailyRate * deductionDays
-                    const monthKey = today.substring(0, 7)
+                    // Use first day of month format for consistent querying
+                    const monthKey = today.substring(0, 7) + '-01'
                     
-                    await supabase.from('salary_adjustments').insert({
+                    console.log('Creating late deduction:', {
+                      employee_id: employee.id,
+                      deductionDays,
+                      deductionAmount,
+                      monthKey,
+                      lateMinutes,
+                      attendanceLogId
+                    })
+                    
+                    const { error: adjustmentError } = await supabase.from('salary_adjustments').insert({
                       employee_id: employee.id,
                       company_id: companyId,
                       month: monthKey,
                       deduction: deductionAmount,
+                      bonus: 0,
                       adjustment_days: deductionDays,
                       description: `خصم تأخير: ${deductionText} (${lateMinutes} دقيقة)`,
                       added_by_name: 'النظام التلقائي',
@@ -477,9 +489,16 @@ serve(async (req) => {
                       is_auto_generated: true
                     })
                     
+                    if (adjustmentError) {
+                      console.error('Failed to create salary adjustment:', adjustmentError)
+                    } else {
+                      console.log('Late deduction created successfully')
+                    }
+                    
                     lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
                       (balanceUsed > 0 ? `✅ تم خصم ${balanceUsed} دقيقة من رصيد التأخيرات\n` : '') +
-                      `📛 تم تطبيق خصم ${deductionDays} يوم (${deductionAmount.toFixed(2)} ${empDetails.currency || 'SAR'})\n` +
+                      `📛 تم تطبيق خصم ${deductionDays} يوم` + 
+                      (deductionAmount > 0 ? ` (${deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '') + `\n` +
                       `📝 السبب: ${deductionText}\n` +
                       `📊 رصيد التأخيرات: ${Math.max(0, currentLateBalance - balanceUsed)} دقيقة`
                   } else if (balanceUsed > 0) {
@@ -563,41 +582,24 @@ serve(async (req) => {
                   } else {
                     // Not enough balance - apply quarter day deduction
                     const deductionDays = 0.25
-                    if (empDetails?.base_salary) {
-                      const dailyRate = empDetails.base_salary / 30
-                      const deductionAmount = dailyRate * deductionDays
-                      const monthKey = attendanceDate.substring(0, 7)
-                      
-                      await supabase.from('salary_adjustments').insert({
-                        employee_id: employee.id,
-                        company_id: companyId,
-                        month: monthKey,
-                        deduction: deductionAmount,
-                        adjustment_days: deductionDays,
-                        description: `خصم انصراف مبكر: ${earlyMinutes} دقيقة قبل موعد الانصراف`,
-                        added_by_name: 'النظام التلقائي',
-                        attendance_log_id: attendance.id,
-                        is_auto_generated: true
-                      })
-                      
-                      earlyDepartureMessage = `\n\n⏰ <b>انصراف مبكر:</b> ${earlyMinutes} دقيقة\n` +
-                        `⚠️ رصيد التأخيرات غير كافٍ\n` +
-                        `📛 تم تطبيق خصم ربع يوم (${deductionAmount.toFixed(2)} ${empDetails.currency || 'SAR'})`
-                    }
-                  }
-                } else {
-                  // More than 5 minutes early - apply quarter day deduction
-                  const deductionDays = 0.25
-                  if (empDetails?.base_salary) {
-                    const dailyRate = empDetails.base_salary / 30
+                    const baseSalary = empDetails?.base_salary ?? 0
+                    const dailyRate = baseSalary / 30
                     const deductionAmount = dailyRate * deductionDays
-                    const monthKey = attendanceDate.substring(0, 7)
+                    const monthKey = attendanceDate.substring(0, 7) + '-01'
                     
-                    await supabase.from('salary_adjustments').insert({
+                    console.log('Creating early departure deduction (not enough balance):', {
+                      employee_id: employee.id,
+                      earlyMinutes,
+                      deductionDays,
+                      monthKey
+                    })
+                    
+                    const { error: adjustmentError } = await supabase.from('salary_adjustments').insert({
                       employee_id: employee.id,
                       company_id: companyId,
                       month: monthKey,
                       deduction: deductionAmount,
+                      bonus: 0,
                       adjustment_days: deductionDays,
                       description: `خصم انصراف مبكر: ${earlyMinutes} دقيقة قبل موعد الانصراف`,
                       added_by_name: 'النظام التلقائي',
@@ -605,10 +607,49 @@ serve(async (req) => {
                       is_auto_generated: true
                     })
                     
+                    if (adjustmentError) {
+                      console.error('Failed to create early departure adjustment:', adjustmentError)
+                    }
+                    
                     earlyDepartureMessage = `\n\n⏰ <b>انصراف مبكر:</b> ${earlyMinutes} دقيقة\n` +
-                      `📛 تم تطبيق خصم ربع يوم (${deductionAmount.toFixed(2)} ${empDetails.currency || 'SAR'})\n` +
-                      `📝 موعد الانصراف: ${workEndTime}`
+                      `⚠️ رصيد التأخيرات غير كافٍ\n` +
+                      `📛 تم تطبيق خصم ربع يوم` + (deductionAmount > 0 ? ` (${deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '')
                   }
+                } else {
+                  // More than 5 minutes early - apply quarter day deduction
+                  const deductionDays = 0.25
+                  const baseSalary = empDetails?.base_salary ?? 0
+                  const dailyRate = baseSalary / 30
+                  const deductionAmount = dailyRate * deductionDays
+                  const monthKey = attendanceDate.substring(0, 7) + '-01'
+                  
+                  console.log('Creating early departure deduction (>5 min):', {
+                    employee_id: employee.id,
+                    earlyMinutes,
+                    deductionDays,
+                    monthKey
+                  })
+                  
+                  const { error: adjustmentError } = await supabase.from('salary_adjustments').insert({
+                    employee_id: employee.id,
+                    company_id: companyId,
+                    month: monthKey,
+                    deduction: deductionAmount,
+                    bonus: 0,
+                    adjustment_days: deductionDays,
+                    description: `خصم انصراف مبكر: ${earlyMinutes} دقيقة قبل موعد الانصراف`,
+                    added_by_name: 'النظام التلقائي',
+                    attendance_log_id: attendance.id,
+                    is_auto_generated: true
+                  })
+                  
+                  if (adjustmentError) {
+                    console.error('Failed to create early departure adjustment:', adjustmentError)
+                  }
+                  
+                  earlyDepartureMessage = `\n\n⏰ <b>انصراف مبكر:</b> ${earlyMinutes} دقيقة\n` +
+                    `📛 تم تطبيق خصم ربع يوم` + (deductionAmount > 0 ? ` (${deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '') + `\n` +
+                    `📝 موعد الانصراف: ${workEndTime}`
                 }
               }
             }
