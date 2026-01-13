@@ -34,7 +34,6 @@ import { useAuth } from '@/contexts/AuthContext';
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -168,11 +167,11 @@ const Attendance = () => {
   };
 
   const handleSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['attendance-all'] });
-    queryClient.invalidateQueries({ queryKey: ['attendance'] });
-    queryClient.invalidateQueries({ queryKey: ['attendance-stats'] });
-    queryClient.invalidateQueries({ queryKey: ['salary-adjustments'] });
-    queryClient.invalidateQueries({ queryKey: ['employee-adjustments'] });
+    queryClient.invalidateQueries({ queryKey: ['attendance-all'], exact: false, refetchType: 'active' });
+    queryClient.invalidateQueries({ queryKey: ['attendance'], exact: false, refetchType: 'active' });
+    queryClient.invalidateQueries({ queryKey: ['attendance-stats'], exact: false, refetchType: 'active' });
+    queryClient.invalidateQueries({ queryKey: ['salary-adjustments'], exact: false, refetchType: 'active' });
+    queryClient.invalidateQueries({ queryKey: ['employee-adjustments'], exact: false, refetchType: 'active' });
   };
 
   const handleDeleteClick = (id: string) => {
@@ -182,48 +181,65 @@ const Attendance = () => {
 
   const handleDeleteConfirm = async () => {
     if (!deleteId || !profile?.company_id) return;
-    
+
+    const idToDelete = deleteId;
+
     setDeleting(true);
     try {
-      // First, delete any linked salary adjustments (soft delete via deleted_records table)
-      const { data: linkedAdjustments } = await supabase
+      // 1) Delete any linked salary adjustments
+      const { data: linkedAdjustments, error: linkedError } = await supabase
         .from('salary_adjustments')
         .select('id')
-        .eq('attendance_log_id', deleteId);
-      
+        .eq('attendance_log_id', idToDelete);
+
+      if (linkedError) throw linkedError;
+
       if (linkedAdjustments && linkedAdjustments.length > 0) {
-        // Delete linked salary adjustments
-        await supabase
+        const { error: deleteAdjustmentsError } = await supabase
           .from('salary_adjustments')
           .delete()
-          .eq('attendance_log_id', deleteId);
+          .eq('attendance_log_id', idToDelete);
+
+        if (deleteAdjustmentsError) throw deleteAdjustmentsError;
       }
 
-      // Get attendance record for logging
-      const { data: recordToDelete } = await supabase
+      // 2) Fetch attendance record for logging/restore
+      const { data: recordToDelete, error: recordError } = await supabase
         .from('attendance_logs')
         .select('*, employees(full_name)')
-        .eq('id', deleteId)
+        .eq('id', idToDelete)
         .single();
 
-      // Save to deleted_records for potential recovery
-      if (recordToDelete) {
-        await supabase.from('deleted_records').insert({
-          company_id: profile.company_id,
-          table_name: 'attendance_logs',
-          record_id: deleteId,
-          record_data: recordToDelete,
-          deleted_by: profile.user_id,
-        });
-      }
+      if (recordError) throw recordError;
 
-      // Delete the attendance record
-      const { error } = await supabase
+      // 3) Save to deleted_records (so we can restore later)
+      const { error: deletedRecordError } = await supabase.from('deleted_records').insert({
+        company_id: profile.company_id,
+        table_name: 'attendance_logs',
+        record_id: idToDelete,
+        record_data: recordToDelete,
+        deleted_by: profile.user_id,
+      });
+
+      if (deletedRecordError) throw deletedRecordError;
+
+      // 4) Delete the attendance record itself (verify row count)
+      const { data: deletedRows, error: deleteError } = await supabase
         .from('attendance_logs')
         .delete()
-        .eq('id', deleteId);
+        .eq('id', idToDelete)
+        .select('id');
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
+      if (!deletedRows || deletedRows.length === 0) {
+        throw new Error('Attendance record was not deleted (no rows affected).');
+      }
+
+      // 5) Immediately remove from UI cache (even before refetch)
+      queryClient.setQueryData(['attendance-all', profile.company_id, dateFilter], (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((r) => r?.id !== idToDelete);
+      });
 
       toast.success(language === 'ar' ? 'تم حذف سجل الحضور بنجاح' : 'Attendance record deleted');
       handleSuccess();
