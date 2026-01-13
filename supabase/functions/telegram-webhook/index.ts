@@ -483,7 +483,7 @@ serve(async (req) => {
                       deduction: deductionAmount,
                       bonus: 0,
                       adjustment_days: deductionDays,
-                      description: `خصم تأخير: ${deductionText} (${lateMinutes} دقيقة)`,
+                      description: `خصم تأخير يوم ${today} - ${deductionText} (${lateMinutes} دقيقة) - وقت الحضور: ${checkInTime} - موعد العمل: ${workStartTime}`,
                       added_by_name: 'النظام التلقائي',
                       attendance_log_id: attendanceLogId,
                       is_auto_generated: true
@@ -601,7 +601,7 @@ serve(async (req) => {
                       deduction: deductionAmount,
                       bonus: 0,
                       adjustment_days: deductionDays,
-                      description: `خصم انصراف مبكر: ${earlyMinutes} دقيقة قبل موعد الانصراف`,
+                      description: `خصم انصراف مبكر يوم ${attendanceDate}: ${earlyMinutes} دقيقة قبل موعد الانصراف (${workEndTime})`,
                       added_by_name: 'النظام التلقائي',
                       attendance_log_id: attendance.id,
                       is_auto_generated: true
@@ -637,7 +637,7 @@ serve(async (req) => {
                     deduction: deductionAmount,
                     bonus: 0,
                     adjustment_days: deductionDays,
-                    description: `خصم انصراف مبكر: ${earlyMinutes} دقيقة قبل موعد الانصراف`,
+                    description: `خصم انصراف مبكر يوم ${attendanceDate}: ${earlyMinutes} دقيقة قبل موعد الانصراف (${workEndTime})`,
                     added_by_name: 'النظام التلقائي',
                     attendance_log_id: attendance.id,
                     is_auto_generated: true
