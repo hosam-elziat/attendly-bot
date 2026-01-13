@@ -390,6 +390,7 @@ export type Database = {
           national_id: string | null
           notes: string | null
           phone: string | null
+          position_id: string | null
           salary_type: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id: string | null
           updated_at: string
@@ -417,6 +418,7 @@ export type Database = {
           national_id?: string | null
           notes?: string | null
           phone?: string | null
+          position_id?: string | null
           salary_type?: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id?: string | null
           updated_at?: string
@@ -444,6 +446,7 @@ export type Database = {
           national_id?: string | null
           notes?: string | null
           phone?: string | null
+          position_id?: string | null
           salary_type?: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id?: string | null
           updated_at?: string
@@ -458,6 +461,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
             referencedColumns: ["id"]
           },
         ]
@@ -589,6 +599,110 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      position_permissions: {
+        Row: {
+          can_add_bonuses: boolean | null
+          can_approve_leaves: boolean | null
+          can_make_deductions: boolean | null
+          can_manage_attendance: boolean | null
+          can_manage_subordinates: boolean | null
+          can_view_reports: boolean | null
+          can_view_salaries: boolean | null
+          created_at: string
+          id: string
+          position_id: string
+          updated_at: string
+        }
+        Insert: {
+          can_add_bonuses?: boolean | null
+          can_approve_leaves?: boolean | null
+          can_make_deductions?: boolean | null
+          can_manage_attendance?: boolean | null
+          can_manage_subordinates?: boolean | null
+          can_view_reports?: boolean | null
+          can_view_salaries?: boolean | null
+          created_at?: string
+          id?: string
+          position_id: string
+          updated_at?: string
+        }
+        Update: {
+          can_add_bonuses?: boolean | null
+          can_approve_leaves?: boolean | null
+          can_make_deductions?: boolean | null
+          can_manage_attendance?: boolean | null
+          can_manage_subordinates?: boolean | null
+          can_view_reports?: boolean | null
+          can_view_salaries?: boolean | null
+          created_at?: string
+          id?: string
+          position_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "position_permissions_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: true
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      positions: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          level: number | null
+          reports_to: string | null
+          title: string
+          title_ar: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          level?: number | null
+          reports_to?: string | null
+          title: string
+          title_ar?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          level?: number | null
+          reports_to?: string | null
+          title?: string
+          title_ar?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "positions_reports_to_fkey"
+            columns: ["reports_to"]
+            isOneToOne: false
+            referencedRelation: "positions"
             referencedColumns: ["id"]
           },
         ]
@@ -1072,6 +1186,10 @@ export type Database = {
     Functions: {
       belongs_to_company: {
         Args: { p_company_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      can_manage_employee: {
+        Args: { manager_employee_id: string; target_employee_id: string }
         Returns: boolean
       }
       get_saas_team_permissions: { Args: { p_user_id: string }; Returns: Json }

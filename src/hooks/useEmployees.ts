@@ -30,6 +30,7 @@ export interface Employee {
   monthly_late_balance_minutes: number | null;
   leave_balance: number | null;
   emergency_leave_balance: number | null;
+  position_id: string | null;
   created_at: string;
   updated_at: string;
 }
