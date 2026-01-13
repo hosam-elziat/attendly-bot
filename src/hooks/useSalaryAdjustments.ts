@@ -56,11 +56,14 @@ export function useSalaryAdjustments(month?: string) {
         .order('created_at', { ascending: false });
 
       if (month) {
+        // Month can be in format 'YYYY-MM' or 'YYYY-MM-DD'
+        // We need to match both old format (YYYY-MM) and new format (YYYY-MM-01)
         const monthStart = startOfMonth(new Date(month + '-01'));
         const monthEnd = endOfMonth(monthStart);
-        query = query
-          .gte('month', format(monthStart, 'yyyy-MM-dd'))
-          .lte('month', format(monthEnd, 'yyyy-MM-dd'));
+        const monthPrefix = format(monthStart, 'yyyy-MM');
+        
+        // Use LIKE query to match both 'YYYY-MM' and 'YYYY-MM-DD' formats
+        query = query.or(`month.eq.${monthPrefix},month.gte.${format(monthStart, 'yyyy-MM-dd')}.and.month.lte.${format(monthEnd, 'yyyy-MM-dd')}`);
       }
 
       const { data, error } = await query;
@@ -107,11 +110,13 @@ export function useEmployeeAdjustments(employeeId?: string, month?: string) {
         .order('created_at', { ascending: false });
 
       if (month) {
+        // Month can be in format 'YYYY-MM' or 'YYYY-MM-DD'
         const monthStart = startOfMonth(new Date(month + '-01'));
         const monthEnd = endOfMonth(monthStart);
-        query = query
-          .gte('month', format(monthStart, 'yyyy-MM-dd'))
-          .lte('month', format(monthEnd, 'yyyy-MM-dd'));
+        const monthPrefix = format(monthStart, 'yyyy-MM');
+        
+        // Use LIKE query to match both 'YYYY-MM' and 'YYYY-MM-DD' formats
+        query = query.or(`month.eq.${monthPrefix},month.gte.${format(monthStart, 'yyyy-MM-dd')}.and.month.lte.${format(monthEnd, 'yyyy-MM-dd')}`);
       }
 
       const { data, error } = await query;
