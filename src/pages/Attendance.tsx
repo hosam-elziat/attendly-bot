@@ -186,7 +186,15 @@ const Attendance = () => {
 
     setDeleting(true);
     try {
-      // 1) Delete any linked salary adjustments
+      // 1) Delete any linked break logs (avoid FK constraint)
+      const { error: breakDeleteError } = await supabase
+        .from('break_logs')
+        .delete()
+        .eq('attendance_id', idToDelete);
+
+      if (breakDeleteError) throw breakDeleteError;
+
+      // 2) Delete any linked salary adjustments
       const { data: linkedAdjustments, error: linkedError } = await supabase
         .from('salary_adjustments')
         .select('id')
