@@ -56,12 +56,12 @@ export function useSalaryAdjustments(month?: string) {
         .order('created_at', { ascending: false });
 
       if (month) {
-        // We store month as the first day of the month: YYYY-MM-01
-        // Older records might have been stored as YYYY-MM, so we support both.
-        const monthPrefix = month.length >= 7 ? month.slice(0, 7) : month;
+        // Normalize month to YYYY-MM-01 format
+        const monthPrefix = month.slice(0, 7);
         const monthKey = `${monthPrefix}-01`;
-
-        query = query.in('month', [monthKey, monthPrefix]);
+        
+        // Use gte/lte range filter to get all records for the month
+        query = query.gte('month', monthKey).lte('month', monthKey);
       }
 
       const { data, error } = await query;
@@ -108,12 +108,12 @@ export function useEmployeeAdjustments(employeeId?: string, month?: string) {
         .order('created_at', { ascending: false });
 
       if (month) {
-        // We store month as the first day of the month: YYYY-MM-01
-        // Older records might have been stored as YYYY-MM, so we support both.
-        const monthPrefix = month.length >= 7 ? month.slice(0, 7) : month;
+        // Normalize month to YYYY-MM-01 format
+        const monthPrefix = month.slice(0, 7);
         const monthKey = `${monthPrefix}-01`;
-
-        query = query.in('month', [monthKey, monthPrefix]);
+        
+        // Use gte/lte range filter to get all records for the month
+        query = query.gte('month', monthKey).lte('month', monthKey);
       }
 
       const { data, error } = await query;
