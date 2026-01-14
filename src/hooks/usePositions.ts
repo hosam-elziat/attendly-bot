@@ -16,6 +16,13 @@ export interface Position {
   updated_at: string;
 }
 
+export interface PositionReportsTo {
+  id: string;
+  position_id: string;
+  reports_to_position_id: string;
+  created_at: string;
+}
+
 export interface PositionPermissions {
   id: string;
   position_id: string;
@@ -32,7 +39,7 @@ export interface PositionPermissions {
 
 export interface PositionWithPermissions extends Position {
   position_permissions: PositionPermissions | null;
-  reports_to_position?: Position | null;
+  reports_to_positions?: string[];
   employees_count?: number;
 }
 
@@ -41,6 +48,7 @@ export interface CreatePositionData {
   title_ar?: string;
   description?: string;
   reports_to?: string | null;
+  reports_to_positions?: string[];
   level?: number;
   permissions?: Partial<Omit<PositionPermissions, 'id' | 'position_id' | 'created_at' | 'updated_at'>>;
 }
@@ -78,9 +86,23 @@ export const usePositions = () => {
         }
       });
 
+      // Get reports_to relationships from junction table
+      const { data: reportsToData } = await supabase
+        .from('position_reports_to')
+        .select('position_id, reports_to_position_id');
+
+      const reportsToMap: Record<string, string[]> = {};
+      reportsToData?.forEach(rel => {
+        if (!reportsToMap[rel.position_id]) {
+          reportsToMap[rel.position_id] = [];
+        }
+        reportsToMap[rel.position_id].push(rel.reports_to_position_id);
+      });
+
       return (data || []).map(pos => ({
         ...pos,
-        employees_count: positionCounts[pos.id] || 0
+        employees_count: positionCounts[pos.id] || 0,
+        reports_to_positions: reportsToMap[pos.id] || (pos.reports_to ? [pos.reports_to] : [])
       })) as PositionWithPermissions[];
     },
     enabled: !!profile?.company_id
@@ -103,13 +125,27 @@ export const useCreatePosition = () => {
           title: data.title,
           title_ar: data.title_ar,
           description: data.description,
-          reports_to: data.reports_to,
+          reports_to: data.reports_to_positions?.[0] || data.reports_to || null,
           level: data.level ?? 0
         })
         .select()
         .single();
 
       if (posError) throw posError;
+
+      // Create reports_to relationships if multiple managers
+      if (data.reports_to_positions && data.reports_to_positions.length > 0) {
+        const reportsToInserts = data.reports_to_positions.map(reportToId => ({
+          position_id: position.id,
+          reports_to_position_id: reportToId
+        }));
+        
+        const { error: reportsError } = await supabase
+          .from('position_reports_to')
+          .insert(reportsToInserts);
+        
+        if (reportsError) throw reportsError;
+      }
 
       // Create permissions
       if (data.permissions) {
@@ -151,19 +187,47 @@ export const useUpdatePosition = () => {
     mutationFn: async ({ 
       id, 
       data, 
-      permissions 
+      permissions,
+      reports_to_positions 
     }: { 
       id: string; 
       data: Partial<Omit<Position, 'id' | 'company_id' | 'created_at' | 'updated_at'>>;
       permissions?: Partial<Omit<PositionPermissions, 'id' | 'position_id' | 'created_at' | 'updated_at'>>;
+      reports_to_positions?: string[];
     }) => {
       // Update position
       const { error: posError } = await supabase
         .from('positions')
-        .update(data)
+        .update({
+          ...data,
+          reports_to: reports_to_positions?.[0] || data.reports_to || null
+        })
         .eq('id', id);
 
       if (posError) throw posError;
+
+      // Update reports_to relationships
+      if (reports_to_positions !== undefined) {
+        // Delete existing relationships
+        await supabase
+          .from('position_reports_to')
+          .delete()
+          .eq('position_id', id);
+
+        // Insert new relationships
+        if (reports_to_positions.length > 0) {
+          const reportsToInserts = reports_to_positions.map(reportToId => ({
+            position_id: id,
+            reports_to_position_id: reportToId
+          }));
+          
+          const { error: reportsError } = await supabase
+            .from('position_reports_to')
+            .insert(reportsToInserts);
+          
+          if (reportsError) throw reportsError;
+        }
+      }
 
       // Update permissions if provided
       if (permissions) {

@@ -44,7 +44,7 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
     title: '',
     title_ar: '',
     description: '',
-    reports_to: '',
+    reports_to_positions: [] as string[],
     level: 0,
   });
   
@@ -64,7 +64,7 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
         title: position.title,
         title_ar: position.title_ar || '',
         description: position.description || '',
-        reports_to: position.reports_to || '',
+        reports_to_positions: position.reports_to_positions || (position.reports_to ? [position.reports_to] : []),
         level: position.level,
       });
       if (position.position_permissions) {
@@ -83,7 +83,7 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
         title: '',
         title_ar: '',
         description: '',
-        reports_to: '',
+        reports_to_positions: [],
         level: 0,
       });
       setPermissions({
@@ -105,7 +105,7 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
       title: formData.title,
       title_ar: formData.title_ar || undefined,
       description: formData.description || undefined,
-      reports_to: formData.reports_to || null,
+      reports_to_positions: formData.reports_to_positions,
       level: formData.level,
       permissions,
     };
@@ -118,10 +118,10 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
             title: data.title,
             title_ar: data.title_ar,
             description: data.description,
-            reports_to: data.reports_to,
             level: data.level,
           },
           permissions,
+          reports_to_positions: formData.reports_to_positions,
         });
       } else {
         await createPosition.mutateAsync(data);
@@ -130,6 +130,15 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
     } catch (error) {
       // Error handled in hook
     }
+  };
+
+  const handleReportsToToggle = (posId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      reports_to_positions: prev.reports_to_positions.includes(posId)
+        ? prev.reports_to_positions.filter(id => id !== posId)
+        : [...prev.reports_to_positions, posId]
+    }));
   };
 
   const permissionLabels = {

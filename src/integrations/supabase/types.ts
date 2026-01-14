@@ -653,6 +653,42 @@ export type Database = {
           },
         ]
       }
+      position_reports_to: {
+        Row: {
+          created_at: string
+          id: string
+          position_id: string
+          reports_to_position_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position_id: string
+          reports_to_position_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position_id?: string
+          reports_to_position_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "position_reports_to_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "position_reports_to_reports_to_position_id_fkey"
+            columns: ["reports_to_position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       positions: {
         Row: {
           company_id: string
@@ -1192,7 +1228,28 @@ export type Database = {
         Args: { manager_employee_id: string; target_employee_id: string }
         Returns: boolean
       }
+      get_employee_managers: {
+        Args: { emp_id: string }
+        Returns: {
+          manager_employee_id: string
+          manager_name: string
+          manager_position_id: string
+          manager_telegram_chat_id: string
+        }[]
+      }
       get_saas_team_permissions: { Args: { p_user_id: string }; Returns: Json }
+      get_subordinate_employees: {
+        Args: { manager_employee_id: string }
+        Returns: {
+          employee_id: string
+        }[]
+      }
+      get_subordinate_positions: {
+        Args: { manager_position_id: string }
+        Returns: {
+          position_id: string
+        }[]
+      }
       get_user_company_id: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
