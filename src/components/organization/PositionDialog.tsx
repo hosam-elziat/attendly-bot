@@ -248,14 +248,14 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
                   {language === 'ar' ? 'يتبع إلى' : 'Reports To'}
                 </Label>
                 <Select
-                  value={formData.reports_to}
-                  onValueChange={(value) => setFormData({ ...formData, reports_to: value })}
+                  value={formData.reports_to || "none"}
+                  onValueChange={(value) => setFormData({ ...formData, reports_to: value === "none" ? "" : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={language === 'ar' ? 'اختر المنصب الأعلى' : 'Select parent position'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">
+                    <SelectItem value="none">
                       {language === 'ar' ? 'لا يوجد (أعلى منصب)' : 'None (Top level)'}
                     </SelectItem>
                     {parentOptions.map(pos => (
