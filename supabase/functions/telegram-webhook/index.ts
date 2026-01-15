@@ -62,6 +62,8 @@ interface SessionData {
   // Manager action session data
   target_employee_id?: string;
   target_employee_name?: string;
+  adjustment_amount?: number;
+  adjustment_days?: number;
 }
 
 serve(async (req) => {
@@ -383,7 +385,7 @@ serve(async (req) => {
         case 'check_in':
           // For check_in, only check today's attendance (not yesterday's open shift)
           if (todayAttendance) {
-            await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!')
+            await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString() // Store UTC in database
@@ -537,7 +539,7 @@ serve(async (req) => {
               `📅 التاريخ: ${today}\n` +
               `⏰ الوقت: ${checkInTime}` +
               lateMessage,
-              getEmployeeKeyboard()
+              getEmployeeKeyboard(managerPermissions)
             )
             
             // Notify managers about check-in
@@ -706,7 +708,7 @@ serve(async (req) => {
               workHoursMessage +
               overtimeMessage +
               earlyDepartureMessage,
-              getEmployeeKeyboard()
+              getEmployeeKeyboard(managerPermissions)
             )
             
             // Notify managers about check-out
@@ -716,11 +718,11 @@ serve(async (req) => {
 
         case 'start_break':
           if (!attendance) {
-            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.')
+            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.', getEmployeeKeyboard(managerPermissions))
           } else if (attendance.status === 'on_break') {
-            await sendMessage(botToken, chatId, '⚠️ أنت في استراحة بالفعل!')
+            await sendMessage(botToken, chatId, '⚠️ أنت في استراحة بالفعل!', getEmployeeKeyboard(managerPermissions))
           } else if (attendance.check_out_time) {
-            await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك بالفعل!')
+            await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك بالفعل!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
@@ -741,16 +743,16 @@ serve(async (req) => {
 
             await sendMessage(botToken, chatId, 
               `☕ بدأت الاستراحة\n\n⏰ الوقت: ${localTime.time}${nightShiftNote}`,
-              getEmployeeKeyboard()
+              getEmployeeKeyboard(managerPermissions)
             )
           }
           break
 
         case 'end_break':
           if (!attendance) {
-            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.')
+            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.', getEmployeeKeyboard(managerPermissions))
           } else if (attendance.status !== 'on_break') {
-            await sendMessage(botToken, chatId, '⚠️ أنت لست في استراحة!')
+            await sendMessage(botToken, chatId, '⚠️ أنت لست في استراحة!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
@@ -787,7 +789,7 @@ serve(async (req) => {
 
             await sendMessage(botToken, chatId, 
               `✅ انتهت الاستراحة\n\n⏰ الوقت: ${localTime.time}${nightShiftNote}`,
-              getEmployeeKeyboard()
+              getEmployeeKeyboard(managerPermissions)
             )
           }
           break
@@ -909,7 +911,7 @@ serve(async (req) => {
           await deleteSession()
           await sendMessage(botToken, chatId, 
             `❌ تم إلغاء طلب الإجازة`,
-            getEmployeeKeyboard()
+            getEmployeeKeyboard(managerPermissions)
           )
           break
 
@@ -1000,7 +1002,7 @@ serve(async (req) => {
             salaryMsg += `\n💵 <b>الإجمالي: ${netSalary.toLocaleString()} ${currency}</b>\n`
             salaryMsg += `\n📅 أيام العمل: ${workDays} يوم`
             
-            await sendMessage(botToken, chatId, salaryMsg, getEmployeeKeyboard())
+            await sendMessage(botToken, chatId, salaryMsg, getEmployeeKeyboard(managerPermissions))
           }
           break
 
@@ -1026,14 +1028,14 @@ serve(async (req) => {
           
         case 'manage_team':
           // Check if employee has manager permissions
-          if (!managerPermissions?.can_add_bonuses && !managerPermissions?.can_make_deductions) {
-            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحيات إدارية')
+          if (!managerPermissions?.can_add_bonuses && !managerPermissions?.can_make_deductions && !managerPermissions?.can_approve_leaves) {
+            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحيات إدارية', getEmployeeKeyboard(managerPermissions))
             break
           }
           
           await sendMessage(botToken, chatId, 
-            '👥 <b>إدارة الفريق</b>\n\nاختر الإجراء:',
-            getManagerTeamKeyboard()
+            '👥 <b>صلاحيات المدير</b>\n\nاختر الإجراء المطلوب:',
+            getManagerTeamKeyboard(managerPermissions)
           )
           break
           
@@ -1043,32 +1045,34 @@ serve(async (req) => {
           
           // Check permission
           if (isBonus && !managerPermissions?.can_add_bonuses) {
-            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة مكافآت')
+            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة مكافآت', getEmployeeKeyboard(managerPermissions))
             break
           }
           if (!isBonus && !managerPermissions?.can_make_deductions) {
-            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة خصومات')
+            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة خصومات', getEmployeeKeyboard(managerPermissions))
             break
           }
           
-          // Get subordinates
-          const { data: subordinates } = await supabase
+          // Get subordinates using position hierarchy
+          const { data: subordinates, error: subError } = await supabase
             .rpc('get_subordinate_employees', { manager_employee_id: employee.id })
           
+          console.log('Subordinates for manager:', employee.id, subordinates, subError)
+          
           if (!subordinates || subordinates.length === 0) {
-            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين تحت إدارتك')
+            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين تحت إدارتك في الهيكل التنظيمي', getEmployeeKeyboard(managerPermissions))
             break
           }
           
           // Get employee details
           const { data: subEmployees } = await supabase
             .from('employees')
-            .select('id, full_name')
+            .select('id, full_name, base_salary')
             .in('id', subordinates.map((s: any) => s.employee_id))
             .eq('is_active', true)
           
           if (!subEmployees || subEmployees.length === 0) {
-            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين نشطين تحت إدارتك')
+            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين نشطين تحت إدارتك', getEmployeeKeyboard(managerPermissions))
             break
           }
           
@@ -1082,10 +1086,12 @@ serve(async (req) => {
             callback_data: `mgr_select_emp_${emp.id}`
           }]))
           
+          subButtons.push([{ text: '🔙 رجوع', callback_data: 'manage_team' }])
           subButtons.push([{ text: '❌ إلغاء', callback_data: 'cancel_mgr_action' }])
           
           await sendMessage(botToken, chatId, 
-            `📋 <b>${actionText}</b>\n\nاختر الموظف:`,
+            `📋 <b>${actionText}</b>\n\n👥 الموظفين تحت إدارتك:\n` +
+            `(يتم عرض الموظفين المرتبطين بمنصبك في الهيكل التنظيمي)\n\nاختر الموظف:`,
             { inline_keyboard: subButtons }
           )
           break
@@ -1132,27 +1138,93 @@ serve(async (req) => {
             
             const isBonus = session.step === 'mgr_bonus_select'
             
-            // Get target employee info
+            // Get target employee info with salary
             const { data: targetEmp } = await supabase
               .from('employees')
-              .select('id, full_name')
+              .select('id, full_name, base_salary')
               .eq('id', targetEmpId)
               .single()
             
             if (!targetEmp) {
-              await sendMessage(botToken, chatId, '❌ الموظف غير موجود')
+              await sendMessage(botToken, chatId, '❌ الموظف غير موجود', getEmployeeKeyboard(managerPermissions))
               break
             }
             
-            // Store selected employee and ask for amount
-            await setSession(isBonus ? 'mgr_bonus_amount' : 'mgr_deduction_amount', {
+            const baseSalary = targetEmp.base_salary || 0
+            const dailyRate = baseSalary / 30
+            
+            // Store selected employee
+            await setSession(isBonus ? 'mgr_bonus_amount_choice' : 'mgr_deduction_amount_choice', {
               target_employee_id: targetEmpId,
               target_employee_name: targetEmp.full_name
             })
             
+            // Create preset buttons based on daily rate
+            const quarterDay = Math.round(dailyRate * 0.25)
+            const halfDay = Math.round(dailyRate * 0.5)
+            const oneDay = Math.round(dailyRate)
+            const twoDays = Math.round(dailyRate * 2)
+            
+            const actionText = isBonus ? 'مكافأة' : 'خصم'
+            const presetPrefix = isBonus ? 'mgr_bonus_preset_' : 'mgr_deduction_preset_'
+            
+            const amountButtons: { text: string; callback_data: string }[][] = []
+            
+            if (baseSalary > 0) {
+              amountButtons.push([
+                { text: `ربع يوم (${quarterDay})`, callback_data: `${presetPrefix}${quarterDay}_0.25` },
+                { text: `نصف يوم (${halfDay})`, callback_data: `${presetPrefix}${halfDay}_0.5` }
+              ])
+              amountButtons.push([
+                { text: `يوم كامل (${oneDay})`, callback_data: `${presetPrefix}${oneDay}_1` },
+                { text: `يومين (${twoDays})`, callback_data: `${presetPrefix}${twoDays}_2` }
+              ])
+            }
+            
+            amountButtons.push([{ text: '✏️ إدخال مبلغ مخصص', callback_data: isBonus ? 'mgr_bonus_custom' : 'mgr_deduction_custom' }])
+            amountButtons.push([{ text: '🔙 رجوع', callback_data: isBonus ? 'mgr_add_bonus' : 'mgr_add_deduction' }])
+            amountButtons.push([{ text: '❌ إلغاء', callback_data: 'cancel_mgr_action' }])
+            
+            await sendMessage(botToken, chatId, 
+              `👤 الموظف: ${targetEmp.full_name}\n` +
+              (baseSalary > 0 ? `💵 الراتب: ${baseSalary}\n📊 اليومي: ${Math.round(dailyRate)}\n\n` : '\n') +
+              `اختر قيمة ال${actionText}:`,
+              { inline_keyboard: amountButtons }
+            )
+          }
+          // Handle preset amount selection
+          else if (callbackData.startsWith('mgr_bonus_preset_') || callbackData.startsWith('mgr_deduction_preset_')) {
+            const session = await getSession()
+            if (!session) break
+            
+            const isBonus = callbackData.startsWith('mgr_bonus_preset_')
+            const parts = callbackData.replace(isBonus ? 'mgr_bonus_preset_' : 'mgr_deduction_preset_', '').split('_')
+            const amount = parseFloat(parts[0])
+            const days = parseFloat(parts[1])
+            
+            // Ask for reason
+            await setSession(isBonus ? 'mgr_bonus_desc' : 'mgr_deduction_desc', {
+              ...session.data,
+              adjustment_amount: amount,
+              adjustment_days: days
+            } as any)
+            
             const actionText = isBonus ? 'المكافأة' : 'الخصم'
             await sendMessage(botToken, chatId, 
-              `👤 الموظف: ${targetEmp.full_name}\n\n` +
+              `💰 القيمة: ${amount} (${days} يوم)\n\n📝 أرسل سبب ${actionText}:`
+            )
+          }
+          // Handle custom amount selection
+          else if (callbackData === 'mgr_bonus_custom' || callbackData === 'mgr_deduction_custom') {
+            const session = await getSession()
+            if (!session) break
+            
+            const isBonus = callbackData === 'mgr_bonus_custom'
+            await setSession(isBonus ? 'mgr_bonus_amount' : 'mgr_deduction_amount', session.data)
+            
+            const actionText = isBonus ? 'المكافأة' : 'الخصم'
+            await sendMessage(botToken, chatId, 
+              `👤 الموظف: ${session.data.target_employee_name}\n\n` +
               `💰 أرسل قيمة ${actionText} (بالأرقام فقط):`
             )
           }
@@ -1176,7 +1248,7 @@ serve(async (req) => {
       if (employee) {
         await sendMessage(botToken, chatId, 
           `مرحباً ${employee.full_name}! 👋\n\nاختر من الأزرار أدناه:`,
-          getEmployeeKeyboard()
+          getEmployeeKeyboard(managerPermissions)
         )
       } else {
         await sendWelcomeMessage(botToken, chatId, false)
@@ -1388,7 +1460,7 @@ serve(async (req) => {
                 `✅ <b>تمت الموافقة على إجازتك الطارئة!</b>\n\n` +
                 `📅 التاريخ: ${text}\n` +
                 `📊 الرصيد المتبقي: ${emergencyBalance - 1} يوم طارئ`,
-                getEmployeeKeyboard()
+                getEmployeeKeyboard(managerPermissions)
               )
               return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
             }
@@ -1445,7 +1517,7 @@ serve(async (req) => {
                 `📝 السبب: ${text}\n` +
                 `📊 الرصيد المتبقي: ${emergencyBalance - 1} يوم طارئ\n\n` +
                 `🏠 يوم إجازة سعيد!`,
-                getEmployeeKeyboard()
+                getEmployeeKeyboard(managerPermissions)
               )
               return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
             }
@@ -1482,7 +1554,7 @@ serve(async (req) => {
             `📅 التاريخ: ${leaveDate}\n` +
             `📝 السبب: ${text}\n\n` +
             `⏳ سيتم إبلاغك على التيلجرام عند الموافقة أو الرفض.`,
-            getEmployeeKeyboard()
+            getEmployeeKeyboard(managerPermissions)
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
@@ -1512,7 +1584,8 @@ serve(async (req) => {
           const isBonus = session.step === 'mgr_bonus_desc'
           const targetEmpId = session.data.target_employee_id
           const targetEmpName = session.data.target_employee_name
-          const amount = (session.data as any).adjustment_amount || 0
+          const amount = session.data.adjustment_amount || 0
+          const adjustmentDays = session.data.adjustment_days || null
           
           const today = new Date()
           const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
@@ -1524,6 +1597,7 @@ serve(async (req) => {
             month: monthKey,
             bonus: isBonus ? amount : 0,
             deduction: isBonus ? 0 : amount,
+            adjustment_days: adjustmentDays,
             description: text,
             added_by: employee.id,
             added_by_name: employee.full_name,
@@ -1614,7 +1688,7 @@ serve(async (req) => {
         `📊 عدد الأيام: ${days}\n` +
         (reason ? `📝 السبب: ${reason}\n` : '') +
         `\n⏳ سيتم مراجعة طلبك من قبل الإدارة.`,
-        getEmployeeKeyboard()
+        getEmployeeKeyboard(managerPermissions)
       )
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
@@ -1623,7 +1697,7 @@ serve(async (req) => {
     if (employee) {
       await sendMessage(botToken, chatId, 
         'اختر من الأزرار أدناه:',
-        getEmployeeKeyboard()
+        getEmployeeKeyboard(managerPermissions)
       )
     } else {
       // If there's a session but we're here, user might have sent unexpected input
@@ -1830,9 +1904,9 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string) {
   }
 }
 
-async function sendWelcomeMessage(botToken: string, chatId: number, isEmployee: boolean) {
+async function sendWelcomeMessage(botToken: string, chatId: number, isEmployee: boolean, managerPerms?: { can_add_bonuses?: boolean; can_make_deductions?: boolean; can_approve_leaves?: boolean } | null) {
   if (isEmployee) {
-    await sendMessage(botToken, chatId, 'مرحباً! 👋\n\nاختر من الأزرار أدناه:', getEmployeeKeyboard())
+    await sendMessage(botToken, chatId, 'مرحباً! 👋\n\nاختر من الأزرار أدناه:', getEmployeeKeyboard(managerPerms))
   } else {
     const keyboard = {
       inline_keyboard: [
@@ -1878,14 +1952,22 @@ function getEmployeeKeyboard(managerPerms?: { can_add_bonuses?: boolean; can_mak
   return { inline_keyboard: keyboard }
 }
 
-function getManagerTeamKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: '➕ إضافة مكافأة', callback_data: 'mgr_add_bonus' }],
-      [{ text: '➖ إضافة خصم', callback_data: 'mgr_add_deduction' }],
-      [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
-    ]
+function getManagerTeamKeyboard(managerPerms?: { can_add_bonuses?: boolean; can_make_deductions?: boolean; can_approve_leaves?: boolean } | null) {
+  const keyboard: { text: string; callback_data: string }[][] = []
+  
+  if (managerPerms?.can_add_bonuses) {
+    keyboard.push([{ text: '🎁 إضافة مكافأة', callback_data: 'mgr_add_bonus' }])
   }
+  if (managerPerms?.can_make_deductions) {
+    keyboard.push([{ text: '💸 إضافة خصم', callback_data: 'mgr_add_deduction' }])
+  }
+  if (managerPerms?.can_approve_leaves) {
+    keyboard.push([{ text: '📋 طلبات الإجازة', callback_data: 'mgr_leave_requests' }])
+  }
+  
+  keyboard.push([{ text: '🔙 رجوع للقائمة الرئيسية', callback_data: 'back_to_main' }])
+  
+  return { inline_keyboard: keyboard }
 }
 
 function getWeekendKeyboard(selectedDays: string[] = []) {
