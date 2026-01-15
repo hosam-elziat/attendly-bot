@@ -7,6 +7,7 @@ import { useEmployees, useCreateEmployee, useUpdateEmployee, CreateEmployeeData,
 import { useSoftDelete } from '@/hooks/useAuditLogs';
 import { useCompany } from '@/hooks/useCompany';
 import { useSubscriptionLimit } from '@/hooks/useSubscriptionLimit';
+import { usePositions } from '@/hooks/usePositions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -76,6 +77,7 @@ const Employees = () => {
   const navigate = useNavigate();
   const { data: employees = [], isLoading } = useEmployees();
   const { data: company } = useCompany();
+  const { data: positions = [] } = usePositions();
   const createEmployee = useCreateEmployee();
   const softDelete = useSoftDelete();
   const updateEmployee = useUpdateEmployee();
@@ -183,6 +185,7 @@ const Employees = () => {
               
               <AddEmployeeForm 
                 defaultCurrency={defaultCurrency}
+                positions={positions}
                 onClose={() => setDialogOpen(false)} 
                 onSubmit={async (data) => {
                   await createEmployee.mutateAsync(data);
@@ -477,6 +480,7 @@ const Employees = () => {
             <EditEmployeeForm 
               employee={selectedEmployee}
               defaultCurrency={defaultCurrency}
+              positions={positions}
               onClose={() => {
                 setEditDialogOpen(false);
                 setSelectedEmployee(null);
@@ -508,6 +512,7 @@ interface EmployeeFormData extends CreateEmployeeData {
   currency?: string;
   notes?: string;
   telegram_chat_id?: string;
+  position_id?: string;
 }
 
 interface AddEmployeeFormProps {
@@ -515,10 +520,11 @@ interface AddEmployeeFormProps {
   onClose: () => void;
   onSubmit: (data: EmployeeFormData) => Promise<void>;
   isLoading: boolean;
+  positions: { id: string; title: string; title_ar: string | null }[];
 }
 
-const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddEmployeeFormProps) => {
-  const { t } = useLanguage();
+const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positions }: AddEmployeeFormProps) => {
+  const { t, language } = useLanguage();
   const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: '',
     email: '',
@@ -536,6 +542,7 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddE
     currency: defaultCurrency,
     notes: '',
     telegram_chat_id: '',
+    position_id: '',
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -605,13 +612,25 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddE
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="department">{t('employees.department')}</Label>
-          <Input 
-            id="department" 
-            placeholder={t('employees.departmentPlaceholder')}
-            value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-          />
+          <Label>{language === 'ar' ? 'المنصب' : 'Position'}</Label>
+          <Select 
+            value={formData.position_id || 'none'} 
+            onValueChange={(value) => setFormData({ ...formData, position_id: value === 'none' ? '' : value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر المنصب' : 'Select position'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                {language === 'ar' ? 'بدون منصب' : 'No position'}
+              </SelectItem>
+              {positions.map((pos) => (
+                <SelectItem key={pos.id} value={pos.id}>
+                  {language === 'ar' && pos.title_ar ? pos.title_ar : pos.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="hire_date">{t('employeeDetails.hireDate')}</Label>
@@ -626,6 +645,15 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddE
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
+          <Label htmlFor="department">{t('employees.department')}</Label>
+          <Input 
+            id="department" 
+            placeholder={t('employees.departmentPlaceholder')}
+            value={formData.department}
+            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="address">{t('employeeDetails.address')}</Label>
           <Input 
             id="address" 
@@ -634,15 +662,16 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading }: AddE
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="telegram_id">Telegram ID</Label>
-          <Input 
-            id="telegram_id" 
-            placeholder="123456789"
-            value={formData.telegram_chat_id}
-            onChange={(e) => setFormData({ ...formData, telegram_chat_id: e.target.value })}
-          />
-        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="telegram_id">Telegram ID</Label>
+        <Input 
+          id="telegram_id" 
+          placeholder="123456789"
+          value={formData.telegram_chat_id}
+          onChange={(e) => setFormData({ ...formData, telegram_chat_id: e.target.value })}
+        />
       </div>
       
       {/* Salary Info */}
@@ -780,10 +809,11 @@ interface EditEmployeeFormProps {
   onClose: () => void;
   onSubmit: (data: Partial<EmployeeFormData>) => Promise<void>;
   isLoading: boolean;
+  positions: { id: string; title: string; title_ar: string | null }[];
 }
 
-const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoading }: EditEmployeeFormProps) => {
-  const { t } = useLanguage();
+const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoading, positions }: EditEmployeeFormProps) => {
+  const { t, language } = useLanguage();
   const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: employee.full_name,
     email: employee.email,
@@ -802,6 +832,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     currency: employee.currency || defaultCurrency,
     notes: employee.notes || '',
     telegram_chat_id: employee.telegram_chat_id || '',
+    position_id: employee.position_id || '',
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -871,12 +902,25 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="edit-department">{t('employees.department')}</Label>
-          <Input 
-            id="edit-department" 
-            value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-          />
+          <Label>{language === 'ar' ? 'المنصب' : 'Position'}</Label>
+          <Select 
+            value={formData.position_id || 'none'} 
+            onValueChange={(value) => setFormData({ ...formData, position_id: value === 'none' ? '' : value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر المنصب' : 'Select position'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                {language === 'ar' ? 'بدون منصب' : 'No position'}
+              </SelectItem>
+              {positions.map((pos) => (
+                <SelectItem key={pos.id} value={pos.id}>
+                  {language === 'ar' && pos.title_ar ? pos.title_ar : pos.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label>{t('employees.status')}</Label>
@@ -897,6 +941,14 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
+          <Label htmlFor="edit-department">{t('employees.department')}</Label>
+          <Input 
+            id="edit-department" 
+            value={formData.department}
+            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="edit-hire_date">{t('employeeDetails.hireDate')}</Label>
           <Input 
             id="edit-hire_date" 
@@ -905,6 +957,9 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
             onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
           />
         </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="edit-address">{t('employeeDetails.address')}</Label>
           <Input 

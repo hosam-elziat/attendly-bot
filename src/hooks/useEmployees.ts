@@ -52,6 +52,7 @@ export interface CreateEmployeeData {
   currency?: string;
   notes?: string;
   telegram_chat_id?: string;
+  position_id?: string;
 }
 
 export const useEmployees = () => {
@@ -120,6 +121,7 @@ export const useCreateEmployee = () => {
         currency: employeeData.currency || null,
         notes: employeeData.notes || null,
         telegram_chat_id: employeeData.telegram_chat_id || null,
+        position_id: employeeData.position_id || null,
       };
 
       const { data, error } = await supabase

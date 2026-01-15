@@ -11,13 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { 
@@ -251,30 +244,39 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="reports_to">
-                  {language === 'ar' ? 'يتبع إلى' : 'Reports To'}
-                </Label>
-                <Select
-                  value={formData.reports_to || "none"}
-                  onValueChange={(value) => setFormData({ ...formData, reports_to: value === "none" ? "" : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={language === 'ar' ? 'اختر المنصب الأعلى' : 'Select parent position'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      {language === 'ar' ? 'لا يوجد (أعلى منصب)' : 'None (Top level)'}
-                    </SelectItem>
-                    {parentOptions.map(pos => (
-                      <SelectItem key={pos.id} value={pos.id}>
+            <div className="space-y-2">
+              <Label>
+                {language === 'ar' ? 'يتبع إلى (يمكن اختيار أكثر من منصب)' : 'Reports To (multiple selection allowed)'}
+              </Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md bg-muted/20">
+                {parentOptions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground col-span-2">
+                    {language === 'ar' ? 'لا توجد مناصب أخرى' : 'No other positions available'}
+                  </p>
+                ) : (
+                  parentOptions.map(pos => (
+                    <div key={pos.id} className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <Checkbox
+                        id={`reports-${pos.id}`}
+                        checked={formData.reports_to_positions.includes(pos.id)}
+                        onCheckedChange={() => handleReportsToToggle(pos.id)}
+                      />
+                      <Label htmlFor={`reports-${pos.id}`} className="text-sm cursor-pointer">
                         {language === 'ar' && pos.title_ar ? pos.title_ar : pos.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Label>
+                    </div>
+                  ))
+                )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' 
+                  ? 'اترك فارغاً إذا كان هذا أعلى منصب'
+                  : 'Leave empty if this is a top-level position'
+                }
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
               <div className="space-y-2">
                 <Label htmlFor="level">
