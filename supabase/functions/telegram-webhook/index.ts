@@ -59,6 +59,9 @@ interface SessionData {
   leave_type?: 'emergency' | 'regular';
   leave_date?: string;
   leave_reason?: string;
+  // Manager action session data
+  target_employee_id?: string;
+  target_employee_name?: string;
 }
 
 serve(async (req) => {
@@ -136,11 +139,30 @@ serve(async (req) => {
     // Check if employee exists
     const { data: employee } = await supabase
       .from('employees')
-      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time')
+      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id')
       .eq('telegram_chat_id', telegramChatId)
       .eq('company_id', companyId)
       .eq('is_active', true)
       .single()
+    
+    // Get employee's position permissions if they have a position
+    let managerPermissions: {
+      can_add_bonuses?: boolean;
+      can_make_deductions?: boolean;
+      can_approve_leaves?: boolean;
+      can_manage_attendance?: boolean;
+      can_manage_subordinates?: boolean;
+    } | null = null
+    
+    if (employee?.position_id) {
+      const { data: posPerms } = await supabase
+        .from('position_permissions')
+        .select('can_add_bonuses, can_make_deductions, can_approve_leaves, can_manage_attendance, can_manage_subordinates')
+        .eq('position_id', employee.position_id)
+        .single()
+      
+      managerPermissions = posPerms
+    }
 
     // Helper functions for session management
     async function getSession(): Promise<{ step: string; data: SessionData } | null> {
@@ -517,6 +539,9 @@ serve(async (req) => {
               lateMessage,
               getEmployeeKeyboard()
             )
+            
+            // Notify managers about check-in
+            await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_in', checkInTime, today)
           }
           break
 
@@ -683,6 +708,9 @@ serve(async (req) => {
               earlyDepartureMessage,
               getEmployeeKeyboard()
             )
+            
+            // Notify managers about check-out
+            await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_out', checkOutTime, attendanceDate)
           }
           break
 
@@ -885,22 +913,7 @@ serve(async (req) => {
           )
           break
 
-        default:
-          // Handle dynamic date selection (leave_date_YYYY-MM-DD)
-          if (callbackData.startsWith('leave_date_')) {
-            const session = await getSession()
-            if (!session) break
-            
-            const dateStr = callbackData.replace('leave_date_', '')
-            
-            // Always ask for reason
-            await setSession('leave_reason', { ...session.data, leave_date: dateStr })
-            await sendMessage(botToken, chatId, 
-              `📅 تاريخ الإجازة: ${dateStr}\n\n` +
-              `📝 أرسل سبب الإجازة:`
-            )
-          }
-          break
+        // Removed old default case - consolidated below
 
         case 'my_salary':
           // Check if it's the last day of the month
@@ -1008,7 +1021,141 @@ serve(async (req) => {
             statusMsg += `📅 لم تسجل حضورك اليوم بعد`
           }
 
-          await sendMessage(botToken, chatId, statusMsg, getEmployeeKeyboard())
+          await sendMessage(botToken, chatId, statusMsg, getEmployeeKeyboard(managerPermissions))
+          break
+          
+        case 'manage_team':
+          // Check if employee has manager permissions
+          if (!managerPermissions?.can_add_bonuses && !managerPermissions?.can_make_deductions) {
+            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحيات إدارية')
+            break
+          }
+          
+          await sendMessage(botToken, chatId, 
+            '👥 <b>إدارة الفريق</b>\n\nاختر الإجراء:',
+            getManagerTeamKeyboard()
+          )
+          break
+          
+        case 'mgr_add_bonus':
+        case 'mgr_add_deduction': {
+          const isBonus = callbackData === 'mgr_add_bonus'
+          
+          // Check permission
+          if (isBonus && !managerPermissions?.can_add_bonuses) {
+            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة مكافآت')
+            break
+          }
+          if (!isBonus && !managerPermissions?.can_make_deductions) {
+            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة خصومات')
+            break
+          }
+          
+          // Get subordinates
+          const { data: subordinates } = await supabase
+            .rpc('get_subordinate_employees', { manager_employee_id: employee.id })
+          
+          if (!subordinates || subordinates.length === 0) {
+            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين تحت إدارتك')
+            break
+          }
+          
+          // Get employee details
+          const { data: subEmployees } = await supabase
+            .from('employees')
+            .select('id, full_name')
+            .in('id', subordinates.map((s: any) => s.employee_id))
+            .eq('is_active', true)
+          
+          if (!subEmployees || subEmployees.length === 0) {
+            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين نشطين تحت إدارتك')
+            break
+          }
+          
+          // Store action type in session
+          await setSession(isBonus ? 'mgr_bonus_select' : 'mgr_deduction_select', {})
+          
+          // Show subordinates list
+          const actionText = isBonus ? 'إضافة مكافأة لـ' : 'إضافة خصم لـ'
+          const subButtons = subEmployees.map(emp => ([{
+            text: emp.full_name,
+            callback_data: `mgr_select_emp_${emp.id}`
+          }]))
+          
+          subButtons.push([{ text: '❌ إلغاء', callback_data: 'cancel_mgr_action' }])
+          
+          await sendMessage(botToken, chatId, 
+            `📋 <b>${actionText}</b>\n\nاختر الموظف:`,
+            { inline_keyboard: subButtons }
+          )
+          break
+        }
+          
+        case 'cancel_mgr_action':
+          await deleteSession()
+          await sendMessage(botToken, chatId, 
+            'تم الإلغاء',
+            getEmployeeKeyboard(managerPermissions)
+          )
+          break
+          
+        case 'back_to_main':
+          await sendMessage(botToken, chatId, 
+            'اختر من الأزرار أدناه:',
+            getEmployeeKeyboard(managerPermissions)
+          )
+          break
+          
+        default:
+          // Handle dynamic callbacks
+          
+          // Handle dynamic date selection (leave_date_YYYY-MM-DD)
+          if (callbackData.startsWith('leave_date_')) {
+            const session = await getSession()
+            if (!session) break
+            
+            const dateStr = callbackData.replace('leave_date_', '')
+            
+            // Always ask for reason
+            await setSession('leave_reason', { ...session.data, leave_date: dateStr })
+            await sendMessage(botToken, chatId, 
+              `📅 تاريخ الإجازة: ${dateStr}\n\n` +
+              `📝 أرسل سبب الإجازة:`
+            )
+          }
+          // Handle manager employee selection
+          else if (callbackData.startsWith('mgr_select_emp_')) {
+            const targetEmpId = callbackData.replace('mgr_select_emp_', '')
+            const session = await getSession()
+            
+            if (!session) break
+            
+            const isBonus = session.step === 'mgr_bonus_select'
+            
+            // Get target employee info
+            const { data: targetEmp } = await supabase
+              .from('employees')
+              .select('id, full_name')
+              .eq('id', targetEmpId)
+              .single()
+            
+            if (!targetEmp) {
+              await sendMessage(botToken, chatId, '❌ الموظف غير موجود')
+              break
+            }
+            
+            // Store selected employee and ask for amount
+            await setSession(isBonus ? 'mgr_bonus_amount' : 'mgr_deduction_amount', {
+              target_employee_id: targetEmpId,
+              target_employee_name: targetEmp.full_name
+            })
+            
+            const actionText = isBonus ? 'المكافأة' : 'الخصم'
+            await sendMessage(botToken, chatId, 
+              `👤 الموظف: ${targetEmp.full_name}\n\n` +
+              `💰 أرسل قيمة ${actionText} (بالأرقام فقط):`
+            )
+          }
           break
       }
 
@@ -1316,6 +1463,18 @@ serve(async (req) => {
             status: 'pending'
           })
           
+          // Notify managers about the leave request
+          await notifyManagersLeaveRequest(
+            supabase, 
+            botToken, 
+            employee.id, 
+            employee.full_name, 
+            companyId, 
+            leaveType, 
+            leaveDate, 
+            text
+          )
+          
           await deleteSession()
           await sendMessage(botToken, chatId, 
             `✅ <b>تم إرسال طلب الإجازة للمدير</b>\n\n` +
@@ -1324,6 +1483,78 @@ serve(async (req) => {
             `📝 السبب: ${text}\n\n` +
             `⏳ سيتم إبلاغك على التيلجرام عند الموافقة أو الرفض.`,
             getEmployeeKeyboard()
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+        
+        case 'mgr_bonus_amount':
+        case 'mgr_deduction_amount': {
+          const amount = parseFloat(text)
+          if (isNaN(amount) || amount <= 0) {
+            await sendMessage(botToken, chatId, '❌ يرجى إدخال قيمة صحيحة (رقم موجب)')
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          const isBonus = session.step === 'mgr_bonus_amount'
+          await setSession(isBonus ? 'mgr_bonus_desc' : 'mgr_deduction_desc', {
+            ...session.data,
+            adjustment_amount: amount
+          } as any)
+          
+          await sendMessage(botToken, chatId, 
+            `💰 القيمة: ${amount}\n\n📝 أرسل سبب ${isBonus ? 'المكافأة' : 'الخصم'}:`
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+        
+        case 'mgr_bonus_desc':
+        case 'mgr_deduction_desc': {
+          const isBonus = session.step === 'mgr_bonus_desc'
+          const targetEmpId = session.data.target_employee_id
+          const targetEmpName = session.data.target_employee_name
+          const amount = (session.data as any).adjustment_amount || 0
+          
+          const today = new Date()
+          const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+          
+          // Insert salary adjustment
+          await supabase.from('salary_adjustments').insert({
+            employee_id: targetEmpId,
+            company_id: companyId,
+            month: monthKey,
+            bonus: isBonus ? amount : 0,
+            deduction: isBonus ? 0 : amount,
+            description: text,
+            added_by: employee.id,
+            added_by_name: employee.full_name,
+            is_auto_generated: false
+          })
+          
+          // Notify the target employee
+          const { data: targetEmp } = await supabase
+            .from('employees')
+            .select('telegram_chat_id')
+            .eq('id', targetEmpId)
+            .single()
+          
+          if (targetEmp?.telegram_chat_id) {
+            const emoji = isBonus ? '🎉' : '⚠️'
+            const typeText = isBonus ? 'مكافأة' : 'خصم'
+            await sendMessage(botToken, parseInt(targetEmp.telegram_chat_id),
+              `${emoji} <b>إشعار ${typeText}</b>\n\n` +
+              `📋 ${employee.full_name} سجّل لك ${typeText}\n` +
+              `📝 السبب: ${text}\n` +
+              `💰 القيمة: ${amount}`
+            )
+          }
+          
+          await deleteSession()
+          await sendMessage(botToken, chatId, 
+            `✅ تم تسجيل ${isBonus ? 'المكافأة' : 'الخصم'} بنجاح!\n\n` +
+            `👤 الموظف: ${targetEmpName}\n` +
+            `💰 القيمة: ${amount}\n` +
+            `📝 السبب: ${text}`,
+            getEmployeeKeyboard(managerPermissions)
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
@@ -1414,6 +1645,98 @@ serve(async (req) => {
 })
 
 // Helper functions
+
+// Notify managers about employee attendance
+async function notifyManagers(
+  supabase: any,
+  botToken: string,
+  employeeId: string,
+  employeeName: string,
+  companyId: string,
+  action: 'check_in' | 'check_out',
+  time: string,
+  date: string
+) {
+  try {
+    // Get managers using the database function
+    const { data: managers, error } = await supabase
+      .rpc('get_employee_managers', { emp_id: employeeId })
+    
+    if (error) {
+      console.error('Error getting managers:', error)
+      return
+    }
+    
+    if (!managers || managers.length === 0) {
+      console.log('No managers found for employee:', employeeId)
+      return
+    }
+    
+    const actionText = action === 'check_in' ? 'سجّل حضوره' : 'سجّل انصرافه'
+    const emoji = action === 'check_in' ? '✅' : '🔴'
+    
+    const message = `${emoji} <b>إشعار حضور</b>\n\n` +
+      `👤 الموظف: ${employeeName}\n` +
+      `📋 ${actionText}\n` +
+      `📅 التاريخ: ${date}\n` +
+      `⏰ الوقت: ${time}`
+    
+    // Send notification to each manager
+    for (const manager of managers) {
+      if (manager.manager_telegram_chat_id) {
+        await sendMessage(botToken, parseInt(manager.manager_telegram_chat_id), message)
+        console.log(`Notified manager ${manager.manager_name} about ${employeeName}'s ${action}`)
+      }
+    }
+  } catch (error) {
+    console.error('Error notifying managers:', error)
+  }
+}
+
+// Notify managers about leave request
+async function notifyManagersLeaveRequest(
+  supabase: any,
+  botToken: string,
+  employeeId: string,
+  employeeName: string,
+  companyId: string,
+  leaveType: string,
+  leaveDate: string,
+  reason: string
+) {
+  try {
+    const { data: managers, error } = await supabase
+      .rpc('get_employee_managers', { emp_id: employeeId })
+    
+    if (error) {
+      console.error('Error getting managers for leave request:', error)
+      return
+    }
+    
+    if (!managers || managers.length === 0) {
+      console.log('No managers found for employee:', employeeId)
+      return
+    }
+    
+    const leaveTypeText = leaveType === 'emergency' ? 'طارئة' : 'اعتيادية'
+    
+    const message = `📝 <b>طلب إجازة جديد</b>\n\n` +
+      `👤 الموظف: ${employeeName}\n` +
+      `📋 نوع الإجازة: ${leaveTypeText}\n` +
+      `📅 التاريخ: ${leaveDate}\n` +
+      `📝 السبب: ${reason || 'لم يحدد'}`
+    
+    for (const manager of managers) {
+      if (manager.manager_telegram_chat_id) {
+        await sendMessage(botToken, parseInt(manager.manager_telegram_chat_id), message)
+        console.log(`Notified manager ${manager.manager_name} about ${employeeName}'s leave request`)
+      }
+    }
+  } catch (error) {
+    console.error('Error notifying managers about leave request:', error)
+  }
+}
+
 async function submitRegistration(
   supabase: any,
   botToken: string,
@@ -1526,24 +1849,41 @@ async function sendWelcomeMessage(botToken: string, chatId: number, isEmployee: 
   }
 }
 
-function getEmployeeKeyboard() {
+function getEmployeeKeyboard(managerPerms?: { can_add_bonuses?: boolean; can_make_deductions?: boolean; can_approve_leaves?: boolean } | null) {
+  const keyboard: { text: string; callback_data: string }[][] = [
+    [
+      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+    ],
+    [
+      { text: '☕ بدء استراحة', callback_data: 'start_break' },
+      { text: '↩️ إنهاء استراحة', callback_data: 'end_break' }
+    ],
+    [
+      { text: '📝 طلب إجازة', callback_data: 'request_leave' },
+      { text: '💰 راتبي', callback_data: 'my_salary' }
+    ],
+    [
+      { text: '📊 حالتي', callback_data: 'my_status' }
+    ]
+  ]
+  
+  // Add manager options if they have permissions
+  if (managerPerms?.can_add_bonuses || managerPerms?.can_make_deductions) {
+    keyboard.push([
+      { text: '👥 إدارة الفريق', callback_data: 'manage_team' }
+    ])
+  }
+  
+  return { inline_keyboard: keyboard }
+}
+
+function getManagerTeamKeyboard() {
   return {
     inline_keyboard: [
-      [
-        { text: '✅ تسجيل حضور', callback_data: 'check_in' },
-        { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
-      ],
-      [
-        { text: '☕ بدء استراحة', callback_data: 'start_break' },
-        { text: '↩️ إنهاء استراحة', callback_data: 'end_break' }
-      ],
-      [
-        { text: '📝 طلب إجازة', callback_data: 'request_leave' },
-        { text: '💰 راتبي', callback_data: 'my_salary' }
-      ],
-      [
-        { text: '📊 حالتي', callback_data: 'my_status' }
-      ]
+      [{ text: '➕ إضافة مكافأة', callback_data: 'mgr_add_bonus' }],
+      [{ text: '➖ إضافة خصم', callback_data: 'mgr_add_deduction' }],
+      [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
     ]
   }
 }
