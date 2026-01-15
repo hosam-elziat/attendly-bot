@@ -295,3 +295,44 @@ export const useAssignPosition = () => {
     }
   });
 };
+
+export const useMovePosition = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ positionId, newParentId }: { positionId: string; newParentId: string | null }) => {
+      // Update the position's reports_to field
+      const { error: posError } = await supabase
+        .from('positions')
+        .update({ reports_to: newParentId })
+        .eq('id', positionId);
+
+      if (posError) throw posError;
+
+      // Delete existing reports_to relationships
+      await supabase
+        .from('position_reports_to')
+        .delete()
+        .eq('position_id', positionId);
+
+      // Insert new relationship if there's a parent
+      if (newParentId) {
+        const { error: reportsError } = await supabase
+          .from('position_reports_to')
+          .insert({
+            position_id: positionId,
+            reports_to_position_id: newParentId
+          });
+        
+        if (reportsError) throw reportsError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+      toast.success('تم نقل المنصب بنجاح');
+    },
+    onError: (error: Error) => {
+      toast.error('فشل في نقل المنصب: ' + error.message);
+    }
+  });
+};
