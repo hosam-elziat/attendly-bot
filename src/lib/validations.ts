@@ -59,6 +59,14 @@ export const EmployeeSchema = z.object({
     .optional(),
   weekend_days: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),
+  position_id: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().uuid('Invalid position ID').nullable().optional()
+  ),
+  telegram_chat_id: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(50, 'Telegram ID must be less than 50 characters').nullable().optional()
+  ),
 });
 
 export type ValidatedEmployeeData = z.infer<typeof EmployeeSchema>;

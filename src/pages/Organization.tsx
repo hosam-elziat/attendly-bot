@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { usePositions, useDeletePosition, PositionWithPermissions } from '@/hooks/usePositions';
+import { usePositions, useDeletePosition, useMovePosition, PositionWithPermissions } from '@/hooks/usePositions';
 import OrganizationChart from '@/components/organization/OrganizationChart';
 import PositionDialog from '@/components/organization/PositionDialog';
 import AssignPositionDialog from '@/components/organization/AssignPositionDialog';
@@ -24,6 +24,7 @@ const Organization = () => {
   const { language } = useLanguage();
   const { data: positions = [], isLoading } = usePositions();
   const deletePosition = useDeletePosition();
+  const movePosition = useMovePosition();
   
   const [positionDialogOpen, setPositionDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -47,6 +48,10 @@ const Organization = () => {
       setDeleteDialogOpen(false);
       setPositionToDelete(null);
     }
+  };
+
+  const handleMovePosition = async (positionId: string, newParentId: string | null) => {
+    await movePosition.mutateAsync({ positionId, newParentId });
   };
 
   const handleAddNew = () => {
@@ -180,6 +185,7 @@ const Organization = () => {
                 positions={positions}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onMove={handleMovePosition}
               />
             )}
           </CardContent>
