@@ -64,6 +64,31 @@ serve(async (req) => {
         )
       }
 
+      // Check if employee was previously deleted (exists in deleted_records)
+      const { data: deletedEmployee } = await supabase
+        .from('deleted_records')
+        .select('id, record_id, record_data, deleted_at')
+        .eq('table_name', 'employees')
+        .eq('company_id', bot.assigned_company_id)
+        .eq('is_restored', false)
+        .filter('record_data->>telegram_chat_id', 'eq', telegram_chat_id)
+        .single()
+
+      if (deletedEmployee) {
+        const deletedData = deletedEmployee.record_data as { full_name?: string }
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'employee_previously_deleted',
+            deleted_record_id: deletedEmployee.id,
+            deleted_employee_name: deletedData?.full_name || 'Unknown',
+            deleted_at: deletedEmployee.deleted_at,
+            message: 'This employee was previously deleted. Would you like to restore them?'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+        )
+      }
+
       // Create join request
       const { data: request, error: insertError } = await supabase
         .from('join_requests')
@@ -107,6 +132,62 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, status: request.status, rejection_reason: request.rejection_reason }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (action === 'restore_deleted_employee') {
+      const { deleted_record_id } = await req.json()
+
+      // Get the deleted record
+      const { data: deletedRecord, error: fetchError } = await supabase
+        .from('deleted_records')
+        .select('*')
+        .eq('id', deleted_record_id)
+        .eq('is_restored', false)
+        .single()
+
+      if (fetchError || !deletedRecord) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Deleted record not found or already restored' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+        )
+      }
+
+      const employeeData = deletedRecord.record_data as Record<string, unknown>
+
+      // Re-insert the employee
+      const { data: restoredEmployee, error: insertError } = await supabase
+        .from('employees')
+        .insert({
+          ...employeeData,
+          id: deletedRecord.record_id,
+          is_active: true,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to restore employee: ' + insertError.message }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        )
+      }
+
+      // Mark as restored
+      await supabase
+        .from('deleted_records')
+        .update({ is_restored: true, restored_at: new Date().toISOString() })
+        .eq('id', deleted_record_id)
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Employee restored successfully',
+          employee_id: restoredEmployee.id,
+          employee_name: restoredEmployee.full_name
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
