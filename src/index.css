@@ -309,23 +309,8 @@
     --tw-space-x-reverse: 1;
   }
 
-  /* RTL flex utilities - ensure content starts from right */
-  [dir="rtl"] .justify-start {
-    justify-content: flex-end;
-  }
-
-  [dir="rtl"] .justify-end {
-    justify-content: flex-start;
-  }
-
-  [dir="rtl"] .justify-between {
-    justify-content: space-between;
-  }
-
-  /* RTL for items-start in info lists */
-  [dir="rtl"] .items-start {
-    align-items: flex-start;
-  }
+  /* Note: justify-start, justify-end, and items-start work correctly with flexbox in RTL 
+     because flexbox respects the writing direction automatically */
 }
 
 @layer components {
