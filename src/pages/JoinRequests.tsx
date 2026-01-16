@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,6 +58,7 @@ const JoinRequests = () => {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [deletedEmployeeData, setDeletedEmployeeData] = useState<any>(null);
+  const [deletedEmployeesMap, setDeletedEmployeesMap] = useState<Record<string, any>>({});
   const [rejectionReason, setRejectionReason] = useState('');
   const [employeeData, setEmployeeData] = useState({
     department: '',
@@ -67,11 +68,52 @@ const JoinRequests = () => {
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const processedRequests = requests.filter(r => r.status !== 'pending');
 
+  // Check deleted employees for all pending requests
+  useEffect(() => {
+    const checkAllDeletedEmployees = async () => {
+      if (pendingRequests.length === 0) return;
+      
+      const newMap: Record<string, any> = {};
+      
+      for (const request of pendingRequests) {
+        try {
+          const result = await checkDeletedEmployee.mutateAsync(request.telegram_chat_id);
+          if (result) {
+            newMap[request.id] = result;
+          }
+        } catch (error) {
+          // Ignore errors
+        }
+      }
+      
+      setDeletedEmployeesMap(newMap);
+    };
+    
+    checkAllDeletedEmployees();
+  }, [requests]);
+  
+  // Check if a request has a deleted employee record
+  const hasDeletedEmployee = (requestId: string) => {
+    return !!deletedEmployeesMap[requestId];
+  };
+  
+  const getDeletedEmployeeData = (requestId: string) => {
+    return deletedEmployeesMap[requestId];
+  };
+
   // Check for deleted employee when clicking approve
   const handleCheckAndApprove = async (request: JoinRequest) => {
     setSelectedRequest(request);
     
-    // Check if this telegram_chat_id belongs to a deleted employee
+    // Check if we already have deleted employee data cached
+    const cachedDeletedEmployee = deletedEmployeesMap[request.id];
+    if (cachedDeletedEmployee) {
+      setDeletedEmployeeData(cachedDeletedEmployee);
+      setShowRestoreDialog(true);
+      return;
+    }
+    
+    // Double-check by making a fresh request
     checkDeletedEmployee.mutate(request.telegram_chat_id, {
       onSuccess: (deletedRecord) => {
         if (deletedRecord) {
@@ -233,8 +275,18 @@ const JoinRequests = () => {
                 </TableHeader>
                 <TableBody>
                   {pendingRequests.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell className="font-medium">{request.full_name}</TableCell>
+                    <TableRow key={request.id} className={hasDeletedEmployee(request.id) ? 'bg-amber-500/10' : ''}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {request.full_name}
+                          {hasDeletedEmployee(request.id) && (
+                            <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+                              <RotateCcw className="w-3 h-3 mr-1" />
+                              {language === 'ar' ? 'موظف سابق' : 'Previous Employee'}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {request.telegram_username ? `@${request.telegram_username}` : request.telegram_chat_id}
                       </TableCell>
