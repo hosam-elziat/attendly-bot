@@ -214,142 +214,176 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
             <RadioGroup 
               value={verificationLevel?.toString() || '1'} 
               onValueChange={(v) => setVerificationLevel(parseInt(v))}
-              className="space-y-2"
+              className="space-y-3"
             >
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                <RadioGroupItem value="1" id="emp-level-1" />
-                <Label htmlFor="emp-level-1" className="cursor-pointer flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-muted-foreground" />
-                  بدون تأكيد
-                </Label>
+              {/* Level 1 */}
+              <div className={`p-3 rounded-lg border transition-colors ${verificationLevel === 1 ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
+                <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                  <RadioGroupItem value="1" id="emp-level-1" />
+                  <Label htmlFor="emp-level-1" className="cursor-pointer flex-1">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-green-500" />
+                      <span className="font-medium">المستوى الأول: بدون تأكيد</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      يتم تسجيل الحضور مباشرة بدون أي تحقق
+                    </p>
+                  </Label>
+                </div>
               </div>
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                <RadioGroupItem value="2" id="emp-level-2" />
-                <Label htmlFor="emp-level-2" className="cursor-pointer flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-amber-500" />
-                  موافقة المدير
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                <RadioGroupItem value="3" id="emp-level-3" />
-                <Label htmlFor="emp-level-3" className="cursor-pointer flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-destructive" />
-                  التحقق من الموقع/البيانات
-                </Label>
-              </div>
-            </RadioGroup>
 
-            {/* Level 2 Approver */}
-            {verificationLevel === 2 && (
-              <div className="space-y-3 mt-4 p-3 bg-amber-500/10 rounded-lg">
-                <Label>من يوافق على حضور هذا الموظف؟</Label>
-                <RadioGroup 
-                  value={approverType} 
-                  onValueChange={(v) => setApproverType(v as 'direct_manager' | 'specific_person')}
-                  className="space-y-2"
-                >
+              {/* Level 2 */}
+              <div className={`rounded-lg border transition-colors ${verificationLevel === 2 ? 'border-amber-500 bg-amber-500/5' : 'hover:bg-muted/50'}`}>
+                <div className="p-3">
                   <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                    <RadioGroupItem value="direct_manager" id="emp-direct" />
-                    <Label htmlFor="emp-direct" className="cursor-pointer">المدير المباشر</Label>
+                    <RadioGroupItem value="2" id="emp-level-2" />
+                    <Label htmlFor="emp-level-2" className="cursor-pointer flex-1">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-amber-500" />
+                        <span className="font-medium">المستوى الثاني: موافقة المدير</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        يتطلب موافقة المدير عبر تيليجرام قبل تسجيل الحضور
+                      </p>
+                    </Label>
                   </div>
-                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                    <RadioGroupItem value="specific_person" id="emp-specific" />
-                    <Label htmlFor="emp-specific" className="cursor-pointer">شخص محدد</Label>
-                  </div>
-                </RadioGroup>
-
-                {approverType === 'specific_person' && (
-                  <Select value={approverId || ''} onValueChange={setApproverId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر موظف..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.filter(e => e.id !== employee.id).map((emp) => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          {emp.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            )}
-
-            {/* Level 3 Multi-Select Requirements */}
-            {verificationLevel === 3 && (
-              <div className="space-y-4 mt-4 p-4 bg-destructive/10 rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <ShieldCheck className="w-4 h-4 text-destructive" />
-                  <Label className="font-medium">متطلبات التحقق (اختر واحدة أو أكثر)</Label>
                 </div>
                 
-                <div className="space-y-3">
-                  {LEVEL3_OPTIONS.map((option) => {
-                    const Icon = option.icon;
-                    const isChecked = level3Requirements.includes(option.id);
-                    return (
-                      <div 
-                        key={option.id}
-                        className={`flex items-center space-x-3 rtl:space-x-reverse p-3 border rounded-lg transition-colors ${
-                          isChecked ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                        }`}
-                      >
-                        <Checkbox 
-                          id={`req-${option.id}`}
-                          checked={isChecked}
-                          onCheckedChange={(checked) => 
-                            handleLevel3RequirementChange(option.id, checked as boolean)
-                          }
-                        />
-                        <Label 
-                          htmlFor={`req-${option.id}`} 
-                          className="cursor-pointer flex items-center gap-2 flex-1"
-                        >
-                          <Icon className="w-4 h-4 text-muted-foreground" />
-                          {option.label}
-                        </Label>
+                {/* Level 2 Settings - Only show when selected */}
+                {verificationLevel === 2 && (
+                  <div className="p-3 pt-0 border-t border-amber-500/20 mt-3">
+                    <Label className="text-sm font-medium">من يوافق على حضور هذا الموظف؟</Label>
+                    <RadioGroup 
+                      value={approverType} 
+                      onValueChange={(v) => setApproverType(v as 'direct_manager' | 'specific_person')}
+                      className="space-y-2 mt-2"
+                    >
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                        <RadioGroupItem value="direct_manager" id="emp-direct" />
+                        <Label htmlFor="emp-direct" className="cursor-pointer text-sm">المدير المباشر (حسب الهيكل التنظيمي)</Label>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                        <RadioGroupItem value="specific_person" id="emp-specific" />
+                        <Label htmlFor="emp-specific" className="cursor-pointer text-sm">شخص محدد</Label>
+                      </div>
+                    </RadioGroup>
 
-                {/* WiFi IPs if selected */}
-                {level3Requirements.includes('wifi_ip') && (
-                  <div className="space-y-2 mt-4 p-3 bg-background rounded-lg border">
-                    <Label className="flex items-center gap-2">
-                      <Wifi className="w-4 h-4" />
-                      عناوين IP المسموحة (WiFi الشركة)
-                    </Label>
-                    <Input 
-                      placeholder="مثال: 192.168.1.1, 10.0.0.1"
-                      value={allowedWifiIps}
-                      onChange={(e) => setAllowedWifiIps(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      افصل بين العناوين بفاصلة. يستخدم للتحقق من اتصال الموظف بشبكة الشركة.
-                    </p>
+                    {approverType === 'specific_person' && (
+                      <Select value={approverId || ''} onValueChange={setApproverId}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="اختر موظف..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {employees.filter(e => e.id !== employee.id).map((emp) => (
+                            <SelectItem key={emp.id} value={emp.id}>
+                              {emp.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 )}
-
-                {/* Summary of selected requirements */}
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm">
-                    <AlertTriangle className="w-4 h-4 inline-block me-1 text-amber-500" />
-                    <strong>المتطلبات المحددة:</strong>{' '}
-                    {level3Requirements.map(r => {
-                      const opt = LEVEL3_OPTIONS.find(o => o.id === r);
-                      return opt?.label;
-                    }).filter(Boolean).join(' + ')}
-                  </p>
-                </div>
               </div>
-            )}
+
+              {/* Level 3 */}
+              <div className={`rounded-lg border transition-colors ${verificationLevel === 3 ? 'border-destructive bg-destructive/5' : 'hover:bg-muted/50'}`}>
+                <div className="p-3">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    <RadioGroupItem value="3" id="emp-level-3" />
+                    <Label htmlFor="emp-level-3" className="cursor-pointer flex-1">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-destructive" />
+                        <span className="font-medium">المستوى الثالث: التحقق المتقدم</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        يتطلب التحقق من الموقع و/أو السيلفي و/أو WiFi
+                      </p>
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Level 3 Settings - Only show when selected */}
+                {verificationLevel === 3 && (
+                  <div className="p-3 pt-0 border-t border-destructive/20 mt-3 space-y-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <ShieldCheck className="w-4 h-4 text-destructive" />
+                        <Label className="font-medium text-sm">اختر طرق التحقق المطلوبة</Label>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {LEVEL3_OPTIONS.map((option) => {
+                          const Icon = option.icon;
+                          const isChecked = level3Requirements.includes(option.id);
+                          return (
+                            <div 
+                              key={option.id}
+                              className={`flex items-center space-x-3 rtl:space-x-reverse p-3 border rounded-lg transition-colors cursor-pointer ${
+                                isChecked ? 'border-destructive bg-destructive/10' : 'hover:bg-muted/50'
+                              }`}
+                              onClick={() => handleLevel3RequirementChange(option.id, !isChecked)}
+                            >
+                              <Checkbox 
+                                id={`req-${option.id}`}
+                                checked={isChecked}
+                                onCheckedChange={(checked) => 
+                                  handleLevel3RequirementChange(option.id, checked as boolean)
+                                }
+                              />
+                              <Label 
+                                htmlFor={`req-${option.id}`} 
+                                className="cursor-pointer flex items-center gap-2 flex-1"
+                              >
+                                <Icon className={`w-4 h-4 ${isChecked ? 'text-destructive' : 'text-muted-foreground'}`} />
+                                {option.label}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* WiFi IPs if selected */}
+                    {level3Requirements.includes('wifi_ip') && (
+                      <div className="space-y-2 p-3 bg-background rounded-lg border">
+                        <Label className="flex items-center gap-2 text-sm">
+                          <Wifi className="w-4 h-4" />
+                          عناوين IP المسموحة (WiFi الشركة)
+                        </Label>
+                        <Input 
+                          placeholder="مثال: 192.168.1.1, 10.0.0.1"
+                          value={allowedWifiIps}
+                          onChange={(e) => setAllowedWifiIps(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          افصل بين العناوين بفاصلة. يستخدم للتحقق من اتصال الموظف بشبكة الشركة.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    {level3Requirements.length > 0 && (
+                      <div className="p-2 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>المتطلبات:</strong>{' '}
+                          {level3Requirements.map(r => {
+                            const opt = LEVEL3_OPTIONS.find(o => o.id === r);
+                            return opt?.label;
+                          }).filter(Boolean).join(' + ')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </RadioGroup>
           </div>
         )}
 
-        <Button onClick={handleSave} className="btn-primary-gradient" disabled={saving}>
+        <Button onClick={handleSave} className="btn-primary-gradient w-full" disabled={saving}>
           {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
-          حفظ
+          حفظ إعدادات التحقق
         </Button>
       </CardContent>
     </Card>
