@@ -237,18 +237,24 @@ export function useCheckDeletedEmployee() {
     mutationFn: async (telegram_chat_id: string) => {
       if (!profile?.company_id) throw new Error('No company found');
 
+      // Get all deleted employees and filter client-side for JSON field match
       const { data, error } = await supabase
         .from('deleted_records')
         .select('id, record_id, record_data, deleted_at')
         .eq('table_name', 'employees')
         .eq('company_id', profile.company_id)
         .eq('is_restored', false)
-        .filter('record_data->>telegram_chat_id', 'eq', telegram_chat_id)
-        .single();
+        .order('deleted_at', { ascending: false });
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       
-      return data;
+      // Find the most recent deleted employee with matching telegram_chat_id
+      const deletedEmployee = data?.find((record) => {
+        const recordData = record.record_data as Record<string, unknown>;
+        return recordData?.telegram_chat_id === telegram_chat_id;
+      });
+      
+      return deletedEmployee || null;
     },
   });
 }
