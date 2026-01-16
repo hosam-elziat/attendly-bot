@@ -75,7 +75,7 @@ export const EMPLOYEE_ROLES = [
 ];
 
 const Employees = () => {
-  const { t } = useLanguage();
+  const { t, direction } = useLanguage();
   const navigate = useNavigate();
   const { data: employees = [], isLoading } = useEmployees();
   const { data: company } = useCompany();
@@ -242,12 +242,12 @@ const Employees = () => {
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground ${direction === 'rtl' ? 'right-3' : 'left-3'}`} />
                   <Input
                     placeholder={t('employees.search')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="ps-10"
+                    className={direction === 'rtl' ? 'pr-10' : 'pl-10'}
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
