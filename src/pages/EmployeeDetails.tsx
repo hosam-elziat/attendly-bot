@@ -351,8 +351,8 @@ const EmployeeDetails = () => {
 
             <TabsContent value="info">
               <Card>
-                <CardHeader className={direction === 'rtl' ? 'text-right' : 'text-left'}>
-                  <CardTitle>{t('employeeDetails.personalInfo')}</CardTitle>
+                <CardHeader>
+                  <CardTitle className={direction === 'rtl' ? 'text-right w-full' : ''}>{t('employeeDetails.personalInfo')}</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2">
                   {/* Column 1: Name, Email, Phone, National ID */}
@@ -501,10 +501,10 @@ const EmployeeDetails = () => {
                       <p className="font-medium text-xl">
                         {direction === 'rtl' ? (
                           <>
+                            {Number(employee.base_salary).toLocaleString()} {currency.symbol}
                             <span className="text-sm text-muted-foreground me-2">
-                              / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
+                              /{employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
                             </span>
-                            {currency.symbol} {Number(employee.base_salary).toLocaleString()}
                           </>
                         ) : (
                           <>
@@ -523,7 +523,7 @@ const EmployeeDetails = () => {
                     <div className={`text-center p-4 rounded-lg bg-success/10 border border-success/20 ${direction === 'rtl' ? 'lg:order-4' : 'lg:order-1'}`}>
                       <p className="text-sm text-muted-foreground">المرتب المكتسب</p>
                       <p className="text-2xl font-bold text-success">
-                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.earnedSalary.toLocaleString()}` : `${salaryStats.earnedSalary.toLocaleString()} ${currency.symbol}`}
+                        {salaryStats.earnedSalary.toLocaleString()} {currency.symbol}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {salaryStats.workDays} / {salaryStats.expectedWorkDays} يوم
@@ -532,7 +532,7 @@ const EmployeeDetails = () => {
                     <div className={`text-center p-4 rounded-lg bg-destructive/10 border border-destructive/20 ${direction === 'rtl' ? 'lg:order-3' : 'lg:order-2'}`}>
                       <p className="text-sm text-muted-foreground">إجمالي الخصومات</p>
                       <p className="text-2xl font-bold text-destructive">
-                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.totalDeductions.toLocaleString()}-` : `-${salaryStats.totalDeductions.toLocaleString()} ${currency.symbol}`}
+                        -{salaryStats.totalDeductions.toLocaleString()} {currency.symbol}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {salaryStats.deductionPercentage}% من المرتب
@@ -541,13 +541,13 @@ const EmployeeDetails = () => {
                     <div className={`text-center p-4 rounded-lg bg-primary/10 border border-primary/20 ${direction === 'rtl' ? 'lg:order-2' : 'lg:order-3'}`}>
                       <p className="text-sm text-muted-foreground">المكافآت</p>
                       <p className="text-2xl font-bold text-primary">
-                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.totalBonuses.toLocaleString()}+` : `+${salaryStats.totalBonuses.toLocaleString()} ${currency.symbol}`}
+                        +{salaryStats.totalBonuses.toLocaleString()} {currency.symbol}
                       </p>
                     </div>
                     <div className={`text-center p-4 rounded-lg bg-warning/10 border border-warning/20 ${direction === 'rtl' ? 'lg:order-1' : 'lg:order-4'}`}>
                       <p className="text-sm text-muted-foreground">صافي المرتب</p>
                       <p className="text-2xl font-bold text-warning">
-                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.netSalary.toLocaleString()}` : `${salaryStats.netSalary.toLocaleString()} ${currency.symbol}`}
+                        {salaryStats.netSalary.toLocaleString()} {currency.symbol}
                       </p>
                     </div>
                   </div>
@@ -558,16 +558,16 @@ const EmployeeDetails = () => {
                       <Timer className="w-5 h-5 text-success flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">الأوفر تايم</p>
-                        <p className="font-medium">{direction === 'rtl' ? `ساعة ${salaryStats.overtimeHours}` : `${salaryStats.overtimeHours} ساعة`}</p>
-                        <p className="text-xs text-success">{direction === 'rtl' ? `${currency.symbol} ${salaryStats.overtimeAmount.toLocaleString()}+` : `+${salaryStats.overtimeAmount.toLocaleString()} ${currency.symbol}`}</p>
+                        <p className="font-medium">{salaryStats.overtimeHours} ساعة</p>
+                        <p className="text-xs text-success">+{salaryStats.overtimeAmount.toLocaleString()} {currency.symbol}</p>
                       </div>
                     </div>
                     <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-2' : 'md:order-2'}`}>
                       <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">دقائق التأخير</p>
-                        <p className="font-medium">{direction === 'rtl' ? `دقيقة ${salaryStats.lateMinutes}` : `${salaryStats.lateMinutes} دقيقة`}</p>
-                        <p className="text-xs text-destructive">{direction === 'rtl' ? `${currency.symbol} ${salaryStats.lateDeductionAmount.toLocaleString()}-` : `-${salaryStats.lateDeductionAmount.toLocaleString()} ${currency.symbol}`}</p>
+                        <p className="font-medium">{salaryStats.lateMinutes} دقيقة</p>
+                        <p className="text-xs text-destructive">-{salaryStats.lateDeductionAmount.toLocaleString()} {currency.symbol}</p>
                       </div>
                     </div>
                     <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-1' : 'md:order-3'}`}>
@@ -645,17 +645,10 @@ const EmployeeDetails = () => {
                         </div>
                       ) : (
                         <p className="text-2xl font-bold text-primary text-center">
-                          {direction === 'rtl' ? (
-                            <>
-                              <span className="text-sm font-normal text-muted-foreground me-1">دقيقة</span>
-                              {employee?.monthly_late_balance_minutes ?? 15}
-                            </>
-                          ) : (
-                            <>
-                              {employee?.monthly_late_balance_minutes ?? 15}
-                              <span className="text-sm font-normal text-muted-foreground ms-1">min</span>
-                            </>
-                          )}
+                          {employee?.monthly_late_balance_minutes ?? 15}
+                          <span className="text-sm font-normal text-muted-foreground ms-1">
+                            {direction === 'rtl' ? 'دقيقة' : 'min'}
+                          </span>
                         </p>
                       )}
                     </div>
