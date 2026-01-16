@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,6 +8,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 const Header = () => {
   const { t, language, setLanguage } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleNavigate = (path: string) => {
+    setMobileMenuOpen(false);
+    navigate(path);
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
@@ -31,11 +37,11 @@ const Header = () => {
             >
               {language === 'en' ? 'العربية' : 'English'}
             </Button>
-            <Button asChild variant="ghost">
-              <Link to="/auth">{t('auth.login')}</Link>
+            <Button variant="ghost" onClick={() => navigate('/auth')}>
+              {t('auth.login')}
             </Button>
-            <Button asChild className="btn-primary-gradient">
-              <Link to="/auth?mode=signup">{t('auth.signup')}</Link>
+            <Button className="btn-primary-gradient" onClick={() => navigate('/auth?mode=signup')}>
+              {t('auth.signup')}
             </Button>
           </nav>
 
@@ -43,7 +49,7 @@ const Header = () => {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="md:hidden min-h-[44px] min-w-[44px] touch-manipulation"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -59,24 +65,27 @@ const Header = () => {
               exit={{ opacity: 0, height: 0 }}
               className="md:hidden border-t border-border"
             >
-              <nav className="flex flex-col py-4 gap-2">
+              <nav className="flex flex-col py-4 gap-3">
                 <Button
                   variant="ghost"
                   onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
-                  className="justify-start"
+                  className="justify-start min-h-[48px] touch-manipulation"
                 >
                   {language === 'en' ? 'العربية' : 'English'}
                 </Button>
-                <Link to="/auth" className="w-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="ghost" className="w-full justify-start min-h-[48px] touch-manipulation">
-                    {t('auth.login')}
-                  </Button>
-                </Link>
-                <Link to="/auth?mode=signup" className="w-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="w-full btn-primary-gradient min-h-[48px] touch-manipulation">
-                    {t('auth.signup')}
-                  </Button>
-                </Link>
+                <Button 
+                  variant="ghost" 
+                  className="justify-start min-h-[48px] touch-manipulation"
+                  onClick={() => handleNavigate('/auth')}
+                >
+                  {t('auth.login')}
+                </Button>
+                <Button 
+                  className="btn-primary-gradient min-h-[48px] touch-manipulation"
+                  onClick={() => handleNavigate('/auth?mode=signup')}
+                >
+                  {t('auth.signup')}
+                </Button>
               </nav>
             </motion.div>
           )}
