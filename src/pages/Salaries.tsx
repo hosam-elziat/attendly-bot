@@ -40,7 +40,7 @@ interface EmployeeWithSalary {
 }
 
 const Salaries = () => {
-  const { t, language } = useLanguage();
+  const { t, language, direction } = useLanguage();
   const { profile } = useAuth();
   const [employees, setEmployees] = useState<EmployeeWithSalary[]>([]);
   const [loading, setLoading] = useState(true);
