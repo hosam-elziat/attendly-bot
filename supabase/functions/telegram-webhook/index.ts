@@ -1594,6 +1594,14 @@ serve(async (req) => {
           const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
           
           // Insert salary adjustment
+          // Note: added_by is a foreign key to auth.users, so we use the employee's user_id if available
+          // Otherwise we leave it null and use added_by_name for tracking
+          const { data: managerUser } = await supabase
+            .from('employees')
+            .select('user_id')
+            .eq('id', employee.id)
+            .single()
+          
           console.log('Inserting salary adjustment:', {
             employee_id: targetEmpId,
             company_id: companyId,
@@ -1602,7 +1610,7 @@ serve(async (req) => {
             deduction: isBonus ? 0 : amount,
             adjustment_days: adjustmentDays,
             description: text,
-            added_by: employee.id,
+            added_by: managerUser?.user_id || null,
             added_by_name: employee.full_name
           })
           
@@ -1614,7 +1622,7 @@ serve(async (req) => {
             deduction: isBonus ? 0 : amount,
             adjustment_days: adjustmentDays,
             description: text,
-            added_by: employee.id,
+            added_by: managerUser?.user_id || null, // Use user_id if available, null otherwise
             added_by_name: employee.full_name,
             is_auto_generated: false
           }).select()
