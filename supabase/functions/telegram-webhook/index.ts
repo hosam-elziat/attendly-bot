@@ -1297,6 +1297,107 @@ serve(async (req) => {
             
             console.log(`Manager ${employee?.full_name} ${isApproval ? 'approved' : 'rejected'} leave request ${leaveRequestId}`)
           }
+          // Handle join request restoration of deleted employee
+          else if (callbackData.startsWith('jr_restore_')) {
+            // Format: jr_restore_{joinRequestId}_{deletedRecordId}
+            const parts = callbackData.replace('jr_restore_', '').split('_')
+            const joinRequestId = parts[0]
+            const deletedRecordId = parts[1]
+            
+            // Fetch join request
+            const { data: joinRequest, error: jrError } = await supabase
+              .from('join_requests')
+              .select('*')
+              .eq('id', joinRequestId)
+              .eq('status', 'pending')
+              .single()
+            
+            if (jrError || !joinRequest) {
+              await sendMessage(botToken, chatId, '❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            // Fetch deleted record
+            const { data: deletedRecord, error: delError } = await supabase
+              .from('deleted_records')
+              .select('*')
+              .eq('id', deletedRecordId)
+              .eq('is_restored', false)
+              .single()
+            
+            if (delError || !deletedRecord) {
+              await sendMessage(botToken, chatId, '❌ لم يتم العثور على سجل الموظف المحذوف', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            const employeeData = deletedRecord.record_data as Record<string, any>
+            
+            // Prepare restored employee data (exclude id field)
+            const { id: _id, created_at, updated_at, ...restoreData } = employeeData
+            
+            // Insert restored employee
+            const { data: restoredEmployee, error: restoreError } = await supabase
+              .from('employees')
+              .insert({
+                ...restoreData,
+                telegram_chat_id: joinRequest.telegram_chat_id, // Use current telegram chat id
+                is_active: true
+              })
+              .select('id, full_name')
+              .single()
+            
+            if (restoreError) {
+              console.error('Failed to restore employee:', restoreError)
+              await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء استعادة الموظف', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            // Mark deleted record as restored
+            await supabase
+              .from('deleted_records')
+              .update({ 
+                is_restored: true, 
+                restored_at: new Date().toISOString() 
+              })
+              .eq('id', deletedRecordId)
+            
+            // Update join request status
+            await supabase
+              .from('join_requests')
+              .update({
+                status: 'approved',
+                reviewed_by: employee?.user_id || null,
+                reviewed_at: new Date().toISOString()
+              })
+              .eq('id', joinRequestId)
+            
+            // Notify applicant
+            try {
+              await sendMessage(botToken, parseInt(joinRequest.telegram_chat_id), 
+                `🎉 مرحباً ${restoredEmployee?.full_name || employeeData.full_name}!\n\n` +
+                `تمت استعادة حسابك السابق بنجاح!\n` +
+                `جميع بياناتك السابقة متاحة الآن.\n\n` +
+                `يمكنك استخدام البوت لتسجيل الحضور والانصراف.\n` +
+                `أرسل /start للبدء.`,
+                {
+                  inline_keyboard: [
+                    [
+                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+                    ]
+                  ]
+                }
+              )
+            } catch (e) {
+              console.error('Failed to notify restored employee:', e)
+            }
+            
+            await sendMessage(botToken, chatId, 
+              `✅ تمت استعادة الموظف ${restoredEmployee?.full_name || employeeData.full_name} بنجاح\n\n` +
+              `📂 تم استرجاع جميع بياناته السابقة`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+          }
           // Handle join request approval/rejection from reviewer
           else if (callbackData.startsWith('jr_approve_') || callbackData.startsWith('jr_reject_') || callbackData.startsWith('jr_details_')) {
             const isApprove = callbackData.startsWith('jr_approve_')
@@ -2461,6 +2562,21 @@ async function notifyAllJoinRequestReviewers(
   companyName: string
 ) {
   try {
+    // Check if applicant is a previously deleted employee
+    const { data: deletedEmployees } = await supabase
+      .from('deleted_records')
+      .select('id, record_id, record_data, deleted_at')
+      .eq('table_name', 'employees')
+      .eq('company_id', companyId)
+      .eq('is_restored', false)
+      .order('deleted_at', { ascending: false })
+    
+    // Filter for matching telegram_chat_id in record_data
+    const deletedEmployee = deletedEmployees?.find((record: any) => {
+      const recordData = record.record_data as Record<string, unknown>
+      return recordData?.telegram_chat_id === applicantChatId
+    })
+
     // Collect all unique reviewer chat IDs
     const reviewerChatIds = new Set<string>()
 
@@ -2503,26 +2619,67 @@ async function notifyAllJoinRequestReviewers(
       return
     }
 
-    const message = 
-      `🆕 <b>طلب انضمام جديد</b>\n\n` +
-      `📋 <b>بيانات المتقدم:</b>\n` +
-      `👤 الاسم: ${sessionData.full_name}\n` +
-      `📧 البريد: ${sessionData.email || 'غير محدد'}\n` +
-      `📱 الهاتف: ${sessionData.phone || 'غير محدد'}\n` +
-      `📲 تليجرام: ${applicantUsername ? `@${applicantUsername}` : applicantChatId}\n` +
-      `⏰ وقت العمل: ${sessionData.work_start_time?.substring(0, 5) || '09:00'} - ${sessionData.work_end_time?.substring(0, 5) || '17:00'}\n` +
-      `📅 أيام الإجازة: ${sessionData.weekend_days?.map((d: string) => getDayName(d)).join('، ') || 'الجمعة، السبت'}\n\n` +
-      `🏢 الشركة: ${companyName}\n\n` +
-      `⚡ <b>اختر إجراء:</b>`
+    // Build message based on whether employee was previously deleted
+    let message = ''
+    let keyboard: any
+    
+    if (deletedEmployee) {
+      const deletedData = deletedEmployee.record_data as { 
+        full_name?: string; 
+        department?: string; 
+        base_salary?: number;
+        position_id?: string;
+      }
+      const deletedDate = new Date(deletedEmployee.deleted_at).toLocaleDateString('ar-EG')
+      
+      message = 
+        `🔄 <b>طلب انضمام من موظف سابق!</b>\n\n` +
+        `⚠️ <b>تنبيه: هذا الموظف كان مسجلاً سابقاً وتم حذفه</b>\n\n` +
+        `📋 <b>البيانات الجديدة:</b>\n` +
+        `👤 الاسم: ${sessionData.full_name}\n` +
+        `📧 البريد: ${sessionData.email || 'غير محدد'}\n` +
+        `📱 الهاتف: ${sessionData.phone || 'غير محدد'}\n` +
+        `📲 تليجرام: ${applicantUsername ? `@${applicantUsername}` : applicantChatId}\n\n` +
+        `📂 <b>البيانات السابقة:</b>\n` +
+        `👤 الاسم: ${deletedData?.full_name || 'غير محدد'}\n` +
+        `${deletedData?.department ? `🏢 القسم: ${deletedData.department}\n` : ''}` +
+        `${deletedData?.base_salary ? `💰 الراتب: ${deletedData.base_salary}\n` : ''}` +
+        `📅 تاريخ الحذف: ${deletedDate}\n\n` +
+        `🏢 الشركة: ${companyName}\n\n` +
+        `⚡ <b>اختر إجراء:</b>`
+      
+      keyboard = {
+        inline_keyboard: [
+          [{ text: '🔄 استعادة البيانات السابقة', callback_data: `jr_restore_${joinRequestId}_${deletedEmployee.id}` }],
+          [
+            { text: '✅ قبول كموظف جديد', callback_data: `jr_approve_${joinRequestId}` },
+            { text: '❌ رفض الطلب', callback_data: `jr_reject_${joinRequestId}` }
+          ],
+          [{ text: '📋 تحديد المنصب والراتب ثم القبول', callback_data: `jr_details_${joinRequestId}` }]
+        ]
+      }
+    } else {
+      message = 
+        `🆕 <b>طلب انضمام جديد</b>\n\n` +
+        `📋 <b>بيانات المتقدم:</b>\n` +
+        `👤 الاسم: ${sessionData.full_name}\n` +
+        `📧 البريد: ${sessionData.email || 'غير محدد'}\n` +
+        `📱 الهاتف: ${sessionData.phone || 'غير محدد'}\n` +
+        `📲 تليجرام: ${applicantUsername ? `@${applicantUsername}` : applicantChatId}\n` +
+        `⏰ وقت العمل: ${sessionData.work_start_time?.substring(0, 5) || '09:00'} - ${sessionData.work_end_time?.substring(0, 5) || '17:00'}\n` +
+        `📅 أيام الإجازة: ${sessionData.weekend_days?.map((d: string) => getDayName(d)).join('، ') || 'الجمعة، السبت'}\n\n` +
+        `🏢 الشركة: ${companyName}\n\n` +
+        `⚡ <b>اختر إجراء:</b>`
 
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ قبول الطلب', callback_data: `jr_approve_${joinRequestId}` },
-          { text: '❌ رفض الطلب', callback_data: `jr_reject_${joinRequestId}` }
-        ],
-        [{ text: '📋 تحديد المنصب والراتب ثم القبول', callback_data: `jr_details_${joinRequestId}` }]
-      ]
+      keyboard = {
+        inline_keyboard: [
+          [
+            { text: '✅ قبول الطلب', callback_data: `jr_approve_${joinRequestId}` },
+            { text: '❌ رفض الطلب', callback_data: `jr_reject_${joinRequestId}` }
+          ],
+          [{ text: '📋 تحديد المنصب والراتب ثم القبول', callback_data: `jr_details_${joinRequestId}` }]
+        ]
+      }
     }
 
     // Send notification to all reviewers
@@ -2530,7 +2687,7 @@ async function notifyAllJoinRequestReviewers(
       await sendMessage(botToken, parseInt(chatId), message, keyboard)
     }
     
-    console.log(`Join request notification sent to ${reviewerChatIds.size} reviewers`)
+    console.log(`Join request notification sent to ${reviewerChatIds.size} reviewers${deletedEmployee ? ' (with deleted employee warning)' : ''}`)
   } catch (error) {
     console.error('Failed to notify join request reviewers:', error)
   }
