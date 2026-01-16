@@ -291,7 +291,7 @@ const Salaries = () => {
             <TabsContent value="overview">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className={`flex items-center gap-2 ${direction === 'rtl' ? 'flex-row-reverse justify-end' : ''}`}>
                     <DollarSign className="w-5 h-5 text-primary" />
                     {language === 'ar' ? 'تفاصيل المرتبات' : t('salaries.breakdown')}
                   </CardTitle>
