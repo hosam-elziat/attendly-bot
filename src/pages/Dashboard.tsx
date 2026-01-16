@@ -86,17 +86,17 @@ const Dashboard = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        {/* Header */}
+      <div className="space-y-4 sm:space-y-8">
+        {/* Header - Mobile optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
             {t('dashboard.welcome')}, {firstName} 👋
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-0.5 sm:mt-1">
             {t('dashboard.whatsHappening')}
           </p>
         </motion.div>
@@ -108,8 +108,8 @@ const Dashboard = () => {
           </div>
         ) : (
           <>
-            {/* Basic Stats Row */}
-            <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-5">
+            {/* Basic Stats Row - Mobile optimized */}
+            <div className="grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-5">
               <StatCard
                 icon={Users}
                 label={language === 'ar' ? 'سجلوا حضور اليوم' : 'Checked In Today'}
