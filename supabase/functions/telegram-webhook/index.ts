@@ -508,8 +508,8 @@ serve(async (req) => {
               // Level 1: Direct check-in without verification
               await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, companyPolicies, empDetails, managerPermissions)
             } else if (effectiveVerificationLevel === 2) {
-              // Level 2: Requires manager approval
-              await createPendingAttendance(supabase, botToken, chatId, employee, companyId, 'check_in', nowUtc, effectiveApproverType, effectiveApproverId)
+              // Level 2: Requires manager approval - use local time ISO string
+              await createPendingAttendance(supabase, botToken, chatId, employee, companyId, 'check_in', localTime.isoString, effectiveApproverType, effectiveApproverId, companyTimezone)
             } else if (effectiveVerificationLevel === 3) {
               // Level 3: Requires location verification - request location from user
               // Use Reply Keyboard with request_location to get user's GPS
@@ -3226,7 +3226,8 @@ async function createPendingAttendance(
   requestType: 'check_in' | 'check_out',
   requestedTime: string,
   approverType: string,
-  approverId: string | null
+  approverId: string | null,
+  timezone: string = 'Africa/Cairo'
 ) {
   // Create pending attendance record
   const { data: pendingRecord, error: pendingError } = await supabase
@@ -3249,12 +3250,19 @@ async function createPendingAttendance(
     return
   }
 
+  // Get local time for display
+  const localTime = getLocalTime(timezone)
+  
+  // Extract time from requestedTime for display (format: YYYY-MM-DDTHH:MM:SS)
+  const timeMatch = requestedTime.match(/T(\d{2}:\d{2}:\d{2})/)
+  const displayTime = timeMatch ? timeMatch[1].substring(0, 5) : localTime.time.substring(0, 5)
+
   // Notify employee
   const requestTypeName = requestType === 'check_in' ? 'الحضور' : 'الانصراف'
   await sendMessage(botToken, chatId, 
     `⏳ <b>تم إرسال طلب ${requestTypeName}</b>\n\n` +
-    `📅 التاريخ: ${new Date().toISOString().split('T')[0]}\n` +
-    `⏰ الوقت: ${new Date(requestedTime).toLocaleTimeString('ar-EG')}\n\n` +
+    `📅 التاريخ: ${localTime.date}\n` +
+    `⏰ الوقت: ${displayTime}\n\n` +
     `🔄 بانتظار موافقة المدير...\n` +
     `سيتم إخطارك عند الموافقة أو الرفض.`
   )
@@ -3280,14 +3288,18 @@ async function createPendingAttendance(
   }
 
   // Notify all approvers
+  // Extract time from requestedTime for display
+  const timeMatchApprover = requestedTime.match(/T(\d{2}:\d{2}:\d{2})/)
+  const displayTimeApprover = timeMatchApprover ? timeMatchApprover[1].substring(0, 5) : localTime.time.substring(0, 5)
+  
   for (const approver of approvers) {
     if (approver.manager_telegram_chat_id || approver.telegram_chat_id) {
       const approverChatId = approver.manager_telegram_chat_id || approver.telegram_chat_id
       await sendMessage(botToken, parseInt(approverChatId),
         `📋 <b>طلب ${requestTypeName} جديد</b>\n\n` +
         `👤 الموظف: ${employee.full_name}\n` +
-        `📅 التاريخ: ${new Date().toISOString().split('T')[0]}\n` +
-        `⏰ الوقت المطلوب: ${new Date(requestedTime).toLocaleTimeString('ar-EG')}\n\n` +
+        `📅 التاريخ: ${localTime.date}\n` +
+        `⏰ الوقت المطلوب: ${displayTimeApprover}\n\n` +
         `اختر الإجراء:`,
         {
           inline_keyboard: [
