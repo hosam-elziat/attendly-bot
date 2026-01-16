@@ -56,17 +56,17 @@ const Hero = () => {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
-            <Button asChild size="lg" className="btn-primary-gradient text-base px-8 py-6">
-              <Link to="/auth?mode=signup">
+            <Link to="/auth?mode=signup" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full btn-primary-gradient text-base px-8 py-6 min-h-[56px] touch-manipulation">
                 {t('landing.hero.cta')}
                 <ArrowRight className={`w-5 h-5 ${direction === 'rtl' ? 'mr-2 rotate-180' : 'ml-2'}`} />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="text-base px-8 py-6">
-              <Link to="/auth">
+              </Button>
+            </Link>
+            <Link to="/auth" className="w-full sm:w-auto">
+              <Button variant="outline" size="lg" className="w-full text-base px-8 py-6 min-h-[56px] touch-manipulation">
                 {t('landing.hero.login')}
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           </motion.div>
         </div>
 
