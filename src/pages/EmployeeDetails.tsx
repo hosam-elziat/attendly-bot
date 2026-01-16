@@ -523,16 +523,28 @@ const EmployeeDetails = () => {
                     <div className={`text-center p-4 rounded-lg bg-success/10 border border-success/20 ${direction === 'rtl' ? 'lg:order-4' : 'lg:order-1'}`}>
                       <p className="text-sm text-muted-foreground">المرتب المكتسب</p>
                       <p className="text-2xl font-bold text-success">
-                        {salaryStats.earnedSalary.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? (
+                          <>{currency.symbol} {salaryStats.earnedSalary.toLocaleString()}</>
+                        ) : (
+                          <>{salaryStats.earnedSalary.toLocaleString()} {currency.symbol}</>
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {salaryStats.workDays} / {salaryStats.expectedWorkDays} يوم
+                        {direction === 'rtl' ? (
+                          <>يوم {salaryStats.expectedWorkDays} / {salaryStats.workDays}</>
+                        ) : (
+                          <>{salaryStats.workDays} / {salaryStats.expectedWorkDays} يوم</>
+                        )}
                       </p>
                     </div>
                     <div className={`text-center p-4 rounded-lg bg-destructive/10 border border-destructive/20 ${direction === 'rtl' ? 'lg:order-3' : 'lg:order-2'}`}>
                       <p className="text-sm text-muted-foreground">إجمالي الخصومات</p>
                       <p className="text-2xl font-bold text-destructive">
-                        -{salaryStats.totalDeductions.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? (
+                          <>{currency.symbol} {salaryStats.totalDeductions.toLocaleString()}-</>
+                        ) : (
+                          <>-{salaryStats.totalDeductions.toLocaleString()} {currency.symbol}</>
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {salaryStats.deductionPercentage}% من المرتب
@@ -541,13 +553,21 @@ const EmployeeDetails = () => {
                     <div className={`text-center p-4 rounded-lg bg-primary/10 border border-primary/20 ${direction === 'rtl' ? 'lg:order-2' : 'lg:order-3'}`}>
                       <p className="text-sm text-muted-foreground">المكافآت</p>
                       <p className="text-2xl font-bold text-primary">
-                        +{salaryStats.totalBonuses.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? (
+                          <>{currency.symbol} {salaryStats.totalBonuses.toLocaleString()}+</>
+                        ) : (
+                          <>+{salaryStats.totalBonuses.toLocaleString()} {currency.symbol}</>
+                        )}
                       </p>
                     </div>
                     <div className={`text-center p-4 rounded-lg bg-warning/10 border border-warning/20 ${direction === 'rtl' ? 'lg:order-1' : 'lg:order-4'}`}>
                       <p className="text-sm text-muted-foreground">صافي المرتب</p>
                       <p className="text-2xl font-bold text-warning">
-                        {salaryStats.netSalary.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? (
+                          <>{currency.symbol} {salaryStats.netSalary.toLocaleString()}</>
+                        ) : (
+                          <>{salaryStats.netSalary.toLocaleString()} {currency.symbol}</>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -558,16 +578,24 @@ const EmployeeDetails = () => {
                       <Timer className="w-5 h-5 text-success flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">الأوفر تايم</p>
-                        <p className="font-medium">{salaryStats.overtimeHours} ساعة</p>
-                        <p className="text-xs text-success">+{salaryStats.overtimeAmount.toLocaleString()} {currency.symbol}</p>
+                        <p className="font-medium">
+                          {direction === 'rtl' ? <>ساعة {salaryStats.overtimeHours}</> : <>{salaryStats.overtimeHours} ساعة</>}
+                        </p>
+                        <p className="text-xs text-success">
+                          {direction === 'rtl' ? <>{currency.symbol} {salaryStats.overtimeAmount.toLocaleString()}+</> : <>+{salaryStats.overtimeAmount.toLocaleString()} {currency.symbol}</>}
+                        </p>
                       </div>
                     </div>
                     <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-2' : 'md:order-2'}`}>
                       <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">دقائق التأخير</p>
-                        <p className="font-medium">{salaryStats.lateMinutes} دقيقة</p>
-                        <p className="text-xs text-destructive">-{salaryStats.lateDeductionAmount.toLocaleString()} {currency.symbol}</p>
+                        <p className="font-medium">
+                          {direction === 'rtl' ? <>دقيقة {salaryStats.lateMinutes}</> : <>{salaryStats.lateMinutes} دقيقة</>}
+                        </p>
+                        <p className="text-xs text-destructive">
+                          {direction === 'rtl' ? <>{currency.symbol} {salaryStats.lateDeductionAmount.toLocaleString()}-</> : <>-{salaryStats.lateDeductionAmount.toLocaleString()} {currency.symbol}</>}
+                        </p>
                       </div>
                     </div>
                     <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-1' : 'md:order-3'}`}>
