@@ -18,9 +18,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { usePositions, useAssignPosition, PositionWithPermissions } from '@/hooks/usePositions';
+import { usePositions, useAssignPosition } from '@/hooks/usePositions';
 import { useEmployees } from '@/hooks/useEmployees';
-import { Search, User, Briefcase } from 'lucide-react';
+import { Search, User, Briefcase, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AssignPositionDialogProps {
@@ -29,7 +29,8 @@ interface AssignPositionDialogProps {
 }
 
 const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps) => {
-  const { language } = useLanguage();
+  const { language, direction } = useLanguage();
+  const isRTL = direction === 'rtl';
   const { data: positions = [] } = usePositions();
   const { data: employees = [] } = useEmployees();
   const assignPosition = useAssignPosition();
@@ -67,36 +68,53 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent 
+        className={cn(
+          "w-[95vw] max-w-2xl max-h-[85vh] p-0 gap-0",
+          isRTL && "text-right"
+        )}
+        dir={direction}
+      >
+        <DialogHeader className="p-4 sm:p-6 pb-0 sm:pb-0">
+          <DialogTitle className={cn("text-lg sm:text-xl", isRTL && "text-right")}>
             {language === 'ar' ? 'تعيين المناصب للموظفين' : 'Assign Positions to Employees'}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="p-4 sm:p-6 pt-4 space-y-3 sm:space-y-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className={cn(
+              "absolute top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground",
+              isRTL ? "right-3" : "left-3"
+            )} />
             <Input
               placeholder={language === 'ar' ? 'البحث عن موظف...' : 'Search employees...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="ps-9"
+              className={cn("h-10 sm:h-10", isRTL ? "pr-9 text-right" : "pl-9")}
             />
           </div>
           
           {/* Bulk assign */}
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <Briefcase className="h-5 w-5 text-muted-foreground" />
-            <span className="text-sm">
-              {language === 'ar' ? 'تعيين منصب لعدة موظفين:' : 'Assign position to multiple:'}
-            </span>
+          <div className={cn(
+            "flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg bg-muted/50",
+            isRTL && "sm:flex-row-reverse"
+          )}>
+            <div className={cn("flex items-center gap-2", isRTL && "flex-row-reverse")}>
+              <Briefcase className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs sm:text-sm whitespace-nowrap">
+                {language === 'ar' ? 'تعيين منصب لعدة موظفين:' : 'Assign position to multiple:'}
+              </span>
+            </div>
             <Select value={selectedPosition} onValueChange={(val) => setSelectedPosition(val === '__none__' ? '' : val)}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className={cn(
+                "w-full sm:w-48 h-9 sm:h-10 text-sm",
+                isRTL && "flex-row-reverse text-right"
+              )}>
                 <SelectValue placeholder={language === 'ar' ? 'اختر منصب' : 'Select position'} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60">
                 <SelectItem value="__none__">
                   {language === 'ar' ? 'بدون منصب' : 'No position'}
                 </SelectItem>
@@ -110,7 +128,7 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
           </div>
           
           {/* Employee list */}
-          <ScrollArea className="h-[400px] rounded-lg border">
+          <ScrollArea className="h-[45vh] sm:h-[400px] rounded-lg border">
             <div className="p-2 space-y-2">
               {filteredEmployees.map(employee => {
                 const currentPosition = assignments[employee.id] ?? employee.position_id;
@@ -119,33 +137,51 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
                 return (
                   <div
                     key={employee.id}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                    className={cn(
+                      "flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors",
+                      isRTL && "sm:flex-row-reverse"
+                    )}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
+                    {/* Employee info */}
+                    <div className={cn(
+                      "flex items-center gap-3 flex-1 min-w-0",
+                      isRTL && "flex-row-reverse"
+                    )}>
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                       </div>
-                      <div>
-                        <p className="font-medium">{employee.full_name}</p>
-                        <p className="text-sm text-muted-foreground">
+                      <div className={cn("min-w-0 flex-1", isRTL && "text-right")}>
+                        <p className="font-medium text-sm sm:text-base truncate">{employee.full_name}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate">
                           {employee.department || employee.email}
                         </p>
                       </div>
                       {positionName && (
-                        <Badge variant="secondary" className="ms-2">
+                        <Badge variant="secondary" className="text-xs hidden sm:inline-flex flex-shrink-0">
                           {positionName}
                         </Badge>
                       )}
                     </div>
                     
+                    {/* Mobile position badge */}
+                    {positionName && (
+                      <Badge variant="secondary" className="text-xs sm:hidden self-start">
+                        {positionName}
+                      </Badge>
+                    )}
+                    
+                    {/* Position select */}
                     <Select
                       value={currentPosition || '__none__'}
                       onValueChange={(value) => handleAssign(employee.id, value === '__none__' ? '' : value)}
                     >
-                      <SelectTrigger className="w-40">
+                      <SelectTrigger className={cn(
+                        "w-full sm:w-40 h-9 sm:h-10 text-sm flex-shrink-0",
+                        isRTL && "flex-row-reverse text-right"
+                      )}>
                         <SelectValue placeholder={language === 'ar' ? 'اختر منصب' : 'Select'} />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         <SelectItem value="__none__">
                           {language === 'ar' ? 'بدون منصب' : 'No position'}
                         </SelectItem>
@@ -161,7 +197,7 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
               })}
               
               {filteredEmployees.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 text-muted-foreground text-sm">
                   {language === 'ar' ? 'لا يوجد موظفين' : 'No employees found'}
                 </div>
               )}
@@ -169,8 +205,15 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
           </ScrollArea>
         </div>
         
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className={cn(
+          "p-4 sm:p-6 pt-0 sm:pt-0",
+          isRTL && "sm:justify-start"
+        )}>
+          <Button 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+            className="w-full sm:w-auto h-10"
+          >
             {language === 'ar' ? 'إغلاق' : 'Close'}
           </Button>
         </DialogFooter>
