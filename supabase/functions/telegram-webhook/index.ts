@@ -38,6 +38,7 @@ interface TelegramUpdate {
     from: { id: number; username?: string; first_name?: string; last_name?: string };
     text?: string;
     contact?: { phone_number: string };
+    location?: { latitude: number; longitude: number };
   };
   callback_query?: {
     id: string;
@@ -439,16 +440,19 @@ serve(async (req) => {
               await createPendingAttendance(supabase, botToken, chatId, employee, companyId, 'check_in', nowUtc, effectiveApproverType, effectiveApproverId)
             } else if (effectiveVerificationLevel === 3) {
               // Level 3: Requires location verification - request location from user
-              await sendMessage(botToken, chatId, 
+              // Use Reply Keyboard with request_location to get user's GPS
+              await sendMessageWithReplyKeyboard(botToken, chatId, 
                 '📍 <b>التحقق من الموقع مطلوب</b>\n\n' +
                 'لتسجيل حضورك، يجب إرسال موقعك الحالي.\n' +
-                'اضغط على زر "إرسال الموقع" أدناه:',
+                'اضغط على زر "📍 إرسال الموقع" أدناه:',
                 {
-                  inline_keyboard: [[
-                    { text: '📍 إرسال الموقع', callback_data: 'request_location_checkin' }
+                  keyboard: [[
+                    { text: '📍 إرسال الموقع', request_location: true }
                   ], [
-                    { text: '❌ إلغاء', callback_data: 'cancel_action' }
-                  ]]
+                    { text: '❌ إلغاء' }
+                  ]],
+                  resize_keyboard: true,
+                  one_time_keyboard: true
                 }
               )
               // Store pending check-in session
@@ -1413,8 +1417,109 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
     }
 
+    // Handle location messages for Level 3 verification
+    if (update.message?.location && employee) {
+      const session = await getSession()
+      
+      if (session?.step === 'pending_location_checkin') {
+        const userLat = update.message.location.latitude
+        const userLng = update.message.location.longitude
+        
+        // Get company location settings
+        const companyLat = company?.company_latitude
+        const companyLng = company?.company_longitude
+        const radiusMeters = company?.location_radius_meters || 100
+        
+        if (!companyLat || !companyLng) {
+          await sendMessage(botToken, chatId, 
+            '⚠️ <b>خطأ في الإعدادات</b>\n\n' +
+            'لم يتم تحديد موقع الشركة بعد.\n' +
+            'يرجى التواصل مع الإدارة.',
+            getEmployeeKeyboard(managerPermissions)
+          )
+          await deleteSession()
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+        
+        // Calculate distance using Haversine formula
+        const distance = calculateDistance(userLat, userLng, companyLat, companyLng)
+        
+        console.log('Location verification:', {
+          userLat, userLng,
+          companyLat, companyLng,
+          distance, radiusMeters
+        })
+        
+        // Check if user is within allowed radius
+        if (distance <= radiusMeters) {
+          // Location verified - process check-in
+          const localTime = getLocalTime(companyTimezone)
+          const nowUtc = new Date().toISOString()
+          const checkInTime = localTime.time
+          const today = localTime.date
+          
+          // Record location for audit
+          await supabase.from('employee_location_history').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            latitude: userLat,
+            longitude: userLng,
+            is_suspicious: false
+          })
+          
+          // Get company policies and employee details for check-in
+          const { data: locCompanyPolicies } = await supabase
+            .from('companies')
+            .select('late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction, daily_late_allowance_minutes, monthly_late_allowance_minutes, overtime_multiplier')
+            .eq('id', companyId)
+            .single()
+          
+          const { data: locEmpDetails } = await supabase
+            .from('employees')
+            .select('monthly_late_balance_minutes, base_salary, currency')
+            .eq('id', employee.id)
+            .single()
+          
+          // Process check-in directly
+          await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, locCompanyPolicies, locEmpDetails, managerPermissions)
+          
+          // Remove keyboard and clear session
+          await removeReplyKeyboard(botToken, chatId, `✅ تم التحقق من موقعك بنجاح!\n📍 المسافة: ${Math.round(distance)} متر`)
+          await deleteSession()
+        } else {
+          // Location outside allowed radius
+          await supabase.from('employee_location_history').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            latitude: userLat,
+            longitude: userLng,
+            is_suspicious: true,
+            suspicion_reason: `خارج نطاق الشركة - المسافة: ${Math.round(distance)} متر`
+          })
+          
+          await removeReplyKeyboard(botToken, chatId, 
+            `❌ <b>فشل التحقق من الموقع</b>\n\n` +
+            `📍 موقعك على بعد <b>${Math.round(distance)} متر</b> من مقر الشركة.\n` +
+            `⚠️ يجب أن تكون ضمن <b>${radiusMeters} متر</b> للتسجيل.\n\n` +
+            `يرجى التأكد من تواجدك داخل مقر العمل والمحاولة مرة أخرى.`
+          )
+          await deleteSession()
+        }
+        
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+    }
+    
     // Handle text messages
     const text = update.message?.text?.trim()
+    
+    // Handle cancel button from reply keyboard
+    if (text === '❌ إلغاء' && employee) {
+      await deleteSession()
+      await removeReplyKeyboard(botToken, chatId, '✅ تم الإلغاء')
+      await sendMessage(botToken, chatId, 'اختر ما تريد فعله:', getEmployeeKeyboard(managerPermissions))
+      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+    }
     
     if (!text) {
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
@@ -2378,6 +2483,61 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
     const txt = await res.text().catch(() => '')
     console.error('telegram-webhook: sendMessage failed', { status: res.status, body: txt })
   }
+}
+
+// Send message with reply keyboard (for location requests)
+async function sendMessageWithReplyKeyboard(botToken: string, chatId: number, text: string, keyboard: any) {
+  const body: any = {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: keyboard
+  }
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    console.error('telegram-webhook: sendMessageWithReplyKeyboard failed', { status: res.status, body: txt })
+  }
+}
+
+// Remove reply keyboard and send message
+async function removeReplyKeyboard(botToken: string, chatId: number, text: string) {
+  const body = {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: { remove_keyboard: true }
+  }
+
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    console.error('telegram-webhook: removeReplyKeyboard failed', { status: res.status, body: txt })
+  }
+}
+
+// Calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000 // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c // Distance in meters
 }
 
 async function answerCallbackQuery(botToken: string, callbackQueryId: string) {
