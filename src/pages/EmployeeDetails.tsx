@@ -355,29 +355,30 @@ const EmployeeDetails = () => {
                   <CardTitle>{t('employeeDetails.personalInfo')}</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-4">
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                  {/* Column 1: Name, Email, Phone, National ID */}
+                  <div className={`space-y-4 ${direction === 'rtl' ? 'md:order-2' : 'md:order-1'}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <User className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.fullName')}</p>
                         <p className="font-medium">{employee.full_name}</p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.email')}</p>
                         <p className="font-medium">{employee.email}</p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <Phone className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.phone')}</p>
                         <p className="font-medium">{employee.phone || '—'}</p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <CreditCard className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.nationalId')}</p>
@@ -385,15 +386,16 @@ const EmployeeDetails = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                  {/* Column 2: Department, Hire Date, Work Hours, Telegram ID */}
+                  <div className={`space-y-4 ${direction === 'rtl' ? 'md:order-1' : 'md:order-2'}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <Building className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.department')}</p>
                         <p className="font-medium">{employee.department || '—'}</p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <Calendar className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.hireDate')}</p>
@@ -402,14 +404,7 @@ const EmployeeDetails = () => {
                         </p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
-                      <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                      <div className={direction === 'rtl' ? 'text-right' : ''}>
-                        <p className="text-sm text-muted-foreground">{t('employeeDetails.address')}</p>
-                        <p className="font-medium">{employee.address || '—'}</p>
-                      </div>
-                    </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <Clock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.workHours')}</p>
@@ -418,16 +413,23 @@ const EmployeeDetails = () => {
                         </p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <MessageCircle className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">Telegram ID</p>
                         <p className="font-medium font-mono">{employee.telegram_chat_id || '—'}</p>
                       </div>
                     </div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                      <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
+                        <p className="text-sm text-muted-foreground">{t('employeeDetails.address')}</p>
+                        <p className="font-medium">{employee.address || '—'}</p>
+                      </div>
+                    </div>
                   </div>
                   {employee.notes && (
-                    <div className={`md:col-span-2 flex items-start gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`md:col-span-2 flex items-start gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <FileText className="w-5 h-5 text-muted-foreground mt-1 flex-shrink-0" />
                       <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.notes')}</p>
@@ -476,8 +478,8 @@ const EmployeeDetails = () => {
 
             <TabsContent value="salary">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>{t('employeeDetails.salaryInfo')}</CardTitle>
+                <CardHeader className={`flex flex-row items-center justify-between ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                  <CardTitle className={direction === 'rtl' ? 'text-right' : ''}>{t('employeeDetails.salaryInfo')}</CardTitle>
                   <Select value={salaryPeriod} onValueChange={(v: SalaryFilterPeriod) => setSalaryPeriod(v)}>
                     <SelectTrigger className="w-40">
                       <SelectValue />
@@ -492,74 +494,85 @@ const EmployeeDetails = () => {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Base Salary */}
-                  <div className="flex items-center gap-3">
-                    <Banknote className="w-5 h-5 text-muted-foreground" />
-                    <div>
+                  <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                    <Banknote className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                    <div className={direction === 'rtl' ? 'text-right' : ''}>
                       <p className="text-sm text-muted-foreground">{t('employees.salaryAmount')}</p>
                       <p className="font-medium text-xl">
-                        {Number(employee.base_salary).toLocaleString()} {currency.symbol}
-                        <span className="text-sm text-muted-foreground ms-2">
-                          / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
-                        </span>
+                        {direction === 'rtl' ? (
+                          <>
+                            <span className="text-sm text-muted-foreground me-2">
+                              / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
+                            </span>
+                            {currency.symbol} {Number(employee.base_salary).toLocaleString()}
+                          </>
+                        ) : (
+                          <>
+                            {Number(employee.base_salary).toLocaleString()} {currency.symbol}
+                            <span className="text-sm text-muted-foreground ms-2">
+                              / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
+                            </span>
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>
 
                   {/* Salary Statistics Grid */}
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-4 border-t">
-                    <div className="text-center p-4 rounded-lg bg-success/10 border border-success/20">
+                    <div className={`text-center p-4 rounded-lg bg-success/10 border border-success/20 ${direction === 'rtl' ? 'lg:order-4' : 'lg:order-1'}`}>
                       <p className="text-sm text-muted-foreground">المرتب المكتسب</p>
                       <p className="text-2xl font-bold text-success">
-                        {salaryStats.earnedSalary.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.earnedSalary.toLocaleString()}` : `${salaryStats.earnedSalary.toLocaleString()} ${currency.symbol}`}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {salaryStats.workDays} / {salaryStats.expectedWorkDays} يوم
                       </p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                    <div className={`text-center p-4 rounded-lg bg-destructive/10 border border-destructive/20 ${direction === 'rtl' ? 'lg:order-3' : 'lg:order-2'}`}>
                       <p className="text-sm text-muted-foreground">إجمالي الخصومات</p>
                       <p className="text-2xl font-bold text-destructive">
-                        -{salaryStats.totalDeductions.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.totalDeductions.toLocaleString()}-` : `-${salaryStats.totalDeductions.toLocaleString()} ${currency.symbol}`}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {salaryStats.deductionPercentage}% من المرتب
                       </p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-primary/10 border border-primary/20">
+                    <div className={`text-center p-4 rounded-lg bg-primary/10 border border-primary/20 ${direction === 'rtl' ? 'lg:order-2' : 'lg:order-3'}`}>
                       <p className="text-sm text-muted-foreground">المكافآت</p>
                       <p className="text-2xl font-bold text-primary">
-                        +{salaryStats.totalBonuses.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.totalBonuses.toLocaleString()}+` : `+${salaryStats.totalBonuses.toLocaleString()} ${currency.symbol}`}
                       </p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-warning/10 border border-warning/20">
+                    <div className={`text-center p-4 rounded-lg bg-warning/10 border border-warning/20 ${direction === 'rtl' ? 'lg:order-1' : 'lg:order-4'}`}>
                       <p className="text-sm text-muted-foreground">صافي المرتب</p>
                       <p className="text-2xl font-bold text-warning">
-                        {salaryStats.netSalary.toLocaleString()} {currency.symbol}
+                        {direction === 'rtl' ? `${currency.symbol} ${salaryStats.netSalary.toLocaleString()}` : `${salaryStats.netSalary.toLocaleString()} ${currency.symbol}`}
                       </p>
                     </div>
                   </div>
 
                   {/* Additional Details */}
                   <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <Timer className="w-5 h-5 text-success" />
-                      <div>
+                    <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-3' : 'md:order-1'}`}>
+                      <Timer className="w-5 h-5 text-success flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">الأوفر تايم</p>
-                        <p className="font-medium">{salaryStats.overtimeHours} ساعة</p>
-                        <p className="text-xs text-success">+{salaryStats.overtimeAmount.toLocaleString()} {currency.symbol}</p>
+                        <p className="font-medium">{direction === 'rtl' ? `ساعة ${salaryStats.overtimeHours}` : `${salaryStats.overtimeHours} ساعة`}</p>
+                        <p className="text-xs text-success">{direction === 'rtl' ? `${currency.symbol} ${salaryStats.overtimeAmount.toLocaleString()}+` : `+${salaryStats.overtimeAmount.toLocaleString()} ${currency.symbol}`}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <AlertTriangle className="w-5 h-5 text-warning" />
-                      <div>
+                    <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-2' : 'md:order-2'}`}>
+                      <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">دقائق التأخير</p>
-                        <p className="font-medium">{salaryStats.lateMinutes} دقيقة</p>
-                        <p className="text-xs text-destructive">-{salaryStats.lateDeductionAmount.toLocaleString()} {currency.symbol}</p>
+                        <p className="font-medium">{direction === 'rtl' ? `دقيقة ${salaryStats.lateMinutes}` : `${salaryStats.lateMinutes} دقيقة`}</p>
+                        <p className="text-xs text-destructive">{direction === 'rtl' ? `${currency.symbol} ${salaryStats.lateDeductionAmount.toLocaleString()}-` : `-${salaryStats.lateDeductionAmount.toLocaleString()} ${currency.symbol}`}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <TrendingUp className="w-5 h-5 text-primary" />
-                      <div>
+                    <div className={`flex items-center gap-3 p-3 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'flex-row-reverse md:order-1' : 'md:order-3'}`}>
+                      <TrendingUp className="w-5 h-5 text-primary flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.commitmentRate')}</p>
                         <p className="font-medium">{stats.commitmentRate}%</p>
                       </div>
@@ -568,17 +581,17 @@ const EmployeeDetails = () => {
 
                   {/* Late Balance & Stats */}
                   <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
-                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <div className={`text-center p-4 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'md:order-3' : 'md:order-1'}`}>
                       <p className="text-sm text-muted-foreground">{t('employeeDetails.lateArrivals')}</p>
                       <p className="text-2xl font-bold text-warning">{stats.lateArrivals}</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <div className={`text-center p-4 rounded-lg bg-muted/50 ${direction === 'rtl' ? 'md:order-2' : 'md:order-2'}`}>
                       <p className="text-sm text-muted-foreground">{t('employeeDetails.absentDays')}</p>
                       <p className="text-2xl font-bold text-destructive">{stats.absentDays}</p>
                     </div>
-                    <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
+                    <div className={`p-4 rounded-lg bg-primary/10 border border-primary/20 ${direction === 'rtl' ? 'md:order-1' : 'md:order-3'}`}>
+                      <div className={`flex items-center justify-between mb-2 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                        <div className={`flex items-center gap-2 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                           <Hourglass className="w-4 h-4 text-primary" />
                           <p className="text-sm text-muted-foreground">
                             {direction === 'rtl' ? 'رصيد التأخيرات' : 'Late Balance'}
@@ -621,7 +634,7 @@ const EmployeeDetails = () => {
                         )}
                       </div>
                       {editingLateBalance ? (
-                        <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                           <NumberInput
                             value={lateBalanceValue}
                             onChange={setLateBalanceValue}
@@ -632,10 +645,17 @@ const EmployeeDetails = () => {
                         </div>
                       ) : (
                         <p className="text-2xl font-bold text-primary text-center">
-                          {employee?.monthly_late_balance_minutes ?? 15}
-                          <span className="text-sm font-normal text-muted-foreground ms-1">
-                            {direction === 'rtl' ? 'دقيقة' : 'min'}
-                          </span>
+                          {direction === 'rtl' ? (
+                            <>
+                              <span className="text-sm font-normal text-muted-foreground me-1">دقيقة</span>
+                              {employee?.monthly_late_balance_minutes ?? 15}
+                            </>
+                          ) : (
+                            <>
+                              {employee?.monthly_late_balance_minutes ?? 15}
+                              <span className="text-sm font-normal text-muted-foreground ms-1">min</span>
+                            </>
+                          )}
                         </p>
                       )}
                     </div>
@@ -643,8 +663,8 @@ const EmployeeDetails = () => {
 
                   {/* Adjustments List */}
                   <div className="pt-4 border-t">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium flex items-center gap-2">
+                    <div className={`flex items-center justify-between mb-4 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                      <h4 className={`font-medium flex items-center gap-2 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                         <ListOrdered className="w-4 h-4" />
                         {direction === 'rtl' ? 'سجل المكافآت والخصومات' : 'Bonuses & Deductions Log'}
                       </h4>
