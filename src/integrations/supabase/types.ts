@@ -209,6 +209,8 @@ export type Database = {
           default_weekend_days: string[] | null
           emergency_leave_days: number | null
           id: string
+          join_request_reviewer_id: string | null
+          join_request_reviewer_type: string | null
           late_15_to_30_deduction: number | null
           late_over_30_deduction: number | null
           late_under_15_deduction: number | null
@@ -235,6 +237,8 @@ export type Database = {
           default_weekend_days?: string[] | null
           emergency_leave_days?: number | null
           id?: string
+          join_request_reviewer_id?: string | null
+          join_request_reviewer_type?: string | null
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
           late_under_15_deduction?: number | null
@@ -261,6 +265,8 @@ export type Database = {
           default_weekend_days?: string[] | null
           emergency_leave_days?: number | null
           id?: string
+          join_request_reviewer_id?: string | null
+          join_request_reviewer_type?: string | null
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
           late_under_15_deduction?: number | null
