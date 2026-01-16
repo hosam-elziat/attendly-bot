@@ -35,14 +35,16 @@ serve(async (req) => {
         weekend_days,
         break_duration_minutes,
         company_id,
-        salary,
+        base_salary,
+        currency,
         companies!inner (
           id,
           telegram_bot_username,
           work_start_time,
           work_end_time,
           break_duration_minutes,
-          absence_without_permission_deduction
+          absence_without_permission_deduction,
+          default_currency
         )
       `)
       .eq('is_active', true)
@@ -98,8 +100,8 @@ serve(async (req) => {
       const reminderStartMinutes = startMinutes + 5
       const reminderStartTime = `${Math.floor(reminderStartMinutes / 60).toString().padStart(2, '0')}:${(reminderStartMinutes % 60).toString().padStart(2, '0')}`
 
-      // Calculate 1 hour after start time for absence check
-      const absenceCheckMinutes = startMinutes + 60
+      // Calculate 2 hours after start time for absence check (changed from 1 hour to 2 hours)
+      const absenceCheckMinutes = startMinutes + 120
       const absenceCheckTime = `${Math.floor(absenceCheckMinutes / 60).toString().padStart(2, '0')}:${(absenceCheckMinutes % 60).toString().padStart(2, '0')}`
 
       // Calculate 5 minutes after end time
@@ -147,9 +149,10 @@ serve(async (req) => {
 
         if (!existingAbsence) {
           // Calculate deduction amount based on daily salary
-          const monthlySalary = emp.salary || 0
+          const monthlySalary = emp.base_salary || 0
           const dailySalary = monthlySalary / 30
           const deductionAmount = dailySalary * absenceDeduction
+          const currency = emp.currency || company?.default_currency || 'EGP'
 
           // Create an absent attendance record
           const { data: newAttendance, error: attError } = await supabase
@@ -198,7 +201,7 @@ serve(async (req) => {
               `⚠️ <b>تم تسجيل غياب</b>\n\n` +
               `مرحباً ${emp.full_name}!\n` +
               `لم يتم تسجيل حضورك اليوم حتى الساعة ${absenceCheckTime}.\n` +
-              `تم تسجيل غياب بدون إذن وخصم ${absenceDeduction} يوم من راتبك.\n\n` +
+              `تم تسجيل غياب بدون إذن وخصم ${absenceDeduction} يوم من راتبك (${deductionAmount.toLocaleString()} ${currency}).\n\n` +
               `💡 <i>إذا كان هناك خطأ، يرجى التواصل مع الإدارة.</i>`,
               getEmployeeKeyboard()
             )
