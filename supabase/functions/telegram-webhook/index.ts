@@ -64,6 +64,11 @@ interface SessionData {
   target_employee_name?: string;
   adjustment_amount?: number;
   adjustment_days?: number;
+  // Join request review session data
+  join_request_id?: string;
+  join_request_applicant_name?: string;
+  join_request_position_id?: string;
+  join_request_salary?: number;
 }
 
 serve(async (req) => {
@@ -123,7 +128,7 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id')
       .eq('id', companyId)
       .single()
 
@@ -1313,6 +1318,192 @@ serve(async (req) => {
             
             console.log(`Manager ${employee?.full_name} ${isApproval ? 'approved' : 'rejected'} leave request ${leaveRequestId}`)
           }
+          // Handle join request approval/rejection from reviewer
+          else if (callbackData.startsWith('jr_approve_') || callbackData.startsWith('jr_reject_') || callbackData.startsWith('jr_details_')) {
+            const isApprove = callbackData.startsWith('jr_approve_')
+            const isReject = callbackData.startsWith('jr_reject_')
+            const isDetails = callbackData.startsWith('jr_details_')
+            
+            let joinRequestId = ''
+            if (isApprove) joinRequestId = callbackData.replace('jr_approve_', '')
+            else if (isReject) joinRequestId = callbackData.replace('jr_reject_', '')
+            else if (isDetails) joinRequestId = callbackData.replace('jr_details_', '')
+            
+            // Fetch join request
+            const { data: joinRequest, error: jrError } = await supabase
+              .from('join_requests')
+              .select('*')
+              .eq('id', joinRequestId)
+              .eq('status', 'pending')
+              .single()
+            
+            if (jrError || !joinRequest) {
+              await sendMessage(botToken, chatId, '❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            if (isReject) {
+              // Direct rejection
+              await supabase
+                .from('join_requests')
+                .update({
+                  status: 'rejected',
+                  reviewed_by: employee?.user_id || null,
+                  reviewed_at: new Date().toISOString()
+                })
+                .eq('id', joinRequestId)
+              
+              // Notify applicant
+              try {
+                await sendMessage(botToken, parseInt(joinRequest.telegram_chat_id), 
+                  '❌ عذراً، تم رفض طلب انضمامك.\n\nيمكنك المحاولة مرة أخرى لاحقاً.'
+                )
+              } catch (e) {
+                console.error('Failed to notify rejected applicant:', e)
+              }
+              
+              await sendMessage(botToken, chatId, 
+                `✅ تم رفض طلب انضمام ${joinRequest.full_name}`,
+                getEmployeeKeyboard(managerPermissions)
+              )
+            } else if (isApprove) {
+              // Quick approval with defaults
+              const { data: compData } = await supabase
+                .from('companies')
+                .select('default_currency, default_weekend_days, work_start_time, work_end_time')
+                .eq('id', companyId)
+                .single()
+              
+              const { error: empError } = await supabase
+                .from('employees')
+                .insert({
+                  company_id: companyId,
+                  full_name: joinRequest.full_name,
+                  email: joinRequest.email || `${joinRequest.telegram_chat_id}@telegram.user`,
+                  phone: joinRequest.phone || null,
+                  telegram_chat_id: joinRequest.telegram_chat_id,
+                  national_id: joinRequest.national_id || null,
+                  work_start_time: joinRequest.work_start_time || compData?.work_start_time || '09:00:00',
+                  work_end_time: joinRequest.work_end_time || compData?.work_end_time || '17:00:00',
+                  weekend_days: joinRequest.weekend_days || compData?.default_weekend_days || ['friday'],
+                  currency: compData?.default_currency || 'SAR',
+                  base_salary: 0
+                })
+              
+              if (empError) {
+                console.error('Failed to create employee:', empError)
+                await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إضافة الموظف', getEmployeeKeyboard(managerPermissions))
+                break
+              }
+              
+              await supabase
+                .from('join_requests')
+                .update({
+                  status: 'approved',
+                  reviewed_by: employee?.user_id || null,
+                  reviewed_at: new Date().toISOString()
+                })
+                .eq('id', joinRequestId)
+              
+              // Notify applicant
+              try {
+                await sendMessage(botToken, parseInt(joinRequest.telegram_chat_id), 
+                  `🎉 مرحباً ${joinRequest.full_name}!\n\n` +
+                  `تم قبول طلب انضمامك بنجاح!\n` +
+                  `يمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.\n\n` +
+                  `أرسل /start للبدء.`,
+                  {
+                    inline_keyboard: [
+                      [
+                        { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+                        { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+                      ]
+                    ]
+                  }
+                )
+              } catch (e) {
+                console.error('Failed to notify approved applicant:', e)
+              }
+              
+              await sendMessage(botToken, chatId, 
+                `✅ تم قبول ${joinRequest.full_name} كموظف جديد\n\n` +
+                `📝 ملاحظة: تم إضافة الموظف بدون راتب أو منصب محدد.`,
+                getEmployeeKeyboard(managerPermissions)
+              )
+            } else if (isDetails) {
+              // Start detailed approval flow - ask for salary
+              await setSession('jr_salary', { 
+                join_request_id: joinRequestId,
+                join_request_applicant_name: joinRequest.full_name
+              })
+              
+              await sendMessage(botToken, chatId, 
+                `📋 <b>تحديد بيانات الموظف الجديد</b>\n\n` +
+                `👤 الاسم: ${joinRequest.full_name}\n\n` +
+                `💰 أرسل الراتب الأساسي (بالأرقام فقط):`,
+                {
+                  inline_keyboard: [
+                    [{ text: '⏭️ تخطي (بدون راتب)', callback_data: 'jr_skip_salary' }],
+                    [{ text: '❌ إلغاء', callback_data: 'jr_cancel' }]
+                  ]
+                }
+              )
+            }
+          }
+          // Handle skip salary in join request
+          else if (callbackData === 'jr_skip_salary') {
+            const session = await getSession()
+            if (!session?.data.join_request_id) break
+            
+            await setSession('jr_position', { 
+              ...session.data,
+              join_request_salary: 0
+            })
+            
+            // Get positions for selection
+            const { data: positions } = await supabase
+              .from('positions')
+              .select('id, title, title_ar')
+              .eq('company_id', companyId)
+              .eq('is_active', true)
+            
+            const positionButtons = positions?.map(p => ([{
+              text: p.title_ar || p.title,
+              callback_data: `jr_pos_${p.id}`
+            }])) || []
+            
+            positionButtons.push([{ text: '⏭️ تخطي (بدون منصب)', callback_data: 'jr_skip_position' }])
+            positionButtons.push([{ text: '❌ إلغاء', callback_data: 'jr_cancel' }])
+            
+            await sendMessage(botToken, chatId, 
+              `👤 ${session.data.join_request_applicant_name}\n` +
+              `💰 الراتب: 0\n\n` +
+              `📋 اختر المنصب:`,
+              { inline_keyboard: positionButtons }
+            )
+          }
+          // Handle position selection in join request
+          else if (callbackData.startsWith('jr_pos_')) {
+            const session = await getSession()
+            if (!session?.data.join_request_id) break
+            
+            const positionId = callbackData.replace('jr_pos_', '')
+            await finalizeJoinRequestApproval(supabase, botToken, chatId, companyId, session.data.join_request_id, session.data.join_request_salary || 0, positionId, employee?.user_id, managerPermissions)
+            await deleteSession()
+          }
+          // Handle skip position in join request
+          else if (callbackData === 'jr_skip_position') {
+            const session = await getSession()
+            if (!session?.data.join_request_id) break
+            
+            await finalizeJoinRequestApproval(supabase, botToken, chatId, companyId, session.data.join_request_id, session.data.join_request_salary || 0, null, employee?.user_id, managerPermissions)
+            await deleteSession()
+          }
+          // Handle cancel join request review
+          else if (callbackData === 'jr_cancel') {
+            await deleteSession()
+            await sendMessage(botToken, chatId, '❌ تم إلغاء مراجعة الطلب', getEmployeeKeyboard(managerPermissions))
+          }
           break
       }
 
@@ -1981,10 +2172,100 @@ async function submitRegistration(
       'يمكنك التحقق من حالة طلبك بالضغط على "حالة طلبي"'
     )
     return
+}
+
+// Finalize join request approval with salary and position
+async function finalizeJoinRequestApproval(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  companyId: string,
+  joinRequestId: string,
+  salary: number,
+  positionId: string | null,
+  reviewerId: string | null,
+  managerPermissions: any
+) {
+  const { data: joinRequest, error: jrError } = await supabase
+    .from('join_requests')
+    .select('*')
+    .eq('id', joinRequestId)
+    .eq('status', 'pending')
+    .single()
+  
+  if (jrError || !joinRequest) {
+    await sendMessage(botToken, chatId, '❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
+    return
   }
+  
+  const { data: compData } = await supabase
+    .from('companies')
+    .select('default_currency, default_weekend_days, work_start_time, work_end_time')
+    .eq('id', companyId)
+    .single()
+  
+  const { error: empError } = await supabase
+    .from('employees')
+    .insert({
+      company_id: companyId,
+      full_name: joinRequest.full_name,
+      email: joinRequest.email || `${joinRequest.telegram_chat_id}@telegram.user`,
+      phone: joinRequest.phone || null,
+      telegram_chat_id: joinRequest.telegram_chat_id,
+      national_id: joinRequest.national_id || null,
+      work_start_time: joinRequest.work_start_time || compData?.work_start_time || '09:00:00',
+      work_end_time: joinRequest.work_end_time || compData?.work_end_time || '17:00:00',
+      weekend_days: joinRequest.weekend_days || compData?.default_weekend_days || ['friday'],
+      currency: compData?.default_currency || 'SAR',
+      base_salary: salary,
+      position_id: positionId
+    })
+  
+  if (empError) {
+    console.error('Failed to create employee:', empError)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إضافة الموظف', getEmployeeKeyboard(managerPermissions))
+    return
+  }
+  
+  await supabase
+    .from('join_requests')
+    .update({
+      status: 'approved',
+      reviewed_by: reviewerId,
+      reviewed_at: new Date().toISOString()
+    })
+    .eq('id', joinRequestId)
+  
+  // Notify applicant
+  try {
+    await sendMessage(botToken, parseInt(joinRequest.telegram_chat_id), 
+      `🎉 مرحباً ${joinRequest.full_name}!\n\n` +
+      `تم قبول طلب انضمامك بنجاح!\n` +
+      `يمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.\n\n` +
+      `أرسل /start للبدء.`,
+      {
+        inline_keyboard: [
+          [
+            { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+            { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+          ]
+        ]
+      }
+    )
+  } catch (e) {
+    console.error('Failed to notify approved applicant:', e)
+  }
+  
+  await sendMessage(botToken, chatId, 
+    `✅ تم قبول ${joinRequest.full_name} كموظف جديد\n\n` +
+    `💰 الراتب: ${salary}\n` +
+    (positionId ? `📋 تم تحديد المنصب` : `📋 بدون منصب محدد`),
+    getEmployeeKeyboard(managerPermissions)
+  )
+}
 
   // Create join request with all collected data including work schedule
-  await supabase.from('join_requests').insert({
+  const { data: newRequest, error: insertError } = await supabase.from('join_requests').insert({
     company_id: companyId,
     telegram_chat_id: telegramChatId,
     telegram_username: username,
@@ -1994,7 +2275,36 @@ async function submitRegistration(
     work_start_time: sessionData.work_start_time || null,
     work_end_time: sessionData.work_end_time || null,
     weekend_days: sessionData.weekend_days || ['friday', 'saturday'],
-  })
+  }).select('id').single()
+
+  if (insertError) {
+    console.error('Failed to create join request:', insertError)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إرسال الطلب. يرجى المحاولة مرة أخرى.')
+    return
+  }
+
+  // Get company reviewer settings
+  const { data: company } = await supabase
+    .from('companies')
+    .select('join_request_reviewer_type, join_request_reviewer_id, name')
+    .eq('id', companyId)
+    .single()
+
+  // Notify the reviewer if configured
+  if (company?.join_request_reviewer_type && company?.join_request_reviewer_id && newRequest?.id) {
+    await notifyJoinRequestReviewer(
+      supabase,
+      botToken,
+      companyId,
+      newRequest.id,
+      sessionData,
+      telegramChatId,
+      username,
+      company.join_request_reviewer_type,
+      company.join_request_reviewer_id,
+      company.name
+    )
+  }
 
   await sendMessage(botToken, chatId, 
     '✅ <b>تم إرسال طلب الانضمام بنجاح!</b>\n\n' +
@@ -2012,6 +2322,87 @@ async function submitRegistration(
       ]
     }
   )
+}
+
+// Notify the designated reviewer about a new join request
+async function notifyJoinRequestReviewer(
+  supabase: any,
+  botToken: string,
+  companyId: string,
+  joinRequestId: string,
+  sessionData: SessionData,
+  applicantChatId: string,
+  applicantUsername: string | undefined,
+  reviewerType: string,
+  reviewerId: string,
+  companyName: string
+) {
+  try {
+    let reviewerChatId: string | null = null
+
+    if (reviewerType === 'employee') {
+      // Get the specific employee
+      const { data: reviewer } = await supabase
+        .from('employees')
+        .select('telegram_chat_id, full_name')
+        .eq('id', reviewerId)
+        .eq('is_active', true)
+        .single()
+      
+      reviewerChatId = reviewer?.telegram_chat_id
+    } else if (reviewerType === 'position') {
+      // Get the first employee with this position who has telegram connected
+      const { data: reviewers } = await supabase
+        .from('employees')
+        .select('telegram_chat_id, full_name')
+        .eq('position_id', reviewerId)
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .not('telegram_chat_id', 'is', null)
+        .limit(1)
+      
+      reviewerChatId = reviewers?.[0]?.telegram_chat_id
+    }
+
+    if (!reviewerChatId) {
+      console.log('No reviewer found with telegram connected for join request:', joinRequestId)
+      return
+    }
+
+    // Get positions list for the reviewer to choose from
+    const { data: positions } = await supabase
+      .from('positions')
+      .select('id, title, title_ar')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+
+    const message = 
+      `🆕 <b>طلب انضمام جديد</b>\n\n` +
+      `📋 <b>بيانات المتقدم:</b>\n` +
+      `👤 الاسم: ${sessionData.full_name}\n` +
+      `📧 البريد: ${sessionData.email || 'غير محدد'}\n` +
+      `📱 الهاتف: ${sessionData.phone || 'غير محدد'}\n` +
+      `📲 تليجرام: ${applicantUsername ? `@${applicantUsername}` : applicantChatId}\n` +
+      `⏰ وقت العمل: ${sessionData.work_start_time?.substring(0, 5) || '09:00'} - ${sessionData.work_end_time?.substring(0, 5) || '17:00'}\n` +
+      `📅 أيام الإجازة: ${sessionData.weekend_days?.map((d: string) => getDayName(d)).join('، ') || 'الجمعة، السبت'}\n\n` +
+      `🏢 الشركة: ${companyName}\n\n` +
+      `⚡ <b>اختر إجراء:</b>`
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '✅ قبول الطلب', callback_data: `jr_approve_${joinRequestId}` },
+          { text: '❌ رفض الطلب', callback_data: `jr_reject_${joinRequestId}` }
+        ],
+        [{ text: '📋 تحديد المنصب والراتب ثم القبول', callback_data: `jr_details_${joinRequestId}` }]
+      ]
+    }
+
+    await sendMessage(botToken, parseInt(reviewerChatId), message, keyboard)
+    console.log('Join request notification sent to reviewer:', reviewerChatId)
+  } catch (error) {
+    console.error('Failed to notify join request reviewer:', error)
+  }
 }
 
 async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {

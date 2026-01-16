@@ -5,6 +5,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/hooks/useCompany';
+import { usePositions } from '@/hooks/usePositions';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -18,7 +20,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,6 +33,8 @@ const Settings = () => {
   const { theme, setTheme } = useTheme();
   const { profile } = useAuth();
   const { data: company, isLoading, refetch } = useCompany();
+  const { data: positions = [] } = usePositions();
+  const { data: employees = [] } = useEmployees();
   const queryClient = useQueryClient();
   
   const [saving, setSaving] = useState(false);
@@ -57,6 +61,10 @@ const Settings = () => {
   // Leave policy states
   const [annualLeaveDays, setAnnualLeaveDays] = useState(21);
   const [emergencyLeaveDays, setEmergencyLeaveDays] = useState(7);
+
+  // Join request reviewer states
+  const [joinRequestReviewerType, setJoinRequestReviewerType] = useState<string | null>(null);
+  const [joinRequestReviewerId, setJoinRequestReviewerId] = useState<string | null>(null);
 
   const WEEKDAYS = [
     { id: 'sunday', label: t('common.sunday') },
@@ -95,6 +103,10 @@ const Settings = () => {
       
       // Default weekend days
       setWeekendDays((company as any).default_weekend_days || ['friday']);
+      
+      // Join request reviewer
+      setJoinRequestReviewerType((company as any).join_request_reviewer_type || null);
+      setJoinRequestReviewerId((company as any).join_request_reviewer_id || null);
     }
   }, [company]);
 
@@ -269,6 +281,35 @@ const Settings = () => {
       
       await refetch();
       toast.success('تم حفظ قوانين الحضور والانصراف');
+    } catch (error: any) {
+      console.error('Save error:', error);
+      toast.error('فشل في الحفظ: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveJoinRequestReviewer = async () => {
+    if (!company?.id) {
+      toast.error('لم يتم العثور على الشركة');
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          join_request_reviewer_type: joinRequestReviewerType,
+          join_request_reviewer_id: joinRequestReviewerId,
+        } as any)
+        .eq('id', company.id);
+
+      if (error) throw error;
+      
+      await refetch();
+      toast.success('تم حفظ إعدادات مراجعة طلبات الانضمام');
     } catch (error: any) {
       console.error('Save error:', error);
       toast.error('فشل في الحفظ: ' + error.message);
@@ -551,6 +592,120 @@ const Settings = () => {
               >
                 {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
                 {t('common.save')}
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Join Request Reviewer Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.55 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-primary" />
+                مراجع طلبات الانضمام
+              </CardTitle>
+              <CardDescription>
+                تحديد الشخص أو المنصب المسؤول عن مراجعة طلبات انضمام الموظفين الجدد عبر تليجرام
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>نوع المراجع</Label>
+                  <Select 
+                    value={joinRequestReviewerType || 'none'} 
+                    onValueChange={(value) => {
+                      if (value === 'none') {
+                        setJoinRequestReviewerType(null);
+                        setJoinRequestReviewerId(null);
+                      } else {
+                        setJoinRequestReviewerType(value);
+                        setJoinRequestReviewerId(null);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر نوع المراجع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون مراجع (الموافقة من الويب)</SelectItem>
+                      <SelectItem value="position">منصب معين</SelectItem>
+                      <SelectItem value="employee">موظف معين</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {joinRequestReviewerType === 'position' && (
+                  <div className="space-y-2">
+                    <Label>اختر المنصب</Label>
+                    <Select 
+                      value={joinRequestReviewerId || ''} 
+                      onValueChange={setJoinRequestReviewerId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر المنصب" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {positions.map((position) => (
+                          <SelectItem key={position.id} value={position.id}>
+                            {language === 'ar' && position.title_ar ? position.title_ar : position.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      سيتم إرسال طلبات الانضمام لأول موظف لديه هذا المنصب ومتصل بتليجرام
+                    </p>
+                  </div>
+                )}
+                
+                {joinRequestReviewerType === 'employee' && (
+                  <div className="space-y-2">
+                    <Label>اختر الموظف</Label>
+                    <Select 
+                      value={joinRequestReviewerId || ''} 
+                      onValueChange={setJoinRequestReviewerId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الموظف" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employees.filter(e => e.telegram_chat_id).map((emp) => (
+                          <SelectItem key={emp.id} value={emp.id}>
+                            {emp.full_name} {emp.department ? `(${emp.department})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      يظهر فقط الموظفون المتصلون بتليجرام
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <h4 className="font-medium mb-2">كيف يعمل هذا؟</h4>
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>عند تقديم موظف جديد لطلب انضمام من تليجرام</li>
+                  <li>يُرسل الطلب للمراجع المحدد مع بيانات المتقدم الكاملة</li>
+                  <li>يحدد المراجع الراتب والمنصب للموظف الجديد</li>
+                  <li>يوافق أو يرفض الطلب مباشرة من تليجرام</li>
+                </ul>
+              </div>
+              
+              <Button 
+                onClick={handleSaveJoinRequestReviewer} 
+                className="btn-primary-gradient" 
+                disabled={saving || (joinRequestReviewerType && !joinRequestReviewerId)}
+              >
+                {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
+                حفظ إعدادات المراجعة
               </Button>
             </CardContent>
           </Card>
