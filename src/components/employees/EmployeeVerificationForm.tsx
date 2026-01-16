@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -214,12 +213,12 @@ const EmployeeVerificationForm = ({
                       const Icon = option.icon;
                       const isChecked = value.level3Requirements.includes(option.id);
                       return (
-                        <div 
+                        <label 
                           key={option.id}
+                          htmlFor={`edit-req-${option.id}`}
                           className={`flex items-center space-x-3 rtl:space-x-reverse p-2 border rounded-lg transition-colors cursor-pointer ${
                             isChecked ? 'border-destructive bg-destructive/10' : 'hover:bg-muted/50'
                           }`}
-                          onClick={() => handleLevel3RequirementChange(option.id, !isChecked)}
                         >
                           <Checkbox 
                             id={`edit-req-${option.id}`}
@@ -228,14 +227,11 @@ const EmployeeVerificationForm = ({
                               handleLevel3RequirementChange(option.id, checked as boolean)
                             }
                           />
-                          <Label 
-                            htmlFor={`edit-req-${option.id}`} 
-                            className="cursor-pointer flex items-center gap-2 flex-1 text-sm"
-                          >
+                          <span className="cursor-pointer flex items-center gap-2 flex-1 text-sm">
                             <Icon className={`w-4 h-4 ${isChecked ? 'text-destructive' : 'text-muted-foreground'}`} />
                             {option.label}
-                          </Label>
-                        </div>
+                          </span>
+                        </label>
                       );
                     })}
                   </div>
