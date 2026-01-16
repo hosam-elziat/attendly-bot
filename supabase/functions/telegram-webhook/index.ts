@@ -123,7 +123,7 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction')
       .eq('id', companyId)
       .single()
 
@@ -135,7 +135,9 @@ serve(async (req) => {
       weekend_days: ['friday', 'saturday'],
       company_name: company?.name || 'الشركة',
       annual_leave_days: company?.annual_leave_days || 21,
-      emergency_leave_days: company?.emergency_leave_days || 7
+      emergency_leave_days: company?.emergency_leave_days || 7,
+      currency: company?.default_currency || 'EGP',
+      absence_deduction_days: company?.absence_without_permission_deduction || 1
     }
 
     // Check if employee exists
@@ -940,7 +942,8 @@ serve(async (req) => {
               .single()
             
             const baseSalary = empDetails?.base_salary || 0
-            const currency = empDetails?.currency || 'SAR'
+            // Use employee currency, fallback to company default currency
+            const currency = empDetails?.currency || companyDefaults.currency
             
             // Get this month's data
             const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
@@ -1591,7 +1594,19 @@ serve(async (req) => {
           const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
           
           // Insert salary adjustment
-          await supabase.from('salary_adjustments').insert({
+          console.log('Inserting salary adjustment:', {
+            employee_id: targetEmpId,
+            company_id: companyId,
+            month: monthKey,
+            bonus: isBonus ? amount : 0,
+            deduction: isBonus ? 0 : amount,
+            adjustment_days: adjustmentDays,
+            description: text,
+            added_by: employee.id,
+            added_by_name: employee.full_name
+          })
+          
+          const { data: insertedAdjustment, error: insertError } = await supabase.from('salary_adjustments').insert({
             employee_id: targetEmpId,
             company_id: companyId,
             month: monthKey,
@@ -1602,7 +1617,19 @@ serve(async (req) => {
             added_by: employee.id,
             added_by_name: employee.full_name,
             is_auto_generated: false
-          })
+          }).select()
+          
+          if (insertError) {
+            console.error('Error inserting salary adjustment:', insertError)
+            await sendMessage(botToken, chatId, 
+              `❌ حدث خطأ أثناء تسجيل ${isBonus ? 'المكافأة' : 'الخصم'}:\n${insertError.message}`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            await deleteSession()
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          console.log('Successfully inserted salary adjustment:', insertedAdjustment)
           
           // Notify the target employee
           const { data: targetEmp } = await supabase
@@ -1612,13 +1639,22 @@ serve(async (req) => {
             .single()
           
           if (targetEmp?.telegram_chat_id) {
+            // Get target employee's currency or use company default
+            const { data: targetEmpDetails } = await supabase
+              .from('employees')
+              .select('currency')
+              .eq('id', targetEmpId)
+              .single()
+            
+            const empCurrency = targetEmpDetails?.currency || companyDefaults.currency
+            
             const emoji = isBonus ? '🎉' : '⚠️'
             const typeText = isBonus ? 'مكافأة' : 'خصم'
             await sendMessage(botToken, parseInt(targetEmp.telegram_chat_id),
               `${emoji} <b>إشعار ${typeText}</b>\n\n` +
               `📋 ${employee.full_name} سجّل لك ${typeText}\n` +
               `📝 السبب: ${text}\n` +
-              `💰 القيمة: ${amount}`
+              `💰 القيمة: ${amount} ${empCurrency}`
             )
           }
           
