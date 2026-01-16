@@ -20,7 +20,8 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck } from 'lucide-react';
+import AttendanceVerificationSettings from '@/components/settings/AttendanceVerificationSettings';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -863,6 +864,15 @@ const Settings = () => {
               </Button>
             </CardContent>
           </Card>
+        </motion.div>
+
+        {/* Attendance Verification Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.7 }}
+        >
+          <AttendanceVerificationSettings company={company} onRefetch={refetch} />
         </motion.div>
       </div>
     </DashboardLayout>

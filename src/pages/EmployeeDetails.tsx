@@ -50,6 +50,8 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, 
 import { ar } from 'date-fns/locale';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
+import EmployeeVerificationSettings from '@/components/settings/EmployeeVerificationSettings';
+import { useCompany } from '@/hooks/useCompany';
 import { toast } from 'sonner';
 
 // Arab countries with timezones
@@ -109,6 +111,7 @@ const EmployeeDetails = () => {
   const { t, direction } = useLanguage();
   const { data: employees = [], refetch: refetchEmployees } = useEmployees();
   const { data: attendanceLogs = [] } = useAttendance();
+  const { data: company } = useCompany();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('month');
   const [salaryPeriod, setSalaryPeriod] = useState<SalaryFilterPeriod>('this_month');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -339,10 +342,11 @@ const EmployeeDetails = () => {
           transition={{ duration: 0.4, delay: 0.2 }}
         >
           <Tabs defaultValue="info" className="space-y-4">
-            <TabsList>
+            <TabsList className="flex-wrap">
               <TabsTrigger value="info">{t('employeeDetails.personalInfo')}</TabsTrigger>
               <TabsTrigger value="attendance">{t('employeeDetails.attendanceLog')}</TabsTrigger>
               <TabsTrigger value="salary">{t('employeeDetails.salaryInfo')}</TabsTrigger>
+              <TabsTrigger value="verification">التحقق من الحضور</TabsTrigger>
             </TabsList>
 
             <TabsContent value="info">
@@ -668,6 +672,15 @@ const EmployeeDetails = () => {
                 month={currentMonth}
                 baseSalary={employee.base_salary}
                 onSuccess={() => refetchAdjustments()}
+              />
+            </TabsContent>
+
+            {/* Verification Settings Tab */}
+            <TabsContent value="verification">
+              <EmployeeVerificationSettings 
+                employee={employee} 
+                company={company} 
+                onSuccess={() => refetchEmployees()} 
               />
             </TabsContent>
           </Tabs>

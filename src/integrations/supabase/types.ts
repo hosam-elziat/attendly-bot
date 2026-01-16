@@ -201,7 +201,12 @@ export type Database = {
         Row: {
           absence_without_permission_deduction: number | null
           annual_leave_days: number | null
+          attendance_approver_id: string | null
+          attendance_approver_type: string | null
+          attendance_verification_level: number | null
           break_duration_minutes: number | null
+          company_latitude: number | null
+          company_longitude: number | null
           country_code: string | null
           created_at: string
           daily_late_allowance_minutes: number | null
@@ -214,6 +219,8 @@ export type Database = {
           late_15_to_30_deduction: number | null
           late_over_30_deduction: number | null
           late_under_15_deduction: number | null
+          level3_verification_mode: string | null
+          location_radius_meters: number | null
           max_excused_absence_days: number | null
           monthly_late_allowance_minutes: number | null
           name: string
@@ -229,7 +236,12 @@ export type Database = {
         Insert: {
           absence_without_permission_deduction?: number | null
           annual_leave_days?: number | null
+          attendance_approver_id?: string | null
+          attendance_approver_type?: string | null
+          attendance_verification_level?: number | null
           break_duration_minutes?: number | null
+          company_latitude?: number | null
+          company_longitude?: number | null
           country_code?: string | null
           created_at?: string
           daily_late_allowance_minutes?: number | null
@@ -242,6 +254,8 @@ export type Database = {
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
           late_under_15_deduction?: number | null
+          level3_verification_mode?: string | null
+          location_radius_meters?: number | null
           max_excused_absence_days?: number | null
           monthly_late_allowance_minutes?: number | null
           name: string
@@ -257,7 +271,12 @@ export type Database = {
         Update: {
           absence_without_permission_deduction?: number | null
           annual_leave_days?: number | null
+          attendance_approver_id?: string | null
+          attendance_approver_type?: string | null
+          attendance_verification_level?: number | null
           break_duration_minutes?: number | null
+          company_latitude?: number | null
+          company_longitude?: number | null
           country_code?: string | null
           created_at?: string
           daily_late_allowance_minutes?: number | null
@@ -270,6 +289,8 @@ export type Database = {
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
           late_under_15_deduction?: number | null
+          level3_verification_mode?: string | null
+          location_radius_meters?: number | null
           max_excused_absence_days?: number | null
           monthly_late_allowance_minutes?: number | null
           name?: string
@@ -376,9 +397,64 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_location_history: {
+        Row: {
+          company_id: string
+          employee_id: string
+          id: string
+          ip_address: string | null
+          is_suspicious: boolean | null
+          latitude: number
+          longitude: number
+          recorded_at: string
+          suspicion_reason: string | null
+        }
+        Insert: {
+          company_id: string
+          employee_id: string
+          id?: string
+          ip_address?: string | null
+          is_suspicious?: boolean | null
+          latitude: number
+          longitude: number
+          recorded_at?: string
+          suspicion_reason?: string | null
+        }
+        Update: {
+          company_id?: string
+          employee_id?: string
+          id?: string
+          ip_address?: string | null
+          is_suspicious?: boolean | null
+          latitude?: number
+          longitude?: number
+          recorded_at?: string
+          suspicion_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_location_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_location_history_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           address: string | null
+          allowed_wifi_ips: string[] | null
+          attendance_approver_id: string | null
+          attendance_approver_type: string | null
+          attendance_verification_level: number | null
           base_salary: number | null
           break_duration_minutes: number | null
           company_id: string
@@ -407,6 +483,10 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          allowed_wifi_ips?: string[] | null
+          attendance_approver_id?: string | null
+          attendance_approver_type?: string | null
+          attendance_verification_level?: number | null
           base_salary?: number | null
           break_duration_minutes?: number | null
           company_id: string
@@ -435,6 +515,10 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          allowed_wifi_ips?: string[] | null
+          attendance_approver_id?: string | null
+          attendance_approver_type?: string | null
+          attendance_verification_level?: number | null
           base_salary?: number | null
           break_duration_minutes?: number | null
           company_id?: string
@@ -634,6 +718,108 @@ export type Database = {
           },
           {
             foreignKeyName: "leave_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_attendance: {
+        Row: {
+          approved_time: string | null
+          approver_id: string | null
+          approver_type: string | null
+          company_id: string
+          created_at: string
+          employee_id: string
+          id: string
+          ip_address: string | null
+          ip_verified: boolean | null
+          latitude: number | null
+          location_spoofing_suspected: boolean | null
+          location_verified: boolean | null
+          longitude: number | null
+          notes: string | null
+          rejection_reason: string | null
+          request_type: string
+          requested_at: string
+          requested_time: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          selfie_url: string | null
+          selfie_verified: boolean | null
+          status: string
+          telegram_message_id: number | null
+          updated_at: string
+          vpn_detected: boolean | null
+        }
+        Insert: {
+          approved_time?: string | null
+          approver_id?: string | null
+          approver_type?: string | null
+          company_id: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          ip_address?: string | null
+          ip_verified?: boolean | null
+          latitude?: number | null
+          location_spoofing_suspected?: boolean | null
+          location_verified?: boolean | null
+          longitude?: number | null
+          notes?: string | null
+          rejection_reason?: string | null
+          request_type?: string
+          requested_at?: string
+          requested_time: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          selfie_url?: string | null
+          selfie_verified?: boolean | null
+          status?: string
+          telegram_message_id?: number | null
+          updated_at?: string
+          vpn_detected?: boolean | null
+        }
+        Update: {
+          approved_time?: string | null
+          approver_id?: string | null
+          approver_type?: string | null
+          company_id?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          ip_address?: string | null
+          ip_verified?: boolean | null
+          latitude?: number | null
+          location_spoofing_suspected?: boolean | null
+          location_verified?: boolean | null
+          longitude?: number | null
+          notes?: string | null
+          rejection_reason?: string | null
+          request_type?: string
+          requested_at?: string
+          requested_time?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          selfie_url?: string | null
+          selfie_verified?: boolean | null
+          status?: string
+          telegram_message_id?: number | null
+          updated_at?: string
+          vpn_detected?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_attendance_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_attendance_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
