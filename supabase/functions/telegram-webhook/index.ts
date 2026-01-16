@@ -1297,35 +1297,41 @@ serve(async (req) => {
             
             console.log(`Manager ${employee?.full_name} ${isApproval ? 'approved' : 'rejected'} leave request ${leaveRequestId}`)
           }
-          // Handle join request restoration of deleted employee
-          else if (callbackData.startsWith('jr_restore_')) {
-            // Format: jr_restore_{joinRequestId}_{deletedRecordId}
-            const parts = callbackData.replace('jr_restore_', '').split('_')
-            const joinRequestId = parts[0]
-            const deletedRecordId = parts[1]
+          // Handle join request restoration of deleted employee (short format: jrr_{shortId})
+          else if (callbackData.startsWith('jrr_')) {
+            // Format: jrr_{first 8 chars of joinRequestId}
+            const shortId = callbackData.replace('jrr_', '')
             
-            // Fetch join request
-            const { data: joinRequest, error: jrError } = await supabase
+            // Fetch join request by partial ID match
+            const { data: joinRequests, error: jrError } = await supabase
               .from('join_requests')
               .select('*')
-              .eq('id', joinRequestId)
               .eq('status', 'pending')
-              .single()
+              .eq('company_id', companyId)
+            
+            const joinRequest = joinRequests?.find((jr: any) => jr.id.startsWith(shortId))
             
             if (jrError || !joinRequest) {
               await sendMessage(botToken, chatId, '❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
               break
             }
             
-            // Fetch deleted record
-            const { data: deletedRecord, error: delError } = await supabase
+            // Find deleted record by telegram_chat_id
+            const { data: deletedRecords } = await supabase
               .from('deleted_records')
               .select('*')
-              .eq('id', deletedRecordId)
+              .eq('table_name', 'employees')
+              .eq('company_id', companyId)
               .eq('is_restored', false)
-              .single()
+              .order('deleted_at', { ascending: false })
             
-            if (delError || !deletedRecord) {
+            // Filter for matching telegram_chat_id
+            const deletedRecord = deletedRecords?.find((record: any) => {
+              const recordData = record.record_data as Record<string, unknown>
+              return recordData?.telegram_chat_id === joinRequest.telegram_chat_id
+            })
+            
+            if (!deletedRecord) {
               await sendMessage(botToken, chatId, '❌ لم يتم العثور على سجل الموظف المحذوف', getEmployeeKeyboard(managerPermissions))
               break
             }
@@ -1359,7 +1365,7 @@ serve(async (req) => {
                 is_restored: true, 
                 restored_at: new Date().toISOString() 
               })
-              .eq('id', deletedRecordId)
+              .eq('id', deletedRecord.id)
             
             // Update join request status
             await supabase
@@ -1369,7 +1375,7 @@ serve(async (req) => {
                 reviewed_by: employee?.user_id || null,
                 reviewed_at: new Date().toISOString()
               })
-              .eq('id', joinRequestId)
+              .eq('id', joinRequest.id)
             
             // Notify applicant
             try {
@@ -2650,7 +2656,7 @@ async function notifyAllJoinRequestReviewers(
       
       keyboard = {
         inline_keyboard: [
-          [{ text: '🔄 استعادة البيانات السابقة', callback_data: `jr_restore_${joinRequestId}_${deletedEmployee.id}` }],
+          [{ text: '🔄 استعادة البيانات السابقة', callback_data: `jrr_${joinRequestId.substring(0, 8)}` }],
           [
             { text: '✅ قبول كموظف جديد', callback_data: `jr_approve_${joinRequestId}` },
             { text: '❌ رفض الطلب', callback_data: `jr_reject_${joinRequestId}` }
