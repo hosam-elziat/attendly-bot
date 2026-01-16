@@ -69,6 +69,8 @@ interface SessionData {
   join_request_applicant_name?: string;
   join_request_position_id?: string;
   join_request_salary?: number;
+  // Attendance approval session data
+  pending_id?: string;
 }
 
 serve(async (req) => {
@@ -128,7 +130,7 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, company_latitude, company_longitude, location_radius_meters, level3_verification_mode')
       .eq('id', companyId)
       .single()
 
@@ -148,11 +150,16 @@ serve(async (req) => {
     // Check if employee exists
     const { data: employee } = await supabase
       .from('employees')
-      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id')
+      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, allowed_wifi_ips')
       .eq('telegram_chat_id', telegramChatId)
       .eq('company_id', companyId)
       .eq('is_active', true)
       .single()
+    
+    // Determine effective verification level (employee override or company default)
+    const effectiveVerificationLevel = (employee as any)?.attendance_verification_level ?? (company as any)?.attendance_verification_level ?? 1
+    const effectiveApproverType = (employee as any)?.attendance_approver_type ?? (company as any)?.attendance_approver_type ?? 'direct_manager'
+    const effectiveApproverId = (employee as any)?.attendance_approver_id ?? (company as any)?.attendance_approver_id
     
     // Get employee's position permissions if they have a position
     let managerPermissions: {
@@ -388,6 +395,31 @@ serve(async (req) => {
         .eq('id', employee.id)
         .single()
 
+      // Handle attendance approval/rejection callbacks first
+      if (callbackData.startsWith('approve_attendance_')) {
+        const pendingId = callbackData.replace('approve_attendance_', '')
+        // Call the attendance-approval edge function
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+        await fetch(`${supabaseUrl}/functions/v1/attendance-approval`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+          body: JSON.stringify({ pending_id: pendingId, action: 'approve', manager_name: employee.full_name, manager_chat_id: chatId })
+        })
+        await sendMessage(botToken, chatId, '✅ تمت معالجة الطلب')
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+
+      if (callbackData.startsWith('reject_attendance_') || callbackData.startsWith('modify_attendance_')) {
+        await sendMessage(botToken, chatId, '⚠️ يرجى استخدام لوحة التحكم للرفض أو تعديل الوقت')
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+
+      if (callbackData === 'cancel_action') {
+        await deleteSession()
+        await sendMessage(botToken, chatId, '✅ تم الإلغاء', getEmployeeKeyboard(managerPermissions))
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+
       switch (callbackData) {
         case 'check_in':
           // For check_in, only check today's attendance (not yesterday's open shift)
@@ -395,162 +427,33 @@ serve(async (req) => {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
-            const nowUtc = new Date().toISOString() // Store UTC in database
-            const checkInTime = localTime.time // Use local time for display and comparison
+            const nowUtc = new Date().toISOString()
+            const checkInTime = localTime.time
             
-            let status: 'checked_in' | 'on_break' | 'checked_out' | 'absent' = 'checked_in'
-            let notes = ''
-            let lateMessage = ''
-            
-            const workStartTime = employee.work_start_time || companyDefaults.work_start_time
-            
-            // Create attendance log first to get the ID
-            const { data: newAttendance, error: insertError } = await supabase.from('attendance_logs').insert({
-              employee_id: employee.id,
-              company_id: companyId,
-              date: today,
-              check_in_time: nowUtc,
-              status,
-              notes: null
-            }).select('id').single()
-
-            if (insertError) {
-              console.error('Failed to create attendance:', insertError)
-              await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء تسجيل الحضور')
-              break
-            }
-
-            const attendanceLogId = newAttendance.id
-            
-            if (workStartTime && checkInTime > workStartTime) {
-              // Calculate late minutes
-              const [startH, startM] = workStartTime.split(':').map(Number)
-              const [checkH, checkM] = checkInTime.split(':').map(Number)
-              const lateMinutes = (checkH * 60 + checkM) - (startH * 60 + startM)
-              
-              if (lateMinutes > 0) {
-                notes = `تأخر ${lateMinutes} دقيقة - موعد العمل: ${workStartTime}`
-                
-                // Update attendance with notes
-                await supabase.from('attendance_logs')
-                  .update({ notes })
-                  .eq('id', attendanceLogId)
-                
-                // Get current late balance
-                let currentLateBalance = empDetails?.monthly_late_balance_minutes ?? companyPolicies?.monthly_late_allowance_minutes ?? 15
-                
-                // Late balance only applies to first 15 minutes
-                const balanceApplicableMinutes = Math.min(lateMinutes, 15)
-                const minutesBeyond15 = Math.max(0, lateMinutes - 15)
-                
-                if (currentLateBalance > 0 && balanceApplicableMinutes <= currentLateBalance && lateMinutes <= 15) {
-                  // Within 15 min and have enough balance - deduct from balance only
-                  const newBalance = currentLateBalance - lateMinutes
-                  await supabase
-                    .from('employees')
-                    .update({ monthly_late_balance_minutes: newBalance })
-                    .eq('id', employee.id)
-                  
-                  lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
-                    `✅ تم خصم ${lateMinutes} دقيقة من رصيد التأخيرات\n` +
-                    `📊 رصيدك المتبقي: ${newBalance} دقيقة`
-                } else {
-                  // Either no balance, partial balance, or exceeds 15 minutes
-                  let balanceUsed = 0
-                  if (currentLateBalance > 0 && lateMinutes <= 15) {
-                    // Use partial balance for first 15 minutes
-                    balanceUsed = Math.min(currentLateBalance, balanceApplicableMinutes)
-                    await supabase
-                      .from('employees')
-                      .update({ monthly_late_balance_minutes: currentLateBalance - balanceUsed })
-                      .eq('id', employee.id)
-                  } else if (currentLateBalance > 0 && lateMinutes > 15) {
-                    // Exhaust balance first for the first 15 mins
-                    balanceUsed = Math.min(currentLateBalance, 15)
-                    await supabase
-                      .from('employees')
-                      .update({ monthly_late_balance_minutes: Math.max(0, currentLateBalance - balanceUsed) })
-                      .eq('id', employee.id)
-                  }
-                  
-                  // Calculate effective late minutes for policy (after balance)
-                  const effectiveLateMinutes = lateMinutes > 15 ? lateMinutes : (lateMinutes - balanceUsed)
-                  
-                  // Apply late policy based on total late minutes
-                  let deductionDays = 0
-                  let deductionText = ''
-                  
-                  if (lateMinutes > 30 && companyPolicies?.late_over_30_deduction) {
-                    deductionDays = companyPolicies.late_over_30_deduction
-                    deductionText = `تأخر أكثر من 30 دقيقة`
-                  } else if (lateMinutes > 15 && companyPolicies?.late_15_to_30_deduction) {
-                    deductionDays = companyPolicies.late_15_to_30_deduction
-                    deductionText = `تأخر من 15 إلى 30 دقيقة`
-                  } else if (effectiveLateMinutes > 0 && companyPolicies?.late_under_15_deduction) {
-                    deductionDays = companyPolicies.late_under_15_deduction
-                    deductionText = `تأخر أقل من 15 دقيقة`
-                  }
-                  
-                  if (deductionDays > 0) {
-                    const baseSalary = empDetails?.base_salary ?? 0
-                    const dailyRate = baseSalary / 30
-                    const deductionAmount = dailyRate * deductionDays
-                    // Use first day of month format for consistent querying
-                    const monthKey = today.substring(0, 7) + '-01'
-                    
-                    console.log('Creating late deduction:', {
-                      employee_id: employee.id,
-                      deductionDays,
-                      deductionAmount,
-                      monthKey,
-                      lateMinutes,
-                      attendanceLogId
-                    })
-                    
-                    const { error: adjustmentError } = await supabase.from('salary_adjustments').insert({
-                      employee_id: employee.id,
-                      company_id: companyId,
-                      month: monthKey,
-                      deduction: deductionAmount,
-                      bonus: 0,
-                      adjustment_days: deductionDays,
-                      description: `خصم تأخير يوم ${today} - ${deductionText} (${lateMinutes} دقيقة) - وقت الحضور: ${checkInTime} - موعد العمل: ${workStartTime}`,
-                      added_by_name: 'النظام التلقائي',
-                      attendance_log_id: attendanceLogId,
-                      is_auto_generated: true
-                    })
-                    
-                    if (adjustmentError) {
-                      console.error('Failed to create salary adjustment:', adjustmentError)
-                    } else {
-                      console.log('Late deduction created successfully')
-                    }
-                    
-                    lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
-                      (balanceUsed > 0 ? `✅ تم خصم ${balanceUsed} دقيقة من رصيد التأخيرات\n` : '') +
-                      `📛 تم تطبيق خصم ${deductionDays} يوم` + 
-                      (deductionAmount > 0 ? ` (${deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '') + `\n` +
-                      `📝 السبب: ${deductionText}\n` +
-                      `📊 رصيد التأخيرات: ${Math.max(0, currentLateBalance - balanceUsed)} دقيقة`
-                  } else if (balanceUsed > 0) {
-                    lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
-                      `✅ تم خصم ${balanceUsed} دقيقة من رصيد التأخيرات\n` +
-                      `📊 رصيدك المتبقي: ${Math.max(0, currentLateBalance - balanceUsed)} دقيقة`
-                  }
+            // Check verification level
+            if (effectiveVerificationLevel === 1) {
+              // Level 1: Direct check-in without verification
+              await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, companyPolicies, empDetails, managerPermissions)
+            } else if (effectiveVerificationLevel === 2) {
+              // Level 2: Requires manager approval
+              await createPendingAttendance(supabase, botToken, chatId, employee, companyId, 'check_in', nowUtc, effectiveApproverType, effectiveApproverId)
+            } else if (effectiveVerificationLevel === 3) {
+              // Level 3: Requires location verification - request location from user
+              await sendMessage(botToken, chatId, 
+                '📍 <b>التحقق من الموقع مطلوب</b>\n\n' +
+                'لتسجيل حضورك، يجب إرسال موقعك الحالي.\n' +
+                'اضغط على زر "إرسال الموقع" أدناه:',
+                {
+                  inline_keyboard: [[
+                    { text: '📍 إرسال الموقع', callback_data: 'request_location_checkin' }
+                  ], [
+                    { text: '❌ إلغاء', callback_data: 'cancel_action' }
+                  ]]
                 }
-              }
+              )
+              // Store pending check-in session
+              await setSession('pending_location_checkin', {})
             }
-
-            await sendMessage(botToken, chatId, 
-              `✅ تم تسجيل حضورك بنجاح!\n\n` +
-              `📅 التاريخ: ${today}\n` +
-              `⏰ الوقت: ${checkInTime}` +
-              lateMessage,
-              getEmployeeKeyboard(managerPermissions)
-            )
-            
-            // Notify managers about check-in
-            await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_in', checkInTime, today)
           }
           break
 
@@ -2687,4 +2590,418 @@ function getExtendedDatePickerKeyboard(leaveType: 'emergency' | 'regular') {
 function getArabicDayName(dayIndex: number): string {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
   return days[dayIndex]
+}
+
+// Helper function for direct check-in (Level 1)
+async function processDirectCheckIn(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  employee: any,
+  companyId: string,
+  today: string,
+  nowUtc: string,
+  checkInTime: string,
+  companyDefaults: any,
+  companyPolicies: any,
+  empDetails: any,
+  managerPermissions: any
+) {
+  let notes = ''
+  let lateMessage = ''
+  
+  const workStartTime = employee.work_start_time || companyDefaults.work_start_time
+  
+  // Create attendance log
+  const { data: newAttendance, error: insertError } = await supabase.from('attendance_logs').insert({
+    employee_id: employee.id,
+    company_id: companyId,
+    date: today,
+    check_in_time: nowUtc,
+    status: 'checked_in',
+    notes: null
+  }).select('id').single()
+
+  if (insertError) {
+    console.error('Failed to create attendance:', insertError)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء تسجيل الحضور')
+    return
+  }
+
+  const attendanceLogId = newAttendance.id
+  
+  if (workStartTime && checkInTime > workStartTime) {
+    const [startH, startM] = workStartTime.split(':').map(Number)
+    const [checkH, checkM] = checkInTime.split(':').map(Number)
+    const lateMinutes = (checkH * 60 + checkM) - (startH * 60 + startM)
+    
+    if (lateMinutes > 0) {
+      notes = `تأخر ${lateMinutes} دقيقة - موعد العمل: ${workStartTime}`
+      
+      await supabase.from('attendance_logs')
+        .update({ notes })
+        .eq('id', attendanceLogId)
+      
+      let currentLateBalance = empDetails?.monthly_late_balance_minutes ?? companyPolicies?.monthly_late_allowance_minutes ?? 15
+      const balanceApplicableMinutes = Math.min(lateMinutes, 15)
+      
+      if (currentLateBalance > 0 && balanceApplicableMinutes <= currentLateBalance && lateMinutes <= 15) {
+        const newBalance = currentLateBalance - lateMinutes
+        await supabase
+          .from('employees')
+          .update({ monthly_late_balance_minutes: newBalance })
+          .eq('id', employee.id)
+        
+        lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
+          `✅ تم خصم ${lateMinutes} دقيقة من رصيد التأخيرات\n` +
+          `📊 رصيدك المتبقي: ${newBalance} دقيقة`
+      } else {
+        let balanceUsed = 0
+        if (currentLateBalance > 0 && lateMinutes <= 15) {
+          balanceUsed = Math.min(currentLateBalance, balanceApplicableMinutes)
+          await supabase
+            .from('employees')
+            .update({ monthly_late_balance_minutes: currentLateBalance - balanceUsed })
+            .eq('id', employee.id)
+        } else if (currentLateBalance > 0 && lateMinutes > 15) {
+          balanceUsed = Math.min(currentLateBalance, 15)
+          await supabase
+            .from('employees')
+            .update({ monthly_late_balance_minutes: Math.max(0, currentLateBalance - balanceUsed) })
+            .eq('id', employee.id)
+        }
+        
+        const effectiveLateMinutes = lateMinutes > 15 ? lateMinutes : (lateMinutes - balanceUsed)
+        
+        let deductionDays = 0
+        let deductionText = ''
+        
+        if (lateMinutes > 30 && companyPolicies?.late_over_30_deduction) {
+          deductionDays = companyPolicies.late_over_30_deduction
+          deductionText = `تأخر أكثر من 30 دقيقة`
+        } else if (lateMinutes > 15 && companyPolicies?.late_15_to_30_deduction) {
+          deductionDays = companyPolicies.late_15_to_30_deduction
+          deductionText = `تأخر من 15 إلى 30 دقيقة`
+        } else if (effectiveLateMinutes > 0 && companyPolicies?.late_under_15_deduction) {
+          deductionDays = companyPolicies.late_under_15_deduction
+          deductionText = `تأخر أقل من 15 دقيقة`
+        }
+        
+        if (deductionDays > 0) {
+          const baseSalary = empDetails?.base_salary ?? 0
+          const dailyRate = baseSalary / 30
+          const deductionAmount = dailyRate * deductionDays
+          const monthKey = today.substring(0, 7) + '-01'
+          
+          await supabase.from('salary_adjustments').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            month: monthKey,
+            deduction: deductionAmount,
+            bonus: 0,
+            adjustment_days: deductionDays,
+            description: `خصم تأخير يوم ${today} - ${deductionText} (${lateMinutes} دقيقة)`,
+            added_by_name: 'النظام التلقائي',
+            attendance_log_id: attendanceLogId,
+            is_auto_generated: true
+          })
+          
+          lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
+            (balanceUsed > 0 ? `✅ تم خصم ${balanceUsed} دقيقة من رصيد التأخيرات\n` : '') +
+            `📛 تم تطبيق خصم ${deductionDays} يوم\n` +
+            `📝 السبب: ${deductionText}`
+        } else if (balanceUsed > 0) {
+          lateMessage = `\n\n⏱️ <b>التأخير:</b> ${lateMinutes} دقيقة\n` +
+            `✅ تم خصم ${balanceUsed} دقيقة من رصيد التأخيرات`
+        }
+      }
+    }
+  }
+
+  await sendMessage(botToken, chatId, 
+    `✅ تم تسجيل حضورك بنجاح!\n\n` +
+    `📅 التاريخ: ${today}\n` +
+    `⏰ الوقت: ${checkInTime}` +
+    lateMessage,
+    getEmployeeKeyboard(managerPermissions)
+  )
+  
+  await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_in', checkInTime, today)
+}
+
+// Helper function to create pending attendance for Level 2 (manager approval)
+async function createPendingAttendance(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  employee: any,
+  companyId: string,
+  requestType: 'check_in' | 'check_out',
+  requestedTime: string,
+  approverType: string,
+  approverId: string | null
+) {
+  // Create pending attendance record
+  const { data: pendingRecord, error: pendingError } = await supabase
+    .from('pending_attendance')
+    .insert({
+      company_id: companyId,
+      employee_id: employee.id,
+      request_type: requestType,
+      requested_time: requestedTime,
+      approver_type: approverType,
+      approver_id: approverId,
+      status: 'pending'
+    })
+    .select('id')
+    .single()
+
+  if (pendingError) {
+    console.error('Failed to create pending attendance:', pendingError)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إرسال طلب الحضور')
+    return
+  }
+
+  // Notify employee
+  const requestTypeName = requestType === 'check_in' ? 'الحضور' : 'الانصراف'
+  await sendMessage(botToken, chatId, 
+    `⏳ <b>تم إرسال طلب ${requestTypeName}</b>\n\n` +
+    `📅 التاريخ: ${new Date().toISOString().split('T')[0]}\n` +
+    `⏰ الوقت: ${new Date(requestedTime).toLocaleTimeString('ar-EG')}\n\n` +
+    `🔄 بانتظار موافقة المدير...\n` +
+    `سيتم إخطارك عند الموافقة أو الرفض.`
+  )
+
+  // Get approver(s) to notify
+  let approvers: any[] = []
+  
+  if (approverType === 'specific_person' && approverId) {
+    // Specific person
+    const { data: approver } = await supabase
+      .from('employees')
+      .select('id, full_name, telegram_chat_id')
+      .eq('id', approverId)
+      .single()
+    
+    if (approver?.telegram_chat_id) {
+      approvers.push(approver)
+    }
+  } else {
+    // Direct manager - get from position hierarchy
+    const { data: managers } = await supabase.rpc('get_employee_managers', { emp_id: employee.id })
+    approvers = managers || []
+  }
+
+  // Notify all approvers
+  for (const approver of approvers) {
+    if (approver.manager_telegram_chat_id || approver.telegram_chat_id) {
+      const approverChatId = approver.manager_telegram_chat_id || approver.telegram_chat_id
+      await sendMessage(botToken, parseInt(approverChatId),
+        `📋 <b>طلب ${requestTypeName} جديد</b>\n\n` +
+        `👤 الموظف: ${employee.full_name}\n` +
+        `📅 التاريخ: ${new Date().toISOString().split('T')[0]}\n` +
+        `⏰ الوقت المطلوب: ${new Date(requestedTime).toLocaleTimeString('ar-EG')}\n\n` +
+        `اختر الإجراء:`,
+        {
+          inline_keyboard: [
+            [
+              { text: '✅ موافقة', callback_data: `approve_attendance_${pendingRecord.id}` },
+              { text: '❌ رفض', callback_data: `reject_attendance_${pendingRecord.id}` }
+            ],
+            [
+              { text: '⏰ تعديل الوقت', callback_data: `modify_attendance_${pendingRecord.id}` }
+            ]
+          ]
+        }
+      )
+}
+
+// Helper function to handle attendance approval/rejection via Telegram
+async function handleAttendanceApproval(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  pendingId: string,
+  action: 'approve' | 'reject' | 'modify',
+  managerName: string,
+  newTime?: string,
+  rejectionReason?: string
+) {
+  // Get the pending attendance request
+  const { data: pendingRequest, error: pendingError } = await supabase
+    .from('pending_attendance')
+    .select(`
+      *,
+      employees (
+        id,
+        full_name,
+        telegram_chat_id,
+        company_id,
+        work_start_time,
+        work_end_time,
+        base_salary,
+        currency
+      )
+    `)
+    .eq('id', pendingId)
+    .single()
+
+  if (pendingError || !pendingRequest) {
+    await sendMessage(botToken, chatId, '❌ لم يتم العثور على الطلب')
+    return
+  }
+
+  if (pendingRequest.status !== 'pending') {
+    await sendMessage(botToken, chatId, '⚠️ تم معالجة هذا الطلب بالفعل')
+    return
+  }
+
+  const employee = pendingRequest.employees
+  const companyId = employee.company_id
+  const today = new Date().toISOString().split('T')[0]
+  let attendanceTime = newTime ? new Date(today + 'T' + newTime + ':00').toISOString() : pendingRequest.requested_time
+
+  if (action === 'approve' || action === 'modify') {
+    // Get company policies for late deduction
+    const { data: companyPolicies } = await supabase
+      .from('companies')
+      .select('late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction')
+      .eq('id', companyId)
+      .single()
+
+    if (pendingRequest.request_type === 'check_in') {
+      // Create attendance log
+      const { data: newAttendance, error: attendanceError } = await supabase
+        .from('attendance_logs')
+        .insert({
+          employee_id: employee.id,
+          company_id: companyId,
+          date: today,
+          check_in_time: attendanceTime,
+          status: 'checked_in',
+          notes: action === 'modify' ? `تم تعديل الوقت بواسطة ${managerName}` : null
+        })
+        .select('id')
+        .single()
+
+      if (attendanceError) {
+        console.error('Failed to create attendance:', attendanceError)
+        await sendMessage(botToken, chatId, '❌ فشل في إنشاء سجل الحضور')
+        return
+      }
+
+      // Check for lateness and apply deductions
+      const checkInDate = new Date(attendanceTime)
+      const workStartTime = employee.work_start_time || '09:00:00'
+      const [startH, startM] = workStartTime.split(':').map(Number)
+      
+      const expectedStart = new Date(checkInDate)
+      expectedStart.setHours(startH, startM, 0, 0)
+
+      if (checkInDate > expectedStart) {
+        const lateMinutes = Math.floor((checkInDate.getTime() - expectedStart.getTime()) / 60000)
+        
+        let deductionDays = 0
+        let deductionText = ''
+        
+        if (lateMinutes > 30 && companyPolicies?.late_over_30_deduction) {
+          deductionDays = companyPolicies.late_over_30_deduction
+          deductionText = `تأخر أكثر من 30 دقيقة`
+        } else if (lateMinutes > 15 && companyPolicies?.late_15_to_30_deduction) {
+          deductionDays = companyPolicies.late_15_to_30_deduction
+          deductionText = `تأخر من 15 إلى 30 دقيقة`
+        } else if (lateMinutes > 0 && companyPolicies?.late_under_15_deduction) {
+          deductionDays = companyPolicies.late_under_15_deduction
+          deductionText = `تأخر أقل من 15 دقيقة`
+        }
+
+        if (deductionDays > 0) {
+          const baseSalary = employee.base_salary || 0
+          const dailyRate = baseSalary / 30
+          const deductionAmount = dailyRate * deductionDays
+          const monthKey = today.substring(0, 7) + '-01'
+
+          await supabase.from('salary_adjustments').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            month: monthKey,
+            deduction: deductionAmount,
+            bonus: 0,
+            adjustment_days: deductionDays,
+            description: `خصم تأخير - ${deductionText} (${lateMinutes} دقيقة) - اعتماد: ${managerName}`,
+            added_by_name: 'النظام التلقائي',
+            attendance_log_id: newAttendance.id,
+            is_auto_generated: true
+          })
+        }
+      }
+    } else if (pendingRequest.request_type === 'check_out') {
+      // Update attendance log with checkout time
+      await supabase
+        .from('attendance_logs')
+        .update({
+          check_out_time: attendanceTime,
+          status: 'checked_out'
+        })
+        .eq('employee_id', employee.id)
+        .eq('company_id', companyId)
+        .eq('date', today)
+        .is('check_out_time', null)
+    }
+
+    // Update pending request status
+    await supabase
+      .from('pending_attendance')
+      .update({
+        status: 'approved',
+        approved_time: attendanceTime,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', pendingId)
+
+    // Notify manager
+    const timeStr = new Date(attendanceTime).toLocaleTimeString('ar-EG')
+    await sendMessage(botToken, chatId, 
+      `✅ تم قبول طلب ${pendingRequest.request_type === 'check_in' ? 'الحضور' : 'الانصراف'}\n\n` +
+      `👤 الموظف: ${employee.full_name}\n` +
+      `⏰ الوقت: ${timeStr}`
+    )
+
+    // Notify employee
+    if (employee.telegram_chat_id) {
+      const msg = action === 'modify'
+        ? `✅ تم قبول ${pendingRequest.request_type === 'check_in' ? 'حضورك' : 'انصرافك'} بوقت معدّل: ${timeStr}\n👤 بواسطة: ${managerName}`
+        : `✅ تم اعتماد ${pendingRequest.request_type === 'check_in' ? 'حضورك' : 'انصرافك'}!\n📅 التاريخ: ${today}\n⏰ الوقت: ${timeStr}\n👤 المعتمد: ${managerName}`
+      
+      await sendMessage(botToken, parseInt(employee.telegram_chat_id), msg)
+    }
+
+  } else if (action === 'reject') {
+    // Update pending request as rejected
+    await supabase
+      .from('pending_attendance')
+      .update({
+        status: 'rejected',
+        rejection_reason: rejectionReason || 'تم الرفض من قبل المدير',
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', pendingId)
+
+    // Notify manager
+    await sendMessage(botToken, chatId, 
+      `❌ تم رفض طلب ${pendingRequest.request_type === 'check_in' ? 'الحضور' : 'الانصراف'}\n` +
+      `👤 الموظف: ${employee.full_name}`
+    )
+
+    // Notify employee
+    if (employee.telegram_chat_id) {
+      await sendMessage(botToken, parseInt(employee.telegram_chat_id),
+        `❌ تم رفض طلب ${pendingRequest.request_type === 'check_in' ? 'الحضور' : 'الانصراف'}\n` +
+        `📝 السبب: ${rejectionReason || 'غير محدد'}\n` +
+        `👤 بواسطة: ${managerName}`
+      )
+    }
+  }
+}
+  }
 }

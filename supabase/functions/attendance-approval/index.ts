@@ -243,8 +243,6 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
-    )
-  }
 })
 
 async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {
