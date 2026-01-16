@@ -258,6 +258,7 @@ const translations: Record<Language, Record<string, string>> = {
     'settings.defaultCurrencyDesc': 'This currency will be used by default for new employees',
     
     // Common
+    'common.actions': 'Actions',
     'common.save': 'Save',
     'common.cancel': 'Cancel',
     'common.edit': 'Edit',
@@ -562,6 +563,7 @@ const translations: Record<Language, Record<string, string>> = {
     'settings.defaultCurrencyDesc': 'هذه العملة ستستخدم افتراضياً للموظفين الجدد',
     
     // Common
+    'common.actions': 'الإجراءات',
     'common.save': 'حفظ',
     'common.cancel': 'إلغاء',
     'common.edit': 'تعديل',
