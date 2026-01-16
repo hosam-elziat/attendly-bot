@@ -55,32 +55,34 @@ const Hero = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col gap-4 justify-center items-center"
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <Button 
               type="button"
               size="lg" 
-              className="w-full sm:w-auto btn-primary-gradient text-base px-8 py-6 min-h-[56px] touch-manipulation cursor-pointer"
-              onClick={(e) => {
+              className="w-full sm:w-auto btn-primary-gradient text-base px-8 py-6 min-h-[56px] touch-manipulation cursor-pointer active:scale-95 transition-transform"
+              onTouchEnd={(e) => {
                 e.preventDefault();
-                e.stopPropagation();
                 navigate('/auth?mode=signup');
               }}
+              onClick={() => navigate('/auth?mode=signup')}
             >
               {t('landing.hero.cta')}
               <ArrowRight className={`w-5 h-5 ${direction === 'rtl' ? 'mr-2 rotate-180' : 'ml-2'}`} />
             </Button>
-            <button
+            <Button 
               type="button"
-              className="text-primary hover:text-primary/80 underline underline-offset-4 text-base font-medium cursor-pointer min-h-[48px] touch-manipulation transition-colors"
-              onClick={(e) => {
+              variant="outline" 
+              size="lg" 
+              className="w-full sm:w-auto text-base px-8 py-6 min-h-[56px] touch-manipulation cursor-pointer active:scale-95 transition-transform"
+              onTouchEnd={(e) => {
                 e.preventDefault();
-                e.stopPropagation();
                 navigate('/auth');
               }}
+              onClick={() => navigate('/auth')}
             >
               {t('landing.hero.login')}
-            </button>
+            </Button>
           </motion.div>
         </div>
 
