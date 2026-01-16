@@ -83,7 +83,7 @@ const AdjustmentsList = ({
   showEmployeeName = true,
   emptyMessage,
 }: AdjustmentsListProps) => {
-  const { language } = useLanguage();
+  const { language, direction } = useLanguage();
   const { profile } = useAuth();
   const logAction = useLogAction();
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -211,8 +211,8 @@ const AdjustmentsList = ({
           return (
             <Card key={adjustment.id}>
               <CardContent className="p-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
+                <div className={`flex items-start justify-between ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`flex items-center gap-2 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                       isBonus ? 'bg-success/10' : 'bg-destructive/10'
                     }`}>
@@ -221,7 +221,7 @@ const AdjustmentsList = ({
                         : <TrendingDown className="w-4 h-4 text-destructive" />
                       }
                     </div>
-                    <div>
+                    <div className={direction === 'rtl' ? 'text-right' : ''}>
                       <Badge className={isBonus ? 'bg-success hover:bg-success/90' : 'bg-destructive hover:bg-destructive/90'}>
                         {isBonus 
                           ? (language === 'ar' ? 'مكافأة' : 'Bonus')
@@ -253,20 +253,20 @@ const AdjustmentsList = ({
                   </div>
                 </div>
                 
-                <div className="mt-3 space-y-2 text-sm">
+                <div className={`mt-3 space-y-2 text-sm ${direction === 'rtl' ? 'text-right' : ''}`}>
                   {showEmployeeName && adjustment.employees && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className={`flex items-center gap-2 text-muted-foreground ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                       <User className="w-4 h-4" />
                       <span>{adjustment.employees.full_name}</span>
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className={`flex items-center gap-2 text-muted-foreground ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                     <Calendar className="w-4 h-4" />
                     <span>{formatDate(adjustment.created_at)}</span>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className={`flex items-center gap-2 text-muted-foreground ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                     {adjustment.is_auto_generated ? (
                       <>
                         <Bot className="w-4 h-4" />
@@ -297,15 +297,15 @@ const AdjustmentsList = ({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
+              <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
               {showEmployeeName && (
-                <TableHead>{language === 'ar' ? 'الموظف' : 'Employee'}</TableHead>
+                <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'الموظف' : 'Employee'}</TableHead>
               )}
-              <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-              <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-              <TableHead>{language === 'ar' ? 'أضافه' : 'Added By'}</TableHead>
-              <TableHead>{language === 'ar' ? 'السبب' : 'Reason'}</TableHead>
-              <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
+              <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+              <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+              <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'أضافه' : 'Added By'}</TableHead>
+              <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'السبب' : 'Reason'}</TableHead>
+              <TableHead className={direction === 'rtl' ? 'text-right' : ''}>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -315,7 +315,7 @@ const AdjustmentsList = ({
               
               return (
                 <TableRow key={adjustment.id}>
-                  <TableCell>
+                  <TableCell className={direction === 'rtl' ? 'text-right' : ''}>
                     <Badge className={isBonus ? 'bg-success hover:bg-success/90' : 'bg-destructive hover:bg-destructive/90'}>
                       {isBonus 
                         ? (language === 'ar' ? 'مكافأة' : 'Bonus')
@@ -324,9 +324,9 @@ const AdjustmentsList = ({
                     </Badge>
                   </TableCell>
                   {showEmployeeName && (
-                    <TableCell>{adjustment.employees?.full_name || '—'}</TableCell>
+                    <TableCell className={direction === 'rtl' ? 'text-right' : ''}>{adjustment.employees?.full_name || '—'}</TableCell>
                   )}
-                  <TableCell>
+                  <TableCell className={direction === 'rtl' ? 'text-right' : ''}>
                     <span className={`font-bold ${isBonus ? 'text-success' : 'text-destructive'}`}>
                       {isBonus ? '+' : '-'}{amount.toLocaleString()}
                     </span>
@@ -336,10 +336,10 @@ const AdjustmentsList = ({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className={`text-muted-foreground ${direction === 'rtl' ? 'text-right' : ''}`}>
                     {formatDate(adjustment.created_at)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className={direction === 'rtl' ? 'text-right' : ''}>
                     {adjustment.is_auto_generated ? (
                       <Badge variant="outline" className="gap-1">
                         <Bot className="w-3 h-3" />
@@ -349,11 +349,11 @@ const AdjustmentsList = ({
                       <span className="text-muted-foreground">{adjustment.added_by_name || '—'}</span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                  <TableCell className={`max-w-[200px] truncate text-muted-foreground ${direction === 'rtl' ? 'text-right' : ''}`}>
                     {adjustment.description || '—'}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
+                  <TableCell className={direction === 'rtl' ? 'text-right' : ''}>
+                    <div className={`flex gap-1 ${direction === 'rtl' ? 'flex-row-reverse justify-end' : ''}`}>
                       <Button
                         variant="ghost"
                         size="sm"
