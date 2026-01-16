@@ -2275,14 +2275,22 @@ async function submitRegistration(
   username?: string
 ) {
   // Check if employee was previously deleted
-  const { data: deletedEmployee } = await supabase
+  // Use RPC call or raw filter for JSON field
+  const { data: deletedEmployees, error: deletedError } = await supabase
     .from('deleted_records')
     .select('id, record_id, record_data, deleted_at')
     .eq('table_name', 'employees')
     .eq('company_id', companyId)
     .eq('is_restored', false)
-    .filter('record_data->>telegram_chat_id', 'eq', telegramChatId)
-    .single()
+    .order('deleted_at', { ascending: false })
+  
+  // Filter for matching telegram_chat_id in record_data
+  const deletedEmployee = deletedEmployees?.find((record: any) => {
+    const recordData = record.record_data as Record<string, unknown>
+    return recordData?.telegram_chat_id === telegramChatId
+  })
+  
+  console.log('Checking deleted employee for telegram_chat_id:', telegramChatId, 'Found:', !!deletedEmployee)
 
   if (deletedEmployee) {
     const deletedData = deletedEmployee.record_data as { full_name?: string; department?: string; base_salary?: number }
