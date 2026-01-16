@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper to convert time string to minutes since midnight
+function timeToMinutes(timeStr: string): number {
+  const parts = timeStr.substring(0, 5).split(':')
+  return parseInt(parts[0]) * 60 + parseInt(parts[1])
+}
+
+// Helper to check if current time is within a window of target time
+function isWithinWindow(currentMinutes: number, targetMinutes: number, windowMinutes: number = 2): boolean {
+  return currentMinutes >= targetMinutes && currentMinutes < targetMinutes + windowMinutes
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -18,10 +29,11 @@ serve(async (req) => {
   try {
     const now = new Date()
     const currentTime = now.toTimeString().substring(0, 5) // HH:MM format
+    const currentMinutes = timeToMinutes(currentTime)
     const today = now.toISOString().split('T')[0]
     const currentDayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()]
 
-    console.log('attendance-reminders: running at', currentTime, 'on', currentDayName)
+    console.log('attendance-reminders: running at', currentTime, `(${currentMinutes} minutes)`, 'on', currentDayName, today)
 
     // Get all active employees with their telegram_chat_id and work times
     const { data: employees, error: empError } = await supabase
@@ -44,10 +56,12 @@ serve(async (req) => {
           work_end_time,
           break_duration_minutes,
           absence_without_permission_deduction,
-          default_currency
+          default_currency,
+          timezone
         )
       `)
       .eq('is_active', true)
+      .not('telegram_chat_id', 'is', null)
 
     if (empError) {
       console.error('Error fetching employees:', empError)
@@ -68,21 +82,37 @@ serve(async (req) => {
       .gte('end_date', today)
 
     const employeesOnLeave = new Set((approvedLeaves || []).map(l => l.employee_id))
+    console.log(`Employees on leave today: ${employeesOnLeave.size}`)
 
-    let checkInReminders = 0
+    // Get public holidays for today (check all unique countries)
+    const { data: holidays } = await supabase
+      .from('companies')
+      .select('id, country_code')
+    
+    // For simplicity, we'll skip public holiday check for now and rely on leave requests
+
+    let checkInRemindersAtStart = 0
+    let checkInRemindersAfter10 = 0
     let checkOutReminders = 0
     let breakEndReminders = 0
     let absenceDeductions = 0
 
     for (const emp of employees || []) {
+      // Skip if no telegram chat id
+      if (!emp.telegram_chat_id) {
+        continue
+      }
+
       // Skip if today is a weekend day for this employee
       const weekendDays = emp.weekend_days || ['friday', 'saturday']
       if (weekendDays.includes(currentDayName)) {
+        console.log(`Skipping ${emp.full_name} - today is weekend (${currentDayName})`)
         continue
       }
 
       // Skip if employee is on approved leave
       if (employeesOnLeave.has(emp.id)) {
+        console.log(`Skipping ${emp.full_name} - on approved leave`)
         continue
       }
 
@@ -92,37 +122,32 @@ serve(async (req) => {
       const breakDuration = emp.break_duration_minutes || company?.break_duration_minutes || 60
       const absenceDeduction = company?.absence_without_permission_deduction || 1 // default 1 day deduction
       
-      // Parse work start time
-      const startParts = workStartTime.substring(0, 5).split(':')
-      const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1])
+      // Parse work times to minutes
+      const startMinutes = timeToMinutes(workStartTime)
+      const endMinutes = timeToMinutes(workEndTime)
       
-      // Calculate 5 minutes after start time for reminder
-      const reminderStartMinutes = startMinutes + 5
-      const reminderStartTime = `${Math.floor(reminderStartMinutes / 60).toString().padStart(2, '0')}:${(reminderStartMinutes % 60).toString().padStart(2, '0')}`
+      // Calculate reminder times
+      const reminderAtStartMinutes = startMinutes // At work start time
+      const reminderAfter10Minutes = startMinutes + 10 // 10 minutes after start
+      const absenceCheckMinutes = startMinutes + 120 // 2 hours after start for absence
+      const reminderCheckOutMinutes = endMinutes + 10 // 10 minutes after end time
 
-      // Calculate 2 hours after start time for absence check (changed from 1 hour to 2 hours)
-      const absenceCheckMinutes = startMinutes + 120
-      const absenceCheckTime = `${Math.floor(absenceCheckMinutes / 60).toString().padStart(2, '0')}:${(absenceCheckMinutes % 60).toString().padStart(2, '0')}`
+      console.log(`Processing ${emp.full_name}: start=${workStartTime.substring(0,5)} (${startMinutes}), current=${currentMinutes}`)
 
-      // Calculate 5 minutes after end time
-      const endParts = workEndTime.substring(0, 5).split(':')
-      const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]) + 5
-      const reminderEndTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`
-
-      // Check if current time matches reminder times (within 1 minute window)
-      const shouldCheckIn = currentTime === reminderStartTime
-      const shouldCheckOut = currentTime === reminderEndTime
-      const shouldCheckAbsence = currentTime === absenceCheckTime
-
-      // Get bot token (if employee has telegram)
+      // Get bot token
       let bot: any = null
-      if (emp.telegram_chat_id && company?.telegram_bot_username) {
+      if (company?.telegram_bot_username) {
         const { data: botData } = await supabase
           .from('telegram_bots')
           .select('bot_token')
           .eq('bot_username', company?.telegram_bot_username)
           .single()
         bot = botData
+      }
+
+      if (!bot?.bot_token) {
+        console.log(`No bot token for ${emp.full_name}`)
+        continue
       }
 
       // Check today's attendance
@@ -133,18 +158,68 @@ serve(async (req) => {
         .eq('date', today)
         .single()
 
-      // === AUTO ABSENCE DEDUCTION (1 hour after work start) ===
-      if (shouldCheckAbsence && !attendance) {
+      // === REMINDER AT WORK START TIME ===
+      if (isWithinWindow(currentMinutes, reminderAtStartMinutes, 3) && !attendance) {
+        // Check if we already sent a reminder today (using a simple approach - check notes or create a tracking mechanism)
+        console.log(`Sending start-time reminder to ${emp.full_name}`)
+        await sendMessage(
+          bot.bot_token,
+          parseInt(emp.telegram_chat_id),
+          `🌅 <b>صباح الخير - موعد العمل</b>\n\n` +
+          `مرحباً ${emp.full_name}!\n` +
+          `حان موعد بدء العمل (${workStartTime.substring(0, 5)}).\n\n` +
+          `📝 يرجى تسجيل الحضور الآن.`,
+          getCheckInKeyboard()
+        )
+        checkInRemindersAtStart++
+      }
+
+      // === REMINDER 10 MINUTES AFTER START ===
+      if (isWithinWindow(currentMinutes, reminderAfter10Minutes, 3) && !attendance) {
+        console.log(`Sending 10-min reminder to ${emp.full_name}`)
+        await sendMessage(
+          bot.bot_token,
+          parseInt(emp.telegram_chat_id),
+          `⏰ <b>تذكير بتسجيل الحضور</b>\n\n` +
+          `مرحباً ${emp.full_name}!\n` +
+          `لم تقم بتسجيل حضورك اليوم بعد.\n` +
+          `موعد العمل: ${workStartTime.substring(0, 5)}\n` +
+          `الوقت الحالي: ${currentTime}\n\n` +
+          `⚠️ <b>مضى 10 دقائق على موعد الحضور!</b>\n` +
+          `يرجى تسجيل الحضور فوراً.\n\n` +
+          `⏳ <i>سيتم تسجيل غياب تلقائي بعد ساعتين من موعد العمل.</i>`,
+          getCheckInKeyboard()
+        )
+        checkInRemindersAfter10++
+      }
+
+      // === AUTO ABSENCE DEDUCTION (2 hours after work start) ===
+      if (isWithinWindow(currentMinutes, absenceCheckMinutes, 3) && !attendance) {
         console.log(`Checking absence for ${emp.full_name} at ${currentTime} (work starts at ${workStartTime.substring(0, 5)})`)
         
-        // Check if we already recorded absence today (look for auto-generated absence deduction)
+        // Double-check employee is not on leave (re-fetch to be sure)
+        const { data: leaveCheck } = await supabase
+          .from('leave_requests')
+          .select('id')
+          .eq('employee_id', emp.id)
+          .eq('status', 'approved')
+          .lte('start_date', today)
+          .gte('end_date', today)
+          .single()
+        
+        if (leaveCheck) {
+          console.log(`${emp.full_name} is on approved leave, skipping absence deduction`)
+          continue
+        }
+        
+        // Check if we already recorded absence today (look for auto-generated absence deduction for this specific date)
         const { data: existingAbsence } = await supabase
           .from('salary_adjustments')
           .select('id')
           .eq('employee_id', emp.id)
-          .eq('month', `${today.substring(0, 7)}-01`) // month is stored as date YYYY-MM-01
+          .eq('month', `${today.substring(0, 7)}-01`)
           .eq('is_auto_generated', true)
-          .ilike('description', '%غياب بدون إذن%')
+          .ilike('description', `%غياب بدون إذن - ${today}%`)
           .single()
 
         if (!existingAbsence) {
@@ -162,7 +237,7 @@ serve(async (req) => {
               company_id: emp.company_id,
               date: today,
               status: 'absent',
-              notes: 'غياب تلقائي - لم يسجل حضور بعد ساعة من موعد العمل'
+              notes: `غياب تلقائي - لم يسجل حضور بعد ساعتين من موعد العمل (${workStartTime.substring(0, 5)})`
             })
             .select('id')
             .single()
@@ -178,30 +253,30 @@ serve(async (req) => {
             .insert({
               employee_id: emp.id,
               company_id: emp.company_id,
-              month: `${today.substring(0, 7)}-01`, // Store as first day of month
+              month: `${today.substring(0, 7)}-01`,
               deduction: deductionAmount,
               adjustment_days: absenceDeduction,
-              description: `غياب بدون إذن - ${today} - لم يسجل حضور حتى ${absenceCheckTime}`,
+              description: `غياب بدون إذن - ${today} - لم يسجل حضور حتى الساعة ${currentTime}`,
               is_auto_generated: true,
               attendance_log_id: newAttendance?.id
             })
 
           if (adjError) {
             console.error(`Failed to create deduction for ${emp.full_name}:`, adjError)
-          }
+          } else {
+            console.log(`Recorded absence for ${emp.full_name}: deduction ${deductionAmount} ${currency}`)
+            absenceDeductions++
 
-          console.log(`Recorded absence for ${emp.full_name}: deduction ${deductionAmount}`)
-          absenceDeductions++
-
-          // Notify employee via Telegram if available
-          if (bot?.bot_token && emp.telegram_chat_id) {
+            // Notify employee via Telegram
             await sendMessage(
               bot.bot_token,
               parseInt(emp.telegram_chat_id),
               `⚠️ <b>تم تسجيل غياب</b>\n\n` +
               `مرحباً ${emp.full_name}!\n` +
-              `لم يتم تسجيل حضورك اليوم حتى الساعة ${absenceCheckTime}.\n` +
-              `تم تسجيل غياب بدون إذن وخصم ${absenceDeduction} يوم من راتبك (${deductionAmount.toLocaleString()} ${currency}).\n\n` +
+              `لم يتم تسجيل حضورك اليوم حتى الساعة ${currentTime}.\n` +
+              `موعد العمل كان: ${workStartTime.substring(0, 5)}\n\n` +
+              `📉 تم تسجيل غياب بدون إذن وخصم ${absenceDeduction} يوم من راتبك.\n` +
+              `💰 قيمة الخصم: ${deductionAmount.toLocaleString()} ${currency}\n\n` +
               `💡 <i>إذا كان هناك خطأ، يرجى التواصل مع الإدارة.</i>`,
               getEmployeeKeyboard()
             )
@@ -209,48 +284,25 @@ serve(async (req) => {
         }
       }
 
-      // Skip telegram-related operations if no bot token
-      if (!bot?.bot_token || !emp.telegram_chat_id) {
-        continue
-      }
-
-      // Send check-in reminder (5 min after work start if not checked in)
-      if (shouldCheckIn && !attendance) {
-        await sendMessage(
-          bot.bot_token,
-          parseInt(emp.telegram_chat_id),
-          `⏰ <b>تذكير بتسجيل الحضور</b>\n\n` +
-          `مرحباً ${emp.full_name}!\n` +
-          `لم تقم بتسجيل حضورك اليوم بعد.\n` +
-          `موعد العمل: ${workStartTime.substring(0, 5)}\n\n` +
-          `⚠️ يرجى تسجيل الحضور الآن.\n` +
-          `⏳ <i>سيتم تسجيل غياب تلقائي بعد ساعة من موعد العمل.</i>`,
-          getCheckInKeyboard()
-        )
-        checkInReminders++
-        console.log(`Sent check-in reminder to ${emp.full_name}`)
-      }
-
-      // Send check-out reminder (5 min after work end if not checked out)
-      if (shouldCheckOut && attendance && !attendance.check_out_time) {
+      // === CHECK-OUT REMINDER (10 minutes after work end) ===
+      if (isWithinWindow(currentMinutes, reminderCheckOutMinutes, 3) && attendance && attendance.status !== 'checked_out' && !attendance.check_out_time) {
+        console.log(`Sending check-out reminder to ${emp.full_name}`)
         await sendMessage(
           bot.bot_token,
           parseInt(emp.telegram_chat_id),
           `⏰ <b>تذكير بتسجيل الانصراف</b>\n\n` +
           `مرحباً ${emp.full_name}!\n` +
-          `لم تقم بتسجيل انصرافك بعد.\n` +
-          `موعد الانصراف: ${workEndTime.substring(0, 5)}\n\n` +
+          `انتهى وقت العمل (${workEndTime.substring(0, 5)}).\n` +
+          `لم تقم بتسجيل انصرافك بعد.\n\n` +
           `⚠️ يرجى تسجيل الانصراف الآن.\n\n` +
           `💡 <i>تجاهل هذه الرسالة إذا كنت تعمل وقت إضافي.</i>`,
           getCheckOutKeyboard()
         )
         checkOutReminders++
-        console.log(`Sent check-out reminder to ${emp.full_name}`)
       }
 
       // Check for employees on break - auto-end break after break_duration_minutes
       if (attendance && attendance.status === 'on_break') {
-        // Get the break log to check duration
         const { data: breakLog } = await supabase
           .from('break_logs')
           .select('id, start_time')
@@ -265,11 +317,9 @@ serve(async (req) => {
           const breakDurationMs = (now.getTime() - breakStart.getTime())
           const breakMinutesElapsed = Math.floor(breakDurationMs / 60000)
 
-          // If break exceeded the allowed duration, auto-end it
           if (breakMinutesElapsed >= breakDuration) {
             const nowUtc = now.toISOString()
             
-            // Update break log
             await supabase
               .from('break_logs')
               .update({ 
@@ -278,13 +328,11 @@ serve(async (req) => {
               })
               .eq('id', breakLog.id)
 
-            // Update attendance status
             await supabase
               .from('attendance_logs')
               .update({ status: 'checked_in' })
               .eq('id', attendance.id)
 
-            // Notify employee
             await sendMessage(
               bot.bot_token,
               parseInt(emp.telegram_chat_id),
@@ -302,17 +350,21 @@ serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        checkInReminders,
-        checkOutReminders,
-        breakEndReminders,
-        absenceDeductions,
-        time: currentTime 
-      }), 
-      { headers: corsHeaders }
-    )
+    const result = { 
+      success: true, 
+      checkInRemindersAtStart,
+      checkInRemindersAfter10,
+      checkOutReminders,
+      breakEndReminders,
+      absenceDeductions,
+      time: currentTime,
+      date: today,
+      day: currentDayName
+    }
+    
+    console.log('attendance-reminders: completed', result)
+
+    return new Response(JSON.stringify(result), { headers: corsHeaders })
 
   } catch (error) {
     console.error('Error in attendance-reminders:', error)
@@ -334,15 +386,21 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
     body.reply_markup = keyboard
   }
 
-  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '')
-    console.error('sendMessage failed', { status: res.status, body: txt })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      console.error('sendMessage failed', { chatId, status: res.status, body: txt })
+    } else {
+      console.log('sendMessage success', { chatId })
+    }
+  } catch (error) {
+    console.error('sendMessage error', { chatId, error: String(error) })
   }
 }
 
