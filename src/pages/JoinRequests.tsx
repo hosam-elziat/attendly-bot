@@ -32,15 +32,19 @@ import {
   Phone,
   Mail,
   User,
-  Eye
+  Eye,
+  Settings
 } from 'lucide-react';
 import { useJoinRequests, useApproveJoinRequest, useRejectJoinRequest, JoinRequest } from '@/hooks/useJoinRequests';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
+import JoinRequestReviewersSettings from '@/components/join-requests/JoinRequestReviewersSettings';
+import { useJoinRequestReviewers } from '@/hooks/useJoinRequestReviewers';
 
 const JoinRequests = () => {
   const { language } = useLanguage();
   const { data: requests = [], isLoading } = useJoinRequests();
+  const { data: reviewers = [] } = useJoinRequestReviewers();
   const approveRequest = useApproveJoinRequest();
   const rejectRequest = useRejectJoinRequest();
   
@@ -48,6 +52,7 @@ const JoinRequests = () => {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [employeeData, setEmployeeData] = useState({
     department: '',
@@ -129,6 +134,20 @@ const JoinRequests = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSettingsDialog(true)}
+              className="flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              {language === 'ar' ? 'إعدادات المراجعين' : 'Reviewers Settings'}
+              {reviewers.length > 0 && (
+                <Badge variant="secondary" className="ms-1">
+                  {reviewers.length}
+                </Badge>
+              )}
+            </Button>
             <Badge variant="outline" className="text-lg px-4 py-2">
               <Clock className="w-4 h-4 mr-2" />
               {pendingRequests.length} {language === 'ar' ? 'طلب معلق' : 'pending'}
@@ -387,6 +406,12 @@ const JoinRequests = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reviewers Settings Dialog */}
+      <JoinRequestReviewersSettings 
+        open={showSettingsDialog} 
+        onOpenChange={setShowSettingsDialog} 
+      />
     </DashboardLayout>
   );
 };
