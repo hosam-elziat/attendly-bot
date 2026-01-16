@@ -3345,16 +3345,30 @@ async function handleAttendanceApproval(
 
   const employee = pendingRequest.employees
   const companyId = employee.company_id
-  const today = new Date().toISOString().split('T')[0]
-  let attendanceTime = newTime ? new Date(today + 'T' + newTime + ':00').toISOString() : pendingRequest.requested_time
+  
+  // Get company settings including timezone
+  const { data: companySettings } = await supabase
+    .from('companies')
+    .select('timezone, late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction')
+    .eq('id', companyId)
+    .single()
+  
+  const companyTimezone = companySettings?.timezone || 'Africa/Cairo'
+  const localTime = getLocalTime(companyTimezone)
+  const today = localTime.date
+  
+  // If newTime is provided (modify action), create proper ISO string with timezone
+  // Otherwise use the original requested_time
+  let attendanceTime: string
+  if (newTime) {
+    // newTime is in HH:MM format, combine with today's date in local timezone
+    attendanceTime = `${today}T${newTime}:00`
+  } else {
+    attendanceTime = pendingRequest.requested_time
+  }
 
   if (action === 'approve' || action === 'modify') {
-    // Get company policies for late deduction
-    const { data: companyPolicies } = await supabase
-      .from('companies')
-      .select('late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction')
-      .eq('id', companyId)
-      .single()
+    const companyPolicies = companySettings
 
     if (pendingRequest.request_type === 'check_in') {
       // Create attendance log

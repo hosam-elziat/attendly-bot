@@ -73,12 +73,24 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         status: status as "checked_in" | "on_break" | "checked_out",
       };
 
+      // Get local timezone offset to preserve the intended time
+      const getTimezoneOffset = () => {
+        const offset = new Date().getTimezoneOffset();
+        const sign = offset <= 0 ? '+' : '-';
+        const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+        const minutes = String(Math.abs(offset) % 60).padStart(2, '0');
+        return `${sign}${hours}:${minutes}`;
+      };
+
+      const tzOffset = getTimezoneOffset();
+
       if (checkInTime) {
-        updates.check_in_time = `${recordDate}T${checkInTime}:00`;
+        // Include timezone offset to ensure correct time is stored
+        updates.check_in_time = `${recordDate}T${checkInTime}:00${tzOffset}`;
       }
 
       if (checkOutTime) {
-        updates.check_out_time = `${recordDate}T${checkOutTime}:00`;
+        updates.check_out_time = `${recordDate}T${checkOutTime}:00${tzOffset}`;
       }
 
       // Store old data for logging
