@@ -67,12 +67,16 @@ const Header = () => {
                 >
                   {language === 'en' ? 'العربية' : 'English'}
                 </Button>
-                <Button asChild variant="ghost" className="justify-start">
-                  <Link to="/auth">{t('auth.login')}</Link>
-                </Button>
-                <Button asChild className="btn-primary-gradient">
-                  <Link to="/auth?mode=signup">{t('auth.signup')}</Link>
-                </Button>
+                <Link to="/auth" className="w-full" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start min-h-[48px] touch-manipulation">
+                    {t('auth.login')}
+                  </Button>
+                </Link>
+                <Link to="/auth?mode=signup" className="w-full" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full btn-primary-gradient min-h-[48px] touch-manipulation">
+                    {t('auth.signup')}
+                  </Button>
+                </Link>
               </nav>
             </motion.div>
           )}
