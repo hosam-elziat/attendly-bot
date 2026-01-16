@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { 
   Select, 
   SelectContent, 
@@ -621,10 +622,9 @@ const EmployeeDetails = () => {
                       </div>
                       {editingLateBalance ? (
                         <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
+                          <NumberInput
                             value={lateBalanceValue}
-                            onChange={(e) => setLateBalanceValue(Number(e.target.value))}
+                            onChange={setLateBalanceValue}
                             className="h-8 text-center"
                             min={0}
                           />

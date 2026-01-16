@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
@@ -327,13 +328,13 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
             {/* Location Radius */}
             <div className="space-y-2">
               <Label htmlFor="radius">نطاق الموقع (بالمتر)</Label>
-              <Input 
+              <NumberInput 
                 id="radius"
-                type="number"
                 min={10}
                 max={5000}
                 value={locationRadius}
-                onChange={(e) => setLocationRadius(Math.min(5000, Math.max(10, parseInt(e.target.value) || 100)))}
+                onChange={setLocationRadius}
+                emptyValue={100}
               />
               <p className="text-xs text-muted-foreground">
                 الموظف يجب أن يكون داخل {locationRadius} متر من موقع الشركة
