@@ -10,6 +10,7 @@ import { useSubscriptionLimit } from '@/hooks/useSubscriptionLimit';
 import { usePositions } from '@/hooks/usePositions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -704,12 +705,10 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
           </div>
           <div className="space-y-2">
             <Label htmlFor="salary">{t('employees.salaryAmount')}</Label>
-            <Input 
+            <NumberInput 
               id="salary" 
-              type="number" 
-              placeholder="5000" 
-              value={formData.base_salary || ''}
-              onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+              value={formData.base_salary || 0}
+              onChange={(value) => setFormData({ ...formData, base_salary: value })}
             />
           </div>
           <div className="space-y-2">
@@ -759,11 +758,10 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
           </div>
           <div className="space-y-2">
             <Label htmlFor="break">{t('settings.breakDuration')}</Label>
-            <Input 
+            <NumberInput 
               id="break" 
-              type="number" 
               value={formData.break_duration_minutes}
-              onChange={(e) => setFormData({ ...formData, break_duration_minutes: parseInt(e.target.value) || 0 })}
+              onChange={(value) => setFormData({ ...formData, break_duration_minutes: value })}
             />
           </div>
         </div>
@@ -1064,11 +1062,10 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-salary">{t('employees.salaryAmount')}</Label>
-            <Input 
+            <NumberInput 
               id="edit-salary" 
-              type="number" 
-              value={formData.base_salary || ''}
-              onChange={(e) => setFormData({ ...formData, base_salary: parseFloat(e.target.value) || 0 })}
+              value={formData.base_salary || 0}
+              onChange={(value) => setFormData({ ...formData, base_salary: value })}
             />
           </div>
           <div className="space-y-2">
@@ -1118,11 +1115,10 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-break">{t('settings.breakDuration')}</Label>
-            <Input 
+            <NumberInput 
               id="edit-break" 
-              type="number" 
               value={formData.break_duration_minutes}
-              onChange={(e) => setFormData({ ...formData, break_duration_minutes: parseInt(e.target.value) || 0 })}
+              onChange={(value) => setFormData({ ...formData, break_duration_minutes: value })}
             />
           </div>
         </div>

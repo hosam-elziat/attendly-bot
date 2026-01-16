@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Select, 
@@ -534,13 +535,12 @@ const Settings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="break-duration">{t('settings.breakDuration')}</Label>
-                  <Input 
+                  <NumberInput 
                     id="break-duration" 
-                    type="number" 
                     min={0}
                     max={480}
                     value={breakDuration}
-                    onChange={(e) => setBreakDuration(Math.min(480, Math.max(0, parseInt(e.target.value) || 0)))}
+                    onChange={setBreakDuration}
                   />
                 </div>
               </div>
@@ -657,25 +657,23 @@ const Settings = () => {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="daily-late">السماحية اليومية (بالدقائق)</Label>
-                    <Input 
+                    <NumberInput 
                       id="daily-late" 
-                      type="number" 
                       min={0}
                       max={60}
                       value={dailyLateAllowance}
-                      onChange={(e) => setDailyLateAllowance(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))}
+                      onChange={setDailyLateAllowance}
                     />
                     <p className="text-xs text-muted-foreground">الحد الأقصى للتأخير اليومي بدون خصم</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="monthly-late">السماحية الشهرية (بالدقائق)</Label>
-                    <Input 
+                    <NumberInput 
                       id="monthly-late" 
-                      type="number" 
                       min={0}
                       max={300}
                       value={monthlyLateAllowance}
-                      onChange={(e) => setMonthlyLateAllowance(Math.min(300, Math.max(0, parseInt(e.target.value) || 0)))}
+                      onChange={setMonthlyLateAllowance}
                     />
                     <p className="text-xs text-muted-foreground">رصيد التأخيرات الشهري للموظف</p>
                   </div>
@@ -691,65 +689,60 @@ const Settings = () => {
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
                     <Label htmlFor="late-under-15">تأخير أقل من 15 دقيقة</Label>
-                    <Input 
+                    <NumberInput 
                       id="late-under-15" 
-                      type="number" 
-                      step="0.25"
+                      step={0.25}
                       min={0}
                       max={2}
                       value={lateUnder15Deduction}
-                      onChange={(e) => setLateUnder15Deduction(Math.min(2, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      onChange={setLateUnder15Deduction}
                     />
                     <p className="text-xs text-muted-foreground">خصم {lateUnder15Deduction === 0.25 ? 'ربع' : lateUnder15Deduction === 0.5 ? 'نصف' : lateUnder15Deduction} يوم</p>
                   </div>
                   <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
                     <Label htmlFor="late-15-30">تأخير 15-30 دقيقة</Label>
-                    <Input 
+                    <NumberInput 
                       id="late-15-30" 
-                      type="number" 
-                      step="0.25"
+                      step={0.25}
                       min={0}
                       max={2}
                       value={late15To30Deduction}
-                      onChange={(e) => setLate15To30Deduction(Math.min(2, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      onChange={setLate15To30Deduction}
                     />
                     <p className="text-xs text-muted-foreground">خصم {late15To30Deduction === 0.5 ? 'نصف' : late15To30Deduction} يوم</p>
                   </div>
                   <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
                     <Label htmlFor="late-over-30">تأخير أكثر من 30 دقيقة</Label>
-                    <Input 
+                    <NumberInput 
                       id="late-over-30" 
-                      type="number" 
-                      step="0.5"
+                      step={0.5}
                       min={0}
                       max={3}
                       value={lateOver30Deduction}
-                      onChange={(e) => setLateOver30Deduction(Math.min(3, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      onChange={setLateOver30Deduction}
                     />
                     <p className="text-xs text-muted-foreground">خصم {lateOver30Deduction} يوم</p>
                   </div>
                   <div className="space-y-2 p-3 border rounded-lg bg-destructive/10 border-destructive/30">
                     <Label htmlFor="absence-no-permission">غياب بدون إذن</Label>
-                    <Input 
+                    <NumberInput 
                       id="absence-no-permission" 
-                      type="number" 
-                      step="0.5"
+                      step={0.5}
                       min={0}
                       max={5}
                       value={absenceWithoutPermissionDeduction}
-                      onChange={(e) => setAbsenceWithoutPermissionDeduction(Math.min(5, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      onChange={setAbsenceWithoutPermissionDeduction}
                     />
                     <p className="text-xs text-muted-foreground">خصم {absenceWithoutPermissionDeduction} يوم</p>
                   </div>
                   <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
                     <Label htmlFor="max-excused">أقصى غياب بإذن (أيام/شهر)</Label>
-                    <Input 
+                    <NumberInput 
                       id="max-excused" 
-                      type="number" 
                       min={0}
                       max={10}
                       value={maxExcusedAbsenceDays}
-                      onChange={(e) => setMaxExcusedAbsenceDays(Math.min(10, Math.max(0, parseInt(e.target.value) || 0)))}
+                      onChange={setMaxExcusedAbsenceDays}
                     />
                     <p className="text-xs text-muted-foreground">الحد الأقصى للغياب المسموح بإذن شهرياً</p>
                   </div>
@@ -809,25 +802,23 @@ const Settings = () => {
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2 p-3 border rounded-lg bg-primary/5 border-primary/20">
                     <Label htmlFor="annual-leave">إجمالي الإجازات السنوية (أيام)</Label>
-                    <Input 
+                    <NumberInput 
                       id="annual-leave" 
-                      type="number" 
                       min={0}
                       max={60}
                       value={annualLeaveDays}
-                      onChange={(e) => setAnnualLeaveDays(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))}
+                      onChange={setAnnualLeaveDays}
                     />
                     <p className="text-xs text-muted-foreground">العدد الإجمالي لأيام الإجازة السنوية</p>
                   </div>
                   <div className="space-y-2 p-3 border rounded-lg bg-amber-500/10 border-amber-500/30">
                     <Label htmlFor="emergency-leave">الإجازات الطارئة (من الإجمالي)</Label>
-                    <Input 
+                    <NumberInput 
                       id="emergency-leave" 
-                      type="number" 
                       min={0}
                       max={annualLeaveDays}
                       value={emergencyLeaveDays}
-                      onChange={(e) => setEmergencyLeaveDays(Math.min(annualLeaveDays, Math.max(0, parseInt(e.target.value) || 0)))}
+                      onChange={setEmergencyLeaveDays}
                     />
                     <p className="text-xs text-muted-foreground">
                       إجازات تُوافق تلقائياً - المتبقي اعتيادية: {annualLeaveDays - emergencyLeaveDays} يوم
