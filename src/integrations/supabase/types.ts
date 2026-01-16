@@ -468,6 +468,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           leave_balance: number | null
+          level3_verification_mode: string | null
           monthly_late_balance_minutes: number | null
           national_id: string | null
           notes: string | null
@@ -500,6 +501,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           leave_balance?: number | null
+          level3_verification_mode?: string | null
           monthly_late_balance_minutes?: number | null
           national_id?: string | null
           notes?: string | null
@@ -532,6 +534,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           leave_balance?: number | null
+          level3_verification_mode?: string | null
           monthly_late_balance_minutes?: number | null
           national_id?: string | null
           notes?: string | null
