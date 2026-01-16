@@ -76,6 +76,19 @@ serve(async (req) => {
       )
     }
 
+    // Get company settings (so balances always match current settings)
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .select('name, annual_leave_days, emergency_leave_days')
+      .eq('id', employee.company_id)
+      .single()
+
+    if (companyError) {
+      console.error('Failed to load company settings:', companyError)
+    }
+
+    const companyName = company?.name || 'الشركة'
+
     // Prepare notification message
     const leaveTypeMap: Record<string, string> = {
       'emergency': 'طارئة',
@@ -85,10 +98,28 @@ serve(async (req) => {
       'personal': 'شخصية'
     }
     const leaveTypeText = leaveTypeMap[leaveRequest.leave_type] || leaveRequest.leave_type
-    
-    // Get leave balance info
-    const leaveBalance = employee.leave_balance ?? 0
-    const emergencyBalance = employee.emergency_leave_balance ?? 0
+
+    // Get leave balance info (fallback to company settings if employee balances are null)
+    const leaveBalance = employee.leave_balance ?? company?.annual_leave_days ?? 0
+    const emergencyBalance = employee.emergency_leave_balance ?? company?.emergency_leave_days ?? 0
+
+    const sendTelegramMessage = async (targetChatId: string, text: string) => {
+      const telegramResponse = await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: targetChatId,
+          text,
+          parse_mode: 'HTML'
+        })
+      })
+
+      const telegramResult = await telegramResponse.json()
+
+      if (!telegramResponse.ok) {
+        throw new Error(`Telegram API error: ${JSON.stringify(telegramResult)}`)
+      }
+    }
 
     let message = ''
     if (status === 'approved') {
@@ -114,30 +145,70 @@ serve(async (req) => {
         `\n⚠️ يرجى التواصل مع الإدارة للمزيد من التفاصيل.`
     }
 
-    // Send Telegram message
-    const telegramResponse = await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: employee.telegram_chat_id,
-        text: message,
-        parse_mode: 'HTML'
-      })
-    })
-
-    const telegramResult = await telegramResponse.json()
-    
-    if (!telegramResponse.ok) {
-      console.error('Telegram API error:', telegramResult)
+    // 1) Notify employee
+    try {
+      await sendTelegramMessage(employee.telegram_chat_id, message)
+      console.log('Employee leave-status notification sent successfully')
+    } catch (err) {
+      console.error('Failed to notify employee via Telegram:', err)
       return new Response(
-        JSON.stringify({ error: 'Failed to send Telegram notification', details: telegramResult }),
+        JSON.stringify({ error: 'Failed to send Telegram notification to employee' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('Notification sent successfully')
+    // 2) Notify direct manager(s)
+    try {
+      const { data: managers, error: managersError } = await supabase
+        .rpc('get_employee_managers', { emp_id: employee.id })
+
+      if (managersError) {
+        console.error('Error getting managers for leave decision:', managersError)
+      } else if (managers && managers.length > 0) {
+        let reviewerName = 'الإدارة'
+        if (leaveRequest.reviewed_by) {
+          const { data: reviewerProfile, error: reviewerError } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('user_id', leaveRequest.reviewed_by)
+            .single()
+
+          if (!reviewerError && reviewerProfile?.full_name) {
+            reviewerName = reviewerProfile.full_name
+          }
+        }
+
+        const decisionText = status === 'approved' ? '✅ تمت الموافقة' : '❌ تم الرفض'
+        const managerMsg = `🔔 <b>قرار طلب إجازة</b>\n\n` +
+          `🏢 الشركة: ${companyName}\n` +
+          `👤 الموظف: ${employee.full_name}\n` +
+          `📋 النوع: إجازة ${leaveTypeText}\n` +
+          `📅 التاريخ: ${leaveRequest.start_date}` +
+          (leaveRequest.start_date !== leaveRequest.end_date ? ` إلى ${leaveRequest.end_date}` : '') + `\n` +
+          `📊 عدد الأيام: ${leaveRequest.days} يوم\n` +
+          (leaveRequest.reason ? `📝 السبب: ${leaveRequest.reason}\n` : '') +
+          `\n${decisionText}\n` +
+          `👤 بواسطة: ${reviewerName}`
+
+        for (const manager of managers) {
+          if (manager.manager_telegram_chat_id) {
+            try {
+              await sendTelegramMessage(String(manager.manager_telegram_chat_id), managerMsg)
+              console.log(`Notified manager ${manager.manager_name} about ${employee.full_name}'s leave decision`)
+            } catch (managerNotifyErr) {
+              console.error('Failed to notify manager via Telegram:', managerNotifyErr)
+            }
+          }
+        }
+      } else {
+        console.log('No managers found for employee:', employee.id)
+      }
+    } catch (error) {
+      console.error('Error notifying managers about leave decision:', error)
+    }
+
     return new Response(
-      JSON.stringify({ success: true, message: 'Notification sent' }),
+      JSON.stringify({ success: true, message: 'Notification(s) sent' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
