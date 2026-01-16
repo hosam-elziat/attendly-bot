@@ -69,14 +69,14 @@ const Organization = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        {/* Header - Mobile optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">
               {language === 'ar' ? 'الهيكل التنظيمي' : 'Organization Structure'}
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-0.5 sm:mt-1 line-clamp-2">
               {language === 'ar' 
                 ? 'إدارة المناصب والصلاحيات والتسلسل الوظيفي'
                 : 'Manage positions, permissions, and organizational hierarchy'
@@ -85,28 +85,37 @@ const Organization = () => {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
-              <Users className="h-4 w-4 me-2" />
-              {language === 'ar' ? 'تعيين الموظفين' : 'Assign Employees'}
+            <Button 
+              variant="outline" 
+              onClick={() => setAssignDialogOpen(true)}
+              size="sm"
+              className="flex-1 sm:flex-none h-9 sm:h-10 text-xs sm:text-sm touch-manipulation"
+            >
+              <Users className="h-4 w-4 me-1 sm:me-2" />
+              <span className="truncate">{language === 'ar' ? 'تعيين الموظفين' : 'Assign'}</span>
             </Button>
-            <Button onClick={handleAddNew}>
-              <Plus className="h-4 w-4 me-2" />
-              {language === 'ar' ? 'إضافة منصب' : 'Add Position'}
+            <Button 
+              onClick={handleAddNew}
+              size="sm"
+              className="flex-1 sm:flex-none h-9 sm:h-10 text-xs sm:text-sm touch-manipulation"
+            >
+              <Plus className="h-4 w-4 me-1 sm:me-2" />
+              <span className="truncate">{language === 'ar' ? 'إضافة منصب' : 'Add Position'}</span>
             </Button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-primary" />
+        {/* Stats Cards - Mobile optimized grid */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
+          <Card className="overflow-hidden">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{totalPositions}</p>
-                  <p className="text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold truncate">{totalPositions}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
                     {language === 'ar' ? 'المناصب' : 'Positions'}
                   </p>
                 </div>
@@ -114,15 +123,15 @@ const Organization = () => {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-green-500" />
+          <Card className="overflow-hidden">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{totalEmployeesAssigned}</p>
-                  <p className="text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold truncate">{totalEmployeesAssigned}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
                     {language === 'ar' ? 'موظف معين' : 'Assigned'}
                   </p>
                 </div>
@@ -130,31 +139,31 @@ const Organization = () => {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-blue-500" />
+          <Card className="overflow-hidden">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{positionsWithPermissions}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'لديه صلاحيات' : 'With Permissions'}
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold truncate">{positionsWithPermissions}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
+                    {language === 'ar' ? 'لديه صلاحيات' : 'With Perms'}
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <GitBranch className="h-5 w-5 text-purple-500" />
+          <Card className="overflow-hidden">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                  <GitBranch className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{hierarchyLevels}</p>
-                  <p className="text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold truncate">{hierarchyLevels}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
                     {language === 'ar' ? 'مستويات' : 'Levels'}
                   </p>
                 </div>
@@ -163,21 +172,21 @@ const Organization = () => {
           </Card>
         </div>
 
-        {/* Organization Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <GitBranch className="h-5 w-5" />
+        {/* Organization Chart - Mobile optimized */}
+        <Card className="overflow-hidden">
+          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <GitBranch className="h-4 w-4 sm:h-5 sm:w-5" />
               {language === 'ar' ? 'شجرة الهيكل التنظيمي' : 'Organization Tree'}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-6 pt-0">
             {isLoading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-24 w-full" />
-                <div className="ps-8 space-y-4">
-                  <Skeleton className="h-20 w-full" />
-                  <Skeleton className="h-20 w-full" />
+              <div className="space-y-3 sm:space-y-4">
+                <Skeleton className="h-20 sm:h-24 w-full rounded-xl" />
+                <div className="ps-4 sm:ps-8 space-y-3 sm:space-y-4">
+                  <Skeleton className="h-16 sm:h-20 w-full rounded-xl" />
+                  <Skeleton className="h-16 sm:h-20 w-full rounded-xl" />
                 </div>
               </div>
             ) : (

@@ -66,10 +66,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-background" dir={direction}>
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation - Enhanced */}
       <nav className={cn(
-        "fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border lg:hidden",
-        "flex items-center justify-around py-2 px-1"
+        "fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border lg:hidden",
+        "flex items-center justify-around py-2 px-2 safe-area-inset-bottom"
       )}>
         {navItems.slice(0, 4).map((item) => {
           const isActive = location.pathname === item.path;
@@ -78,30 +78,30 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition-colors min-w-[56px]",
+                "flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all duration-200 min-w-[60px] touch-manipulation",
                 isActive
-                  ? "text-primary"
-                  : "text-muted-foreground"
+                  ? "text-primary bg-primary/10 scale-105"
+                  : "text-muted-foreground active:scale-95 active:bg-muted/50"
               )}
             >
-              <item.icon className="w-5 h-5" />
-              <span className="text-[10px] font-medium truncate">{item.label.split(' ')[0]}</span>
+              <div className={cn(
+                "p-1.5 rounded-lg transition-colors",
+                isActive && "bg-primary/20"
+              )}>
+                <item.icon className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-medium truncate max-w-[50px]">{item.label.split(' ')[0]}</span>
             </Link>
           );
         })}
         <button
           onClick={() => setSidebarOpen(true)}
-          className="flex flex-col items-center gap-1 px-2 py-1 rounded-lg text-muted-foreground min-w-[56px]"
+          className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-muted-foreground min-w-[60px] touch-manipulation active:scale-95 active:bg-muted/50 transition-all duration-200"
         >
-          <Menu className="w-5 h-5" />
+          <div className="p-1.5 rounded-lg">
+            <Menu className="w-5 h-5" />
+          </div>
           <span className="text-[10px] font-medium">{language === 'ar' ? 'المزيد' : 'More'}</span>
-        </button>
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center gap-1 px-2 py-1 rounded-lg text-destructive min-w-[56px]"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="text-[10px] font-medium">{language === 'ar' ? 'خروج' : 'Logout'}</span>
         </button>
       </nav>
 
@@ -198,31 +198,31 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         "min-h-screen transition-all duration-300",
         direction === 'rtl' ? 'lg:mr-64' : 'lg:ml-64'
       )}>
-        {/* Top bar */}
-        <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
-          <div className="flex items-center justify-between h-16 px-6">
+        {/* Top bar - Enhanced for mobile */}
+        <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden"
+              className="lg:hidden h-10 w-10 touch-manipulation"
             >
               <Menu className="w-5 h-5" />
             </Button>
             
-            <div className="flex items-center gap-4 ms-auto">
+            <div className="flex items-center gap-3 ms-auto">
               <div className="hidden sm:block text-sm text-muted-foreground">
                 {profile?.full_name}
               </div>
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-primary font-medium text-sm">{initials}</span>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-primary font-medium text-xs sm:text-sm">{initials}</span>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Page content */}
-        <div className="p-4 sm:p-6 pb-20 lg:pb-6">
+        {/* Page content - Enhanced padding */}
+        <div className="p-3 sm:p-6 pb-24 lg:pb-6">
           {children}
         </div>
 

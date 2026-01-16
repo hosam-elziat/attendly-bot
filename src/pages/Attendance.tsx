@@ -310,21 +310,21 @@ const Attendance = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
+      <div className="space-y-4 sm:space-y-6">
+        {/* Header - Mobile optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <h1 className="text-2xl font-bold text-foreground">{t('nav.attendance')}</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">{t('nav.attendance')}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5 sm:mt-1">
             {t('attendance.trackDaily')}
           </p>
         </motion.div>
 
-        {/* Stats */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {/* Stats - Mobile optimized */}
+        <div className="grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           {statCards.map((stat, index) => (
             <motion.div
               key={stat.label}
@@ -332,15 +332,15 @@ const Attendance = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: index * 0.1 }}
             >
-              <Card className="card-hover">
-                <CardContent className="pt-4 sm:pt-6">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-accent flex items-center justify-center">
-                      <stat.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.color}`} />
+              <Card className="card-hover overflow-hidden">
+                <CardContent className="p-3 sm:pt-6 sm:p-6">
+                  <div className="flex items-center gap-2 sm:gap-4">
+                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg bg-accent flex items-center justify-center shrink-0">
+                      <stat.icon className={`w-4 h-4 sm:w-6 sm:h-6 ${stat.color}`} />
                     </div>
-                    <div>
-                      <p className="text-xs sm:text-sm text-muted-foreground">{stat.label}</p>
-                      <p className="text-xl sm:text-2xl font-bold text-foreground">{stat.value}</p>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-sm text-muted-foreground truncate">{stat.label}</p>
+                      <p className="text-lg sm:text-2xl font-bold text-foreground">{stat.value}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -350,15 +350,15 @@ const Attendance = () => {
         </div>
 
 
-        {/* Filters & Add Button */}
+        {/* Filters & Add Button - Mobile optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.5 }}
         >
           <Card>
-            <CardContent className="pt-4 sm:pt-6">
-              <div className="flex flex-col gap-4">
+            <CardContent className="p-3 sm:pt-6 sm:p-6">
+              <div className="flex flex-col gap-3">
                 {/* Search */}
                 <div className="relative">
                   <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -366,39 +366,44 @@ const Attendance = () => {
                     placeholder={language === 'ar' ? 'بحث عن موظف...' : 'Search employee...'}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="ps-9"
+                    className="ps-9 h-10"
                   />
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="w-full sm:w-40">
-                      <SelectValue placeholder={t('attendance.selectDate')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="today">{t('attendance.today')}</SelectItem>
-                      <SelectItem value="yesterday">{t('attendance.yesterday')}</SelectItem>
-                      <SelectItem value="week">{t('attendance.thisWeek')}</SelectItem>
-                      <SelectItem value="month">{t('attendance.thisMonth')}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  <div className="flex gap-2 flex-1">
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger className="flex-1 sm:w-36 h-10">
+                        <SelectValue placeholder={t('attendance.selectDate')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="today">{t('attendance.today')}</SelectItem>
+                        <SelectItem value="yesterday">{t('attendance.yesterday')}</SelectItem>
+                        <SelectItem value="week">{t('attendance.thisWeek')}</SelectItem>
+                        <SelectItem value="month">{t('attendance.thisMonth')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="flex-1 sm:w-36 h-10">
+                        <SelectValue placeholder={t('attendance.filterStatus')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('attendance.allStatus')}</SelectItem>
+                        <SelectItem value="checked_in">{t('attendance.present')}</SelectItem>
+                        <SelectItem value="on_break">{t('attendance.onBreak')}</SelectItem>
+                        <SelectItem value="checked_out">{t('attendance.left')}</SelectItem>
+                        <SelectItem value="absent">{language === 'ar' ? 'غائب' : 'Absent'}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-40">
-                      <SelectValue placeholder={t('attendance.filterStatus')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('attendance.allStatus')}</SelectItem>
-                      <SelectItem value="checked_in">{t('attendance.present')}</SelectItem>
-                      <SelectItem value="on_break">{t('attendance.onBreak')}</SelectItem>
-                      <SelectItem value="checked_out">{t('attendance.left')}</SelectItem>
-                      <SelectItem value="absent">{language === 'ar' ? 'غائب' : 'Absent'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  
-                  <Button onClick={() => setAddDialogOpen(true)} className="gap-2 sm:ms-auto">
+                  <Button 
+                    onClick={() => setAddDialogOpen(true)} 
+                    className="gap-2 h-10 touch-manipulation"
+                  >
                     <Plus className="w-4 h-4" />
-                    {language === 'ar' ? 'إضافة حضور' : 'Add Attendance'}
+                    <span className="sm:inline">{language === 'ar' ? 'إضافة حضور' : 'Add'}</span>
                   </Button>
                 </div>
               </div>
@@ -406,99 +411,162 @@ const Attendance = () => {
           </Card>
         </motion.div>
 
-        {/* Attendance Table */}
+        {/* Attendance Records - Mobile cards + Desktop table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.5 }}
         >
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary" />
+            <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                 {language === 'ar' ? 'سجلات الحضور' : 'Attendance Records'}
-                <Badge variant="secondary" className="ms-2">{filteredAttendance.length}</Badge>
+                <Badge variant="secondary" className="ms-2 text-xs">{filteredAttendance.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
               ) : filteredAttendance.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Clock className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-1">{t('attendance.noRecords')}</h3>
-                  <p className="text-sm text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <Clock className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground/50 mb-4" />
+                  <h3 className="text-base sm:text-lg font-medium text-foreground mb-1">{t('attendance.noRecords')}</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     {t('attendance.noRecordsDesc')}
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('attendance.employee')}</TableHead>
-                        <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                        <TableHead>{t('attendance.checkIn')}</TableHead>
-                        <TableHead>{t('attendance.checkOut')}</TableHead>
-                        <TableHead>{t('employees.status')}</TableHead>
-                        <TableHead>{t('common.actions') || 'Actions'}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAttendance.map((record: any) => (
-                        <TableRow key={record.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-accent flex items-center justify-center">
-                                <span className="text-xs font-medium text-accent-foreground">
+                <>
+                  {/* Mobile Cards View */}
+                  <div className="block sm:hidden p-3 space-y-2">
+                    {filteredAttendance.map((record: any) => (
+                      <Card key={record.id} className="border shadow-sm">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shrink-0">
+                                <span className="text-[10px] font-medium text-accent-foreground">
                                   {record.employees?.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || 'U'}
                                 </span>
                               </div>
-                              <span className="font-medium text-foreground text-sm">
-                                {record.employees?.full_name || t('common.unknown')}
-                              </span>
+                              <div className="min-w-0">
+                                <p className="font-medium text-foreground text-sm truncate">
+                                  {record.employees?.full_name || t('common.unknown')}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {formatDate(record.date)}
+                                </p>
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {formatDate(record.date)}
+                            {getStatusBadge(record.status, record.isNightShift)}
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <LogIn className="w-3 h-3 text-success" />
+                                <span>{formatTime(record.check_in_time)}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <LogOut className="w-3 h-3" />
+                                <span>{formatTime(record.check_out_time)}</span>
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatTime(record.check_in_time)}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatTime(record.check_out_time)}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(record.status, record.isNightShift)}</TableCell>
-                          <TableCell>
                             <div className="flex gap-1">
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
                                 onClick={() => handleEditClick(record)}
-                                className="text-primary hover:text-primary/80 h-8 w-8 p-0"
+                                className="h-8 w-8 touch-manipulation"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="w-4 h-4 text-primary" />
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
                                 onClick={() => handleDeleteClick(record.id)}
-                                className="text-destructive hover:text-destructive/80 h-8 w-8 p-0"
+                                className="h-8 w-8 touch-manipulation"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4 text-destructive" />
                               </Button>
                             </div>
-                          </TableCell>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('attendance.employee')}</TableHead>
+                          <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                          <TableHead>{t('attendance.checkIn')}</TableHead>
+                          <TableHead>{t('attendance.checkOut')}</TableHead>
+                          <TableHead>{t('employees.status')}</TableHead>
+                          <TableHead>{t('common.actions') || 'Actions'}</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredAttendance.map((record: any) => (
+                          <TableRow key={record.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center">
+                                  <span className="text-xs font-medium text-accent-foreground">
+                                    {record.employees?.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || 'U'}
+                                  </span>
+                                </div>
+                                <span className="font-medium text-foreground text-sm">
+                                  {record.employees?.full_name || t('common.unknown')}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {formatDate(record.date)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatTime(record.check_in_time)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatTime(record.check_out_time)}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(record.status, record.isNightShift)}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditClick(record)}
+                                  className="text-primary hover:text-primary/80 h-8 w-8 p-0"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteClick(record.id)}
+                                  className="text-destructive hover:text-destructive/80 h-8 w-8 p-0"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
