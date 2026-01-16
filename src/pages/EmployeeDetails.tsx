@@ -346,7 +346,6 @@ const EmployeeDetails = () => {
               <TabsTrigger value="info">{t('employeeDetails.personalInfo')}</TabsTrigger>
               <TabsTrigger value="attendance">{t('employeeDetails.attendanceLog')}</TabsTrigger>
               <TabsTrigger value="salary">{t('employeeDetails.salaryInfo')}</TabsTrigger>
-              <TabsTrigger value="verification">التحقق من الحضور</TabsTrigger>
             </TabsList>
 
             <TabsContent value="info">
@@ -437,6 +436,15 @@ const EmployeeDetails = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Verification Settings */}
+              <div className="mt-4">
+                <EmployeeVerificationSettings 
+                  employee={employee} 
+                  company={company} 
+                  onSuccess={() => refetchEmployees()} 
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="attendance">
@@ -676,13 +684,6 @@ const EmployeeDetails = () => {
             </TabsContent>
 
             {/* Verification Settings Tab */}
-            <TabsContent value="verification">
-              <EmployeeVerificationSettings 
-                employee={employee} 
-                company={company} 
-                onSuccess={() => refetchEmployees()} 
-              />
-            </TabsContent>
           </Tabs>
         </motion.div>
       </div>
