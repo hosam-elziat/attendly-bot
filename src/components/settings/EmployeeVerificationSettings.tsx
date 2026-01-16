@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Select, 
   SelectContent, 
@@ -11,7 +12,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { ShieldCheck, MapPin, UserCheck, Lock, Loader2, Building, Wifi } from 'lucide-react';
+import { ShieldCheck, MapPin, UserCheck, Lock, Loader2, Building, Wifi, Camera, Map, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -21,6 +22,13 @@ interface EmployeeVerificationSettingsProps {
   company: any;
   onSuccess: () => void;
 }
+
+// Level 3 verification options
+const LEVEL3_OPTIONS = [
+  { id: 'location', label: 'الموقع الجغرافي (GPS)', icon: Map },
+  { id: 'selfie', label: 'صورة سيلفي', icon: Camera },
+  { id: 'wifi_ip', label: 'عنوان IP (WiFi الشركة)', icon: Wifi },
+];
 
 const EmployeeVerificationSettings = ({ employee, company, onSuccess }: EmployeeVerificationSettingsProps) => {
   const [saving, setSaving] = useState(false);
@@ -34,7 +42,8 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
   const [approverType, setApproverType] = useState<'direct_manager' | 'specific_person'>('direct_manager');
   const [approverId, setApproverId] = useState<string | null>(null);
   
-  // WiFi IPs for level 3
+  // Level 3 settings - multiple selection
+  const [level3Requirements, setLevel3Requirements] = useState<string[]>(['location']);
   const [allowedWifiIps, setAllowedWifiIps] = useState<string>('');
 
   useEffect(() => {
@@ -45,13 +54,65 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
       setApproverType((employee as any).attendance_approver_type || 'direct_manager');
       setApproverId((employee as any).attendance_approver_id || null);
       setAllowedWifiIps(((employee as any).allowed_wifi_ips || []).join(', '));
+      
+      // Parse level 3 requirements from employee or company settings
+      const empLevel3Mode = (employee as any).level3_verification_mode;
+      const companyLevel3Mode = (company as any)?.level3_verification_mode || 'location_only';
+      const mode = empLevel3Mode || companyLevel3Mode;
+      
+      // Convert mode string to array of requirements
+      const requirements: string[] = [];
+      if (mode.includes('location')) requirements.push('location');
+      if (mode.includes('selfie')) requirements.push('selfie');
+      if (mode.includes('ip')) requirements.push('wifi_ip');
+      if (requirements.length === 0) requirements.push('location');
+      setLevel3Requirements(requirements);
     }
   }, [employee, company]);
+
+  const handleLevel3RequirementChange = (requirementId: string, checked: boolean) => {
+    setLevel3Requirements(prev => {
+      if (checked) {
+        return [...prev, requirementId];
+      } else {
+        // Ensure at least one requirement is selected
+        const newReqs = prev.filter(r => r !== requirementId);
+        return newReqs.length > 0 ? newReqs : prev;
+      }
+    });
+  };
+
+  const getLevel3ModeString = (): string => {
+    const hasLocation = level3Requirements.includes('location');
+    const hasSelfie = level3Requirements.includes('selfie');
+    const hasIp = level3Requirements.includes('wifi_ip');
+
+    if (hasLocation && hasSelfie && hasIp) return 'location_selfie_ip';
+    if (hasLocation && hasSelfie) return 'location_selfie';
+    if (hasLocation && hasIp) return 'location_ip';
+    if (hasSelfie && hasIp) return 'selfie_ip';
+    if (hasLocation) return 'location_only';
+    if (hasSelfie) return 'selfie_only';
+    if (hasIp) return 'ip_only';
+    return 'location_only';
+  };
 
   const handleSave = async () => {
     if (!employee?.id) {
       toast.error('لم يتم العثور على الموظف');
       return;
+    }
+
+    // Validate level 3 settings
+    if (!useCompanyDefault && verificationLevel === 3) {
+      if (level3Requirements.length === 0) {
+        toast.error('يجب اختيار طريقة تحقق واحدة على الأقل');
+        return;
+      }
+      if (level3Requirements.includes('wifi_ip') && !allowedWifiIps.trim()) {
+        toast.error('يجب إدخال عناوين IP المسموحة عند اختيار التحقق بـ WiFi');
+        return;
+      }
     }
 
     setSaving(true);
@@ -61,6 +122,7 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
         attendance_verification_level: useCompanyDefault ? null : verificationLevel,
         attendance_approver_type: useCompanyDefault ? null : approverType,
         attendance_approver_id: !useCompanyDefault && approverType === 'specific_person' ? approverId : null,
+        level3_verification_mode: !useCompanyDefault && verificationLevel === 3 ? getLevel3ModeString() : null,
       };
 
       // Parse WiFi IPs
@@ -88,12 +150,27 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
   };
 
   const companyLevel = (company as any)?.attendance_verification_level || 1;
+  const companyLevel3Mode = (company as any)?.level3_verification_mode || 'location_only';
+  
   const getLevelName = (level: number) => {
     switch (level) {
       case 1: return 'بدون تأكيد';
       case 2: return 'موافقة المدير';
-      case 3: return 'التحقق من الموقع';
+      case 3: return 'التحقق من الموقع/البيانات';
       default: return 'غير محدد';
+    }
+  };
+
+  const getLevel3ModeLabel = (mode: string) => {
+    switch (mode) {
+      case 'location_only': return 'الموقع فقط';
+      case 'location_selfie': return 'الموقع + سيلفي';
+      case 'location_ip': return 'الموقع + WiFi IP';
+      case 'location_selfie_ip': return 'الموقع + سيلفي + WiFi IP';
+      case 'selfie_only': return 'سيلفي فقط';
+      case 'ip_only': return 'WiFi IP فقط';
+      case 'selfie_ip': return 'سيلفي + WiFi IP';
+      default: return mode;
     }
   };
 
@@ -124,7 +201,8 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
               استخدام الإعداد الافتراضي للشركة
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              المستوى الحالي للشركة: {getLevelName(companyLevel)}
+              المستوى الحالي: {getLevelName(companyLevel)}
+              {companyLevel === 3 && ` (${getLevel3ModeLabel(companyLevel3Mode)})`}
             </p>
           </Label>
         </div>
@@ -156,7 +234,7 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
                 <RadioGroupItem value="3" id="emp-level-3" />
                 <Label htmlFor="emp-level-3" className="cursor-pointer flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-destructive" />
-                  التحقق من الموقع
+                  التحقق من الموقع/البيانات
                 </Label>
               </div>
             </RadioGroup>
@@ -197,21 +275,73 @@ const EmployeeVerificationSettings = ({ employee, company, onSuccess }: Employee
               </div>
             )}
 
-            {/* Level 3 WiFi IPs */}
+            {/* Level 3 Multi-Select Requirements */}
             {verificationLevel === 3 && (
-              <div className="space-y-3 mt-4 p-3 bg-destructive/10 rounded-lg">
-                <Label className="flex items-center gap-2">
-                  <Wifi className="w-4 h-4" />
-                  عناوين IP المسموحة (WiFi الشركة)
-                </Label>
-                <Input 
-                  placeholder="مثال: 192.168.1.1, 10.0.0.1"
-                  value={allowedWifiIps}
-                  onChange={(e) => setAllowedWifiIps(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  افصل بين العناوين بفاصلة. يستخدم للتحقق من اتصال الموظف بشبكة الشركة.
-                </p>
+              <div className="space-y-4 mt-4 p-4 bg-destructive/10 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <ShieldCheck className="w-4 h-4 text-destructive" />
+                  <Label className="font-medium">متطلبات التحقق (اختر واحدة أو أكثر)</Label>
+                </div>
+                
+                <div className="space-y-3">
+                  {LEVEL3_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    const isChecked = level3Requirements.includes(option.id);
+                    return (
+                      <div 
+                        key={option.id}
+                        className={`flex items-center space-x-3 rtl:space-x-reverse p-3 border rounded-lg transition-colors ${
+                          isChecked ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <Checkbox 
+                          id={`req-${option.id}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => 
+                            handleLevel3RequirementChange(option.id, checked as boolean)
+                          }
+                        />
+                        <Label 
+                          htmlFor={`req-${option.id}`} 
+                          className="cursor-pointer flex items-center gap-2 flex-1"
+                        >
+                          <Icon className="w-4 h-4 text-muted-foreground" />
+                          {option.label}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* WiFi IPs if selected */}
+                {level3Requirements.includes('wifi_ip') && (
+                  <div className="space-y-2 mt-4 p-3 bg-background rounded-lg border">
+                    <Label className="flex items-center gap-2">
+                      <Wifi className="w-4 h-4" />
+                      عناوين IP المسموحة (WiFi الشركة)
+                    </Label>
+                    <Input 
+                      placeholder="مثال: 192.168.1.1, 10.0.0.1"
+                      value={allowedWifiIps}
+                      onChange={(e) => setAllowedWifiIps(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      افصل بين العناوين بفاصلة. يستخدم للتحقق من اتصال الموظف بشبكة الشركة.
+                    </p>
+                  </div>
+                )}
+
+                {/* Summary of selected requirements */}
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm">
+                    <AlertTriangle className="w-4 h-4 inline-block me-1 text-amber-500" />
+                    <strong>المتطلبات المحددة:</strong>{' '}
+                    {level3Requirements.map(r => {
+                      const opt = LEVEL3_OPTIONS.find(o => o.id === r);
+                      return opt?.label;
+                    }).filter(Boolean).join(' + ')}
+                  </p>
+                </div>
               </div>
             )}
           </div>
