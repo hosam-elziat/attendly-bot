@@ -802,8 +802,8 @@ serve(async (req) => {
           await sendMessage(botToken, chatId, 
             `📝 <b>طلب إجازة</b>\n\n` +
             `📊 رصيدك الحالي:\n` +
-            `• إجازات طارئة: ${employee.emergency_leave_balance || companyDefaults.emergency_leave_days} يوم\n` +
-            `• إجازات اعتيادية: ${employee.leave_balance || (companyDefaults.annual_leave_days - companyDefaults.emergency_leave_days)} يوم\n\n` +
+            `• إجازات طارئة: ${employee.emergency_leave_balance ?? companyDefaults.emergency_leave_days} يوم\n` +
+            `• إجازات اعتيادية: ${employee.leave_balance ?? companyDefaults.annual_leave_days} يوم\n\n` +
             `اختر نوع الإجازة:`,
             {
               inline_keyboard: [
@@ -820,7 +820,7 @@ serve(async (req) => {
           await setSession('leave_date_choice', { leave_type: 'emergency' })
           await sendMessage(botToken, chatId, 
             `🚨 <b>إجازة طارئة</b>\n\n` +
-            `📊 رصيدك المتاح: ${employee.emergency_leave_balance || companyDefaults.emergency_leave_days} يوم\n\n` +
+            `📊 رصيدك المتاح: ${employee.emergency_leave_balance ?? companyDefaults.emergency_leave_days} يوم\n\n` +
             `اختر يوم الإجازة:`,
             getDatePickerKeyboard('emergency')
           )
@@ -832,7 +832,7 @@ serve(async (req) => {
           await setSession('leave_date_choice', { leave_type: 'regular' })
           await sendMessage(botToken, chatId, 
             `📅 <b>إجازة اعتيادية</b>\n\n` +
-            `📊 رصيدك المتاح: ${employee.leave_balance || (companyDefaults.annual_leave_days - companyDefaults.emergency_leave_days)} يوم\n\n` +
+            `📊 رصيدك المتاح: ${employee.leave_balance ?? companyDefaults.annual_leave_days} يوم\n\n` +
             `⚠️ الإجازة الاعتيادية تحتاج إبلاغ مسبق قبل 48 ساعة على الأقل.\n\n` +
             `اختر يوم الإجازة:`,
             getDatePickerKeyboard('regular')
