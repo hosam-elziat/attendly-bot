@@ -228,3 +228,161 @@ export function useRejectJoinRequest() {
     },
   });
 }
+
+// Hook to check for deleted employee when processing join request
+export function useCheckDeletedEmployee() {
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (telegram_chat_id: string) => {
+      if (!profile?.company_id) throw new Error('No company found');
+
+      const { data, error } = await supabase
+        .from('deleted_records')
+        .select('id, record_id, record_data, deleted_at')
+        .eq('table_name', 'employees')
+        .eq('company_id', profile.company_id)
+        .eq('is_restored', false)
+        .filter('record_data->>telegram_chat_id', 'eq', telegram_chat_id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      return data;
+    },
+  });
+}
+
+// Hook to restore a deleted employee
+export function useRestoreDeletedEmployee() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ 
+      deletedRecordId, 
+      joinRequestId,
+      telegram_chat_id 
+    }: { 
+      deletedRecordId: string; 
+      joinRequestId: string;
+      telegram_chat_id: string;
+    }) => {
+      if (!profile?.company_id) throw new Error('No company found');
+
+      // Get the deleted record
+      const { data: deletedRecord, error: fetchError } = await supabase
+        .from('deleted_records')
+        .select('*')
+        .eq('id', deletedRecordId)
+        .eq('is_restored', false)
+        .single();
+
+      if (fetchError || !deletedRecord) {
+        throw new Error('Deleted record not found or already restored');
+      }
+
+      const employeeData = deletedRecord.record_data as Record<string, unknown>;
+      
+      // Prepare employee data for insertion with proper typing (without id for insert)
+      const insertData = {
+        company_id: employeeData.company_id as string,
+        full_name: employeeData.full_name as string,
+        email: employeeData.email as string,
+        phone: employeeData.phone as string | null,
+        department: employeeData.department as string | null,
+        base_salary: employeeData.base_salary as number | null,
+        telegram_chat_id: employeeData.telegram_chat_id as string | null,
+        national_id: employeeData.national_id as string | null,
+        work_start_time: employeeData.work_start_time as string | null,
+        work_end_time: employeeData.work_end_time as string | null,
+        weekend_days: employeeData.weekend_days as string[] | null,
+        position_id: employeeData.position_id as string | null,
+        hire_date: employeeData.hire_date as string | null,
+        leave_balance: employeeData.leave_balance as number | null,
+        emergency_leave_balance: employeeData.emergency_leave_balance as number | null,
+        notes: employeeData.notes as string | null,
+        is_active: true,
+        updated_at: new Date().toISOString()
+      };
+
+      // Re-insert the employee (new ID will be generated)
+      const { error: insertError } = await supabase
+        .from('employees')
+        .insert(insertData);
+
+      if (insertError) throw insertError;
+
+      // Mark as restored
+      const { error: updateError } = await supabase
+        .from('deleted_records')
+        .update({ is_restored: true, restored_at: new Date().toISOString() })
+        .eq('id', deletedRecordId);
+
+      if (updateError) throw updateError;
+
+      // Update join request status to approved
+      const { error: jrError } = await supabase
+        .from('join_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', joinRequestId);
+
+      if (jrError) throw jrError;
+
+      // Send Telegram notification
+      try {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('telegram_bot_username')
+          .eq('id', profile.company_id)
+          .single();
+
+        if (company?.telegram_bot_username) {
+          const { data: bot } = await supabase
+            .from('telegram_bots')
+            .select('bot_token')
+            .eq('bot_username', company.telegram_bot_username)
+            .single();
+
+          if (bot?.bot_token) {
+            const employeeName = (employeeData as any)?.full_name || 'الموظف';
+            await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: telegram_chat_id,
+                text: `🎉 مرحباً بعودتك ${employeeName}!\n\nتم استعادة حسابك بنجاح!\nجميع بياناتك السابقة متاحة الآن.\n\nأرسل /start للبدء.`,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+                    ]
+                  ]
+                }
+              })
+            });
+          }
+        }
+      } catch (notifyError) {
+        console.error('Failed to send Telegram notification:', notifyError);
+      }
+
+      return { success: true, employeeName: (employeeData as any)?.full_name };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['join-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['deleted-records'] });
+      toast.success(`تم استعادة الموظف ${data.employeeName} بنجاح`);
+    },
+    onError: (error) => {
+      console.error('Error restoring employee:', error);
+      toast.error('حدث خطأ أثناء استعادة الموظف');
+    },
+  });
+}

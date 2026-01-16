@@ -337,6 +337,78 @@ serve(async (req) => {
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
 
+        // Handle restore deleted employee
+        if (callbackData.startsWith('restore_employee_')) {
+          const deletedRecordId = callbackData.replace('restore_employee_', '')
+          
+          // Get the deleted record
+          const { data: deletedRecord, error: fetchError } = await supabase
+            .from('deleted_records')
+            .select('*')
+            .eq('id', deletedRecordId)
+            .eq('is_restored', false)
+            .single()
+
+          if (fetchError || !deletedRecord) {
+            await sendMessage(botToken, chatId, '❌ لم يتم العثور على السجل أو تم استعادته بالفعل')
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+
+          const employeeData = deletedRecord.record_data as Record<string, unknown>
+
+          // Re-insert the employee
+          const { error: insertError } = await supabase
+            .from('employees')
+            .insert({
+              ...employeeData,
+              id: deletedRecord.record_id,
+              is_active: true,
+              updated_at: new Date().toISOString()
+            })
+
+          if (insertError) {
+            console.error('Failed to restore employee:', insertError)
+            await sendMessage(botToken, chatId, '❌ فشل في استعادة الحساب: ' + insertError.message)
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+
+          // Mark as restored
+          await supabase
+            .from('deleted_records')
+            .update({ is_restored: true, restored_at: new Date().toISOString() })
+            .eq('id', deletedRecordId)
+
+          await deleteSession()
+          
+          const restoredName = (employeeData as any)?.full_name || 'الموظف'
+          await sendMessage(botToken, chatId,
+            `🎉 <b>تم استعادة حسابك بنجاح!</b>\n\n` +
+            `👤 مرحباً بعودتك ${restoredName}!\n` +
+            `تم استعادة جميع بياناتك السابقة.\n\n` +
+            `يمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.`,
+            {
+              inline_keyboard: [
+                [
+                  { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+                  { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+                ]
+              ]
+            }
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        // Handle force new registration (ignore deleted record)
+        if (callbackData === 'force_new_registration') {
+          const session = await getSession()
+          if (session) {
+            // Continue with normal registration
+            await submitRegistrationForce(supabase, botToken, chatId, session.data, companyId, telegramChatId, update.callback_query?.from.username)
+            await deleteSession()
+          }
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
         await sendWelcomeMessage(botToken, chatId, false)
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
       }
@@ -2194,6 +2266,132 @@ async function notifyManagersLeaveRequest(
 }
 
 async function submitRegistration(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  sessionData: SessionData,
+  companyId: string,
+  telegramChatId: string,
+  username?: string
+) {
+  // Check if employee was previously deleted
+  const { data: deletedEmployee } = await supabase
+    .from('deleted_records')
+    .select('id, record_id, record_data, deleted_at')
+    .eq('table_name', 'employees')
+    .eq('company_id', companyId)
+    .eq('is_restored', false)
+    .filter('record_data->>telegram_chat_id', 'eq', telegramChatId)
+    .single()
+
+  if (deletedEmployee) {
+    const deletedData = deletedEmployee.record_data as { full_name?: string; department?: string; base_salary?: number }
+    const deletedDate = new Date(deletedEmployee.deleted_at).toLocaleDateString('ar-EG')
+    
+    await sendMessage(botToken, chatId,
+      `⚠️ <b>تم العثور على سجل موظف سابق!</b>\n\n` +
+      `👤 الاسم: ${deletedData?.full_name || sessionData.full_name}\n` +
+      `📅 تاريخ الحذف: ${deletedDate}\n` +
+      `${deletedData?.department ? `🏢 القسم: ${deletedData.department}\n` : ''}` +
+      `${deletedData?.base_salary ? `💰 الراتب السابق: ${deletedData.base_salary}\n` : ''}\n` +
+      `هل تريد استعادة حسابك السابق بكل البيانات؟`,
+      {
+        inline_keyboard: [
+          [
+            { text: '✅ استعادة حسابي السابق', callback_data: `restore_employee_${deletedEmployee.id}` },
+            { text: '🆕 إنشاء حساب جديد', callback_data: 'force_new_registration' }
+          ],
+          [{ text: '❌ إلغاء', callback_data: 'cancel_registration' }]
+        ]
+      }
+    )
+    return
+  }
+
+  // Check if request already exists
+  const { data: existingRequest } = await supabase
+    .from('join_requests')
+    .select('id, status')
+    .eq('telegram_chat_id', telegramChatId)
+    .eq('company_id', companyId)
+    .eq('status', 'pending')
+    .single()
+
+  if (existingRequest) {
+    await sendMessage(botToken, chatId, 
+      '⚠️ لديك طلب قيد المراجعة بالفعل!\n\n' +
+      'يمكنك التحقق من حالة طلبك بالضغط على "حالة طلبي"'
+    )
+    return
+  }
+
+  // Create join request with all collected data including work schedule
+  const { data: newRequest, error: insertError } = await supabase.from('join_requests').insert({
+    company_id: companyId,
+    telegram_chat_id: telegramChatId,
+    telegram_username: username,
+    full_name: sessionData.full_name,
+    email: sessionData.email,
+    phone: sessionData.phone,
+    work_start_time: sessionData.work_start_time || null,
+    work_end_time: sessionData.work_end_time || null,
+    weekend_days: sessionData.weekend_days || ['friday', 'saturday'],
+  }).select('id').single()
+
+  if (insertError) {
+    console.error('Failed to create join request:', insertError)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إرسال الطلب. يرجى المحاولة مرة أخرى.')
+    return
+  }
+
+  // Get company name for notification
+  const { data: company } = await supabase
+    .from('companies')
+    .select('name')
+    .eq('id', companyId)
+    .single()
+
+  // Get all configured reviewers from the new table
+  const { data: reviewers } = await supabase
+    .from('join_request_reviewers')
+    .select('reviewer_type, reviewer_id')
+    .eq('company_id', companyId)
+
+  // Notify all reviewers if configured
+  if (reviewers && reviewers.length > 0 && newRequest?.id) {
+    await notifyAllJoinRequestReviewers(
+      supabase,
+      botToken,
+      companyId,
+      newRequest.id,
+      sessionData,
+      telegramChatId,
+      username,
+      reviewers,
+      company?.name || ''
+    )
+  }
+
+  await sendMessage(botToken, chatId, 
+    '✅ <b>تم إرسال طلب الانضمام بنجاح!</b>\n\n' +
+    '📋 ملخص بياناتك:\n' +
+    `👤 الاسم: ${sessionData.full_name}\n` +
+    `📧 البريد: ${sessionData.email}\n` +
+    `📱 الهاتف: ${sessionData.phone}\n` +
+    `⏰ وقت العمل: ${sessionData.work_start_time?.substring(0, 5)} - ${sessionData.work_end_time?.substring(0, 5)}\n` +
+    `📅 أيام الإجازة: ${sessionData.weekend_days?.map((d: string) => getDayName(d)).join('، ')}\n\n` +
+    '⏳ سيتم مراجعة طلبك من قبل الإدارة.\n' +
+    'سنرسل لك إشعاراً فور الموافقة على طلبك.',
+    {
+      inline_keyboard: [
+        [{ text: '📋 حالة طلبي', callback_data: 'check_status' }]
+      ]
+    }
+  )
+}
+
+// Submit registration bypassing deleted employee check (for force new registration)
+async function submitRegistrationForce(
   supabase: any,
   botToken: string,
   chatId: number,

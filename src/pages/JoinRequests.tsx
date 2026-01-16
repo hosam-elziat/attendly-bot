@@ -35,11 +35,12 @@ import {
   Eye,
   Settings
 } from 'lucide-react';
-import { useJoinRequests, useApproveJoinRequest, useRejectJoinRequest, JoinRequest } from '@/hooks/useJoinRequests';
+import { useJoinRequests, useApproveJoinRequest, useRejectJoinRequest, useCheckDeletedEmployee, useRestoreDeletedEmployee, JoinRequest } from '@/hooks/useJoinRequests';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import JoinRequestReviewersSettings from '@/components/join-requests/JoinRequestReviewersSettings';
 import { useJoinRequestReviewers } from '@/hooks/useJoinRequestReviewers';
+import { RotateCcw, AlertTriangle } from 'lucide-react';
 
 const JoinRequests = () => {
   const { language } = useLanguage();
@@ -47,12 +48,16 @@ const JoinRequests = () => {
   const { data: reviewers = [] } = useJoinRequestReviewers();
   const approveRequest = useApproveJoinRequest();
   const rejectRequest = useRejectJoinRequest();
+  const checkDeletedEmployee = useCheckDeletedEmployee();
+  const restoreEmployee = useRestoreDeletedEmployee();
   
   const [selectedRequest, setSelectedRequest] = useState<JoinRequest | null>(null);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [deletedEmployeeData, setDeletedEmployeeData] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [employeeData, setEmployeeData] = useState({
     department: '',
@@ -61,6 +66,45 @@ const JoinRequests = () => {
 
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const processedRequests = requests.filter(r => r.status !== 'pending');
+
+  // Check for deleted employee when clicking approve
+  const handleCheckAndApprove = async (request: JoinRequest) => {
+    setSelectedRequest(request);
+    
+    // Check if this telegram_chat_id belongs to a deleted employee
+    checkDeletedEmployee.mutate(request.telegram_chat_id, {
+      onSuccess: (deletedRecord) => {
+        if (deletedRecord) {
+          // Found deleted employee - show restore dialog
+          setDeletedEmployeeData(deletedRecord);
+          setShowRestoreDialog(true);
+        } else {
+          // No deleted employee - proceed with normal approval
+          setShowApproveDialog(true);
+        }
+      },
+      onError: () => {
+        // If check fails, proceed with normal approval
+        setShowApproveDialog(true);
+      }
+    });
+  };
+
+  const handleRestore = () => {
+    if (!selectedRequest || !deletedEmployeeData) return;
+    
+    restoreEmployee.mutate({
+      deletedRecordId: deletedEmployeeData.id,
+      joinRequestId: selectedRequest.id,
+      telegram_chat_id: selectedRequest.telegram_chat_id,
+    }, {
+      onSuccess: () => {
+        setShowRestoreDialog(false);
+        setSelectedRequest(null);
+        setDeletedEmployeeData(null);
+      }
+    });
+  };
 
   const handleApprove = () => {
     if (!selectedRequest) return;
@@ -216,10 +260,8 @@ const JoinRequests = () => {
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700"
-                            onClick={() => {
-                              setSelectedRequest(request);
-                              setShowApproveDialog(true);
-                            }}
+                            onClick={() => handleCheckAndApprove(request)}
+                            disabled={checkDeletedEmployee.isPending}
                           >
                             <CheckCircle className="w-4 h-4 mr-1" />
                             {language === 'ar' ? 'قبول' : 'Approve'}
@@ -412,6 +454,81 @@ const JoinRequests = () => {
         open={showSettingsDialog} 
         onOpenChange={setShowSettingsDialog} 
       />
+
+      {/* Restore Deleted Employee Dialog */}
+      <Dialog open={showRestoreDialog} onOpenChange={(open) => {
+        setShowRestoreDialog(open);
+        if (!open) {
+          setDeletedEmployeeData(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              {language === 'ar' ? 'موظف محذوف مسبقاً' : 'Previously Deleted Employee'}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar' 
+                ? 'تم العثور على سجل موظف محذوف بنفس معرف تليجرام. يمكنك استعادة بياناته السابقة أو إنشاء موظف جديد.' 
+                : 'A deleted employee record with the same Telegram ID was found. You can restore their previous data or create a new employee.'}
+            </DialogDescription>
+          </DialogHeader>
+          {deletedEmployeeData && (
+            <div className="space-y-4">
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 space-y-2">
+                <p className="font-medium flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4" />
+                  {language === 'ar' ? 'بيانات الموظف السابق:' : 'Previous Employee Data:'}
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">{language === 'ar' ? 'الاسم:' : 'Name:'}</span>
+                    <span className="ms-1 font-medium">{(deletedEmployeeData.record_data as any)?.full_name}</span>
+                  </div>
+                  {(deletedEmployeeData.record_data as any)?.department && (
+                    <div>
+                      <span className="text-muted-foreground">{language === 'ar' ? 'القسم:' : 'Department:'}</span>
+                      <span className="ms-1 font-medium">{(deletedEmployeeData.record_data as any)?.department}</span>
+                    </div>
+                  )}
+                  {(deletedEmployeeData.record_data as any)?.base_salary && (
+                    <div>
+                      <span className="text-muted-foreground">{language === 'ar' ? 'الراتب:' : 'Salary:'}</span>
+                      <span className="ms-1 font-medium">{(deletedEmployeeData.record_data as any)?.base_salary}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground">{language === 'ar' ? 'تاريخ الحذف:' : 'Deleted:'}</span>
+                    <span className="ms-1 font-medium">{formatDate(deletedEmployeeData.deleted_at)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowRestoreDialog(false);
+                setShowApproveDialog(true);
+              }}
+            >
+              {language === 'ar' ? 'إنشاء موظف جديد' : 'Create New Employee'}
+            </Button>
+            <Button 
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={handleRestore}
+              disabled={restoreEmployee.isPending}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              {restoreEmployee.isPending 
+                ? (language === 'ar' ? 'جاري الاستعادة...' : 'Restoring...') 
+                : (language === 'ar' ? 'استعادة الموظف السابق' : 'Restore Previous Employee')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
