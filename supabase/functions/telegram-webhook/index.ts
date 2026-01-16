@@ -2274,48 +2274,6 @@ async function submitRegistration(
   telegramChatId: string,
   username?: string
 ) {
-  // Check if employee was previously deleted
-  // Use RPC call or raw filter for JSON field
-  const { data: deletedEmployees, error: deletedError } = await supabase
-    .from('deleted_records')
-    .select('id, record_id, record_data, deleted_at')
-    .eq('table_name', 'employees')
-    .eq('company_id', companyId)
-    .eq('is_restored', false)
-    .order('deleted_at', { ascending: false })
-  
-  // Filter for matching telegram_chat_id in record_data
-  const deletedEmployee = deletedEmployees?.find((record: any) => {
-    const recordData = record.record_data as Record<string, unknown>
-    return recordData?.telegram_chat_id === telegramChatId
-  })
-  
-  console.log('Checking deleted employee for telegram_chat_id:', telegramChatId, 'Found:', !!deletedEmployee)
-
-  if (deletedEmployee) {
-    const deletedData = deletedEmployee.record_data as { full_name?: string; department?: string; base_salary?: number }
-    const deletedDate = new Date(deletedEmployee.deleted_at).toLocaleDateString('ar-EG')
-    
-    await sendMessage(botToken, chatId,
-      `⚠️ <b>تم العثور على سجل موظف سابق!</b>\n\n` +
-      `👤 الاسم: ${deletedData?.full_name || sessionData.full_name}\n` +
-      `📅 تاريخ الحذف: ${deletedDate}\n` +
-      `${deletedData?.department ? `🏢 القسم: ${deletedData.department}\n` : ''}` +
-      `${deletedData?.base_salary ? `💰 الراتب السابق: ${deletedData.base_salary}\n` : ''}\n` +
-      `هل تريد استعادة حسابك السابق بكل البيانات؟`,
-      {
-        inline_keyboard: [
-          [
-            { text: '✅ استعادة حسابي السابق', callback_data: `restore_employee_${deletedEmployee.id}` },
-            { text: '🆕 إنشاء حساب جديد', callback_data: 'force_new_registration' }
-          ],
-          [{ text: '❌ إلغاء', callback_data: 'cancel_registration' }]
-        ]
-      }
-    )
-    return
-  }
-
   // Check if request already exists
   const { data: existingRequest } = await supabase
     .from('join_requests')
