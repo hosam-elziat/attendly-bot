@@ -508,8 +508,8 @@ serve(async (req) => {
               // Level 1: Direct check-in without verification
               await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, companyPolicies, empDetails, managerPermissions)
             } else if (effectiveVerificationLevel === 2) {
-              // Level 2: Requires manager approval - use local time ISO string
-              await createPendingAttendance(supabase, botToken, chatId, employee, companyId, 'check_in', localTime.isoString, effectiveApproverType, effectiveApproverId, companyTimezone)
+              // Level 2: Requires manager approval - use UTC for storage, local time for display
+              await createPendingAttendance(supabase, botToken, chatId, employee, companyId, 'check_in', nowUtc, effectiveApproverType, effectiveApproverId, companyTimezone)
             } else if (effectiveVerificationLevel === 3) {
               // Level 3: Requires location verification - request location from user
               // Use Reply Keyboard with request_location to get user's GPS
@@ -3250,12 +3250,9 @@ async function createPendingAttendance(
     return
   }
 
-  // Get local time for display
+  // Get local time for display - this is the actual current time in the company's timezone
   const localTime = getLocalTime(timezone)
-  
-  // Extract time from requestedTime for display (format: YYYY-MM-DDTHH:MM:SS)
-  const timeMatch = requestedTime.match(/T(\d{2}:\d{2}:\d{2})/)
-  const displayTime = timeMatch ? timeMatch[1].substring(0, 5) : localTime.time.substring(0, 5)
+  const displayTime = localTime.time.substring(0, 5) // HH:MM format
 
   // Notify employee
   const requestTypeName = requestType === 'check_in' ? 'الحضور' : 'الانصراف'
@@ -3287,10 +3284,8 @@ async function createPendingAttendance(
     approvers = managers || []
   }
 
-  // Notify all approvers
-  // Extract time from requestedTime for display
-  const timeMatchApprover = requestedTime.match(/T(\d{2}:\d{2}:\d{2})/)
-  const displayTimeApprover = timeMatchApprover ? timeMatchApprover[1].substring(0, 5) : localTime.time.substring(0, 5)
+  // Notify all approvers using local time for display
+  const displayTimeApprover = localTime.time.substring(0, 5) // HH:MM format
   
   for (const approver of approvers) {
     if (approver.manager_telegram_chat_id || approver.telegram_chat_id) {
