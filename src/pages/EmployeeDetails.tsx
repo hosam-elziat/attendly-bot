@@ -351,85 +351,85 @@ const EmployeeDetails = () => {
 
             <TabsContent value="info">
               <Card>
-                <CardHeader>
+                <CardHeader className={direction === 'rtl' ? 'text-right' : 'text-left'}>
                   <CardTitle>{t('employeeDetails.personalInfo')}</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <User className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <User className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.fullName')}</p>
                         <p className="font-medium">{employee.full_name}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Mail className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.email')}</p>
                         <p className="font-medium">{employee.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <Phone className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.phone')}</p>
                         <p className="font-medium">{employee.phone || '—'}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <CreditCard className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.nationalId')}</p>
                         <p className="font-medium">{employee.national_id || '—'}</p>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Building className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <Building className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.department')}</p>
                         <p className="font-medium">{employee.department || '—'}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Calendar className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <Calendar className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.hireDate')}</p>
                         <p className="font-medium">
                           {employee.hire_date ? format(parseISO(employee.hire_date), 'PPP', { locale: ar }) : '—'}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.address')}</p>
                         <p className="font-medium">{employee.address || '—'}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <Clock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employees.workHours')}</p>
                         <p className="font-medium">
                           {employee.work_start_time?.slice(0, 5) || '09:00'} - {employee.work_end_time?.slice(0, 5) || '17:00'}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <MessageCircle className="w-5 h-5 text-muted-foreground" />
-                      <div>
+                    <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <MessageCircle className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">Telegram ID</p>
                         <p className="font-medium font-mono">{employee.telegram_chat_id || '—'}</p>
                       </div>
                     </div>
                   </div>
                   {employee.notes && (
-                    <div className="md:col-span-2 flex items-start gap-3">
-                      <FileText className="w-5 h-5 text-muted-foreground mt-1" />
-                      <div>
+                    <div className={`md:col-span-2 flex items-start gap-3 ${direction === 'rtl' ? 'flex-row-reverse text-right' : ''}`}>
+                      <FileText className="w-5 h-5 text-muted-foreground mt-1 flex-shrink-0" />
+                      <div className={direction === 'rtl' ? 'text-right' : ''}>
                         <p className="text-sm text-muted-foreground">{t('employeeDetails.notes')}</p>
                         <p className="font-medium">{employee.notes}</p>
                       </div>
