@@ -67,6 +67,22 @@ export const EmployeeSchema = z.object({
     (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
     z.string().trim().max(50, 'Telegram ID must be less than 50 characters').nullable().optional()
   ),
+  
+  // Attendance verification settings
+  attendance_verification_level: z.number().min(1).max(3).nullable().optional(),
+  attendance_approver_type: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.enum(['direct_manager', 'specific_person']).nullable().optional()
+  ),
+  attendance_approver_id: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().uuid('Invalid approver ID').nullable().optional()
+  ),
+  level3_verification_mode: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().max(50).nullable().optional()
+  ),
+  allowed_wifi_ips: z.array(z.string()).nullable().optional(),
 });
 
 export type ValidatedEmployeeData = z.infer<typeof EmployeeSchema>;
