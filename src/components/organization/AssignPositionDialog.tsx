@@ -92,12 +92,12 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
             <span className="text-sm">
               {language === 'ar' ? 'تعيين منصب لعدة موظفين:' : 'Assign position to multiple:'}
             </span>
-            <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+            <Select value={selectedPosition} onValueChange={(val) => setSelectedPosition(val === '__none__' ? '' : val)}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder={language === 'ar' ? 'اختر منصب' : 'Select position'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">
+                <SelectItem value="__none__">
                   {language === 'ar' ? 'بدون منصب' : 'No position'}
                 </SelectItem>
                 {positions.map(pos => (
@@ -139,14 +139,14 @@ const AssignPositionDialog = ({ open, onOpenChange }: AssignPositionDialogProps)
                     </div>
                     
                     <Select
-                      value={currentPosition || ''}
-                      onValueChange={(value) => handleAssign(employee.id, value)}
+                      value={currentPosition || '__none__'}
+                      onValueChange={(value) => handleAssign(employee.id, value === '__none__' ? '' : value)}
                     >
                       <SelectTrigger className="w-40">
                         <SelectValue placeholder={language === 'ar' ? 'اختر منصب' : 'Select'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">
+                        <SelectItem value="__none__">
                           {language === 'ar' ? 'بدون منصب' : 'No position'}
                         </SelectItem>
                         {positions.map(pos => (
