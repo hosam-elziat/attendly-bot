@@ -351,8 +351,8 @@ const EmployeeDetails = () => {
 
             <TabsContent value="info">
               <Card>
-                <CardHeader>
-                  <CardTitle className={direction === 'rtl' ? 'text-right w-full' : ''}>{t('employeeDetails.personalInfo')}</CardTitle>
+                <CardHeader className={direction === 'rtl' ? 'flex flex-row-reverse' : ''}>
+                  <CardTitle className="w-full" style={{ textAlign: direction === 'rtl' ? 'right' : 'left' }}>{t('employeeDetails.personalInfo')}</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2">
                   {/* Column 1: Name, Email, Phone, National ID */}
