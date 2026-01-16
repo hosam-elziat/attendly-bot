@@ -154,7 +154,7 @@ const Auth = () => {
                 : t('auth.signInWorkspace')}
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" autoComplete="on">
               {isSignup && (
                 <>
                   <div className="space-y-2">
@@ -223,7 +223,7 @@ const Auth = () => {
 
               <Button 
                 type="submit" 
-                className="w-full h-12 btn-primary-gradient"
+                className="w-full h-12 min-h-[48px] btn-primary-gradient touch-manipulation"
                 disabled={loading || googleLoading}
               >
                 {loading && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
@@ -244,7 +244,7 @@ const Auth = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-12"
+                className="w-full h-12 min-h-[48px] touch-manipulation"
                 onClick={handleGoogleSignIn}
                 disabled={loading || googleLoading}
               >
