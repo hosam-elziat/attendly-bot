@@ -38,6 +38,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle } from 'lucide-react';
+import EmployeeVerificationForm from '@/components/employees/EmployeeVerificationForm';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -481,6 +482,8 @@ const Employees = () => {
               employee={selectedEmployee}
               defaultCurrency={defaultCurrency}
               positions={positions}
+              company={company}
+              employees={employees}
               onClose={() => {
                 setEditDialogOpen(false);
                 setSelectedEmployee(null);
@@ -807,12 +810,20 @@ interface EditEmployeeFormProps {
   employee: Employee;
   defaultCurrency: string;
   onClose: () => void;
-  onSubmit: (data: Partial<EmployeeFormData>) => Promise<void>;
+  onSubmit: (data: Partial<EmployeeFormData & {
+    attendance_verification_level: number | null;
+    attendance_approver_type: string | null;
+    attendance_approver_id: string | null;
+    level3_verification_mode: string | null;
+    allowed_wifi_ips: string[] | null;
+  }>) => Promise<void>;
   isLoading: boolean;
   positions: { id: string; title: string; title_ar: string | null }[];
+  company: any;
+  employees: Employee[];
 }
 
-const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoading, positions }: EditEmployeeFormProps) => {
+const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoading, positions, company, employees }: EditEmployeeFormProps) => {
   const { t, language } = useLanguage();
   const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: employee.full_name,
@@ -834,6 +845,40 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     telegram_chat_id: employee.telegram_chat_id || '',
     position_id: employee.position_id || '',
   });
+
+  // Verification settings state
+  const parseLevel3Requirements = (mode: string | null): string[] => {
+    if (!mode) return ['location'];
+    const requirements: string[] = [];
+    if (mode.includes('location')) requirements.push('location');
+    if (mode.includes('selfie')) requirements.push('selfie');
+    if (mode.includes('ip')) requirements.push('wifi_ip');
+    return requirements.length > 0 ? requirements : ['location'];
+  };
+
+  const [verificationSettings, setVerificationSettings] = useState({
+    useCompanyDefault: (employee as any).attendance_verification_level === null || (employee as any).attendance_verification_level === undefined,
+    verificationLevel: (employee as any).attendance_verification_level || (company as any)?.attendance_verification_level || 1,
+    approverType: ((employee as any).attendance_approver_type || 'direct_manager') as 'direct_manager' | 'specific_person',
+    approverId: (employee as any).attendance_approver_id || null,
+    level3Requirements: parseLevel3Requirements((employee as any).level3_verification_mode),
+    allowedWifiIps: ((employee as any).allowed_wifi_ips || []).join(', '),
+  });
+
+  const getLevel3ModeString = (requirements: string[]): string => {
+    const hasLocation = requirements.includes('location');
+    const hasSelfie = requirements.includes('selfie');
+    const hasIp = requirements.includes('wifi_ip');
+
+    if (hasLocation && hasSelfie && hasIp) return 'location_selfie_ip';
+    if (hasLocation && hasSelfie) return 'location_selfie';
+    if (hasLocation && hasIp) return 'location_ip';
+    if (hasSelfie && hasIp) return 'selfie_ip';
+    if (hasLocation) return 'location_only';
+    if (hasSelfie) return 'selfie_only';
+    if (hasIp) return 'ip_only';
+    return 'location_only';
+  };
   
   const handleWeekendToggle = (day: string) => {
     setFormData(prev => ({
@@ -846,10 +891,23 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Build verification data
+    const verificationData = {
+      attendance_verification_level: verificationSettings.useCompanyDefault ? null : verificationSettings.verificationLevel,
+      attendance_approver_type: verificationSettings.useCompanyDefault ? null : verificationSettings.approverType,
+      attendance_approver_id: !verificationSettings.useCompanyDefault && verificationSettings.approverType === 'specific_person' ? verificationSettings.approverId : null,
+      level3_verification_mode: !verificationSettings.useCompanyDefault && verificationSettings.verificationLevel === 3 ? getLevel3ModeString(verificationSettings.level3Requirements) : null,
+      allowed_wifi_ips: verificationSettings.allowedWifiIps.trim() 
+        ? verificationSettings.allowedWifiIps.split(',').map(ip => ip.trim()).filter(ip => ip) 
+        : null,
+    };
+
     await onSubmit({
       ...formData,
       work_start_time: formData.work_start_time + ':00',
       work_end_time: formData.work_end_time + ':00',
+      ...verificationData,
     });
   };
 
@@ -1081,6 +1139,15 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           ))}
         </div>
       </div>
+
+      {/* Verification Settings */}
+      <EmployeeVerificationForm
+        employee={employee}
+        company={company}
+        employees={employees}
+        value={verificationSettings}
+        onChange={setVerificationSettings}
+      />
 
       {/* Notes */}
       <div className="border-t pt-4 space-y-2">

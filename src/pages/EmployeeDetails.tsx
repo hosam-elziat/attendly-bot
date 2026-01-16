@@ -50,7 +50,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, 
 import { ar } from 'date-fns/locale';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
-import EmployeeVerificationSettings from '@/components/settings/EmployeeVerificationSettings';
+
 import { useCompany } from '@/hooks/useCompany';
 import { toast } from 'sonner';
 
@@ -436,15 +436,6 @@ const EmployeeDetails = () => {
                   )}
                 </CardContent>
               </Card>
-
-              {/* Verification Settings */}
-              <div className="mt-4">
-                <EmployeeVerificationSettings 
-                  employee={employee} 
-                  company={company} 
-                  onSuccess={() => refetchEmployees()} 
-                />
-              </div>
             </TabsContent>
 
             <TabsContent value="attendance">
