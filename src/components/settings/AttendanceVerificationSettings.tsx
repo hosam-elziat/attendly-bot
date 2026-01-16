@@ -185,7 +185,7 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
         </div>
 
         {/* Level 2 Settings */}
-        {verificationLevel >= 2 && (
+        {verificationLevel === 2 && (
           <div className="space-y-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg">
             <h4 className="font-medium flex items-center gap-2">
               <UserCheck className="w-4 h-4" />
