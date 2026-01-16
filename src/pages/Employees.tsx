@@ -516,6 +516,12 @@ interface EmployeeFormData extends CreateEmployeeData {
   notes?: string;
   telegram_chat_id?: string;
   position_id?: string;
+  // Verification settings
+  attendance_verification_level?: number | null;
+  attendance_approver_type?: string | null;
+  attendance_approver_id?: string | null;
+  level3_verification_mode?: string | null;
+  allowed_wifi_ips?: string[] | null;
 }
 
 interface AddEmployeeFormProps {
