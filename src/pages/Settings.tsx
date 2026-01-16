@@ -597,7 +597,7 @@ const Settings = () => {
           </Card>
         </motion.div>
 
-        {/* Join Request Reviewer Settings */}
+        {/* Join Request Reviewer Settings - Simplified */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -607,106 +607,24 @@ const Settings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-primary" />
-                مراجع طلبات الانضمام
+                مراجعو طلبات الانضمام
               </CardTitle>
               <CardDescription>
-                تحديد الشخص أو المنصب المسؤول عن مراجعة طلبات انضمام الموظفين الجدد عبر تليجرام
+                تحديد المسؤولين عن مراجعة طلبات انضمام الموظفين الجدد عبر تليجرام
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>نوع المراجع</Label>
-                  <Select 
-                    value={joinRequestReviewerType || 'none'} 
-                    onValueChange={(value) => {
-                      if (value === 'none') {
-                        setJoinRequestReviewerType(null);
-                        setJoinRequestReviewerId(null);
-                      } else {
-                        setJoinRequestReviewerType(value);
-                        setJoinRequestReviewerId(null);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر نوع المراجع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">بدون مراجع (الموافقة من الويب)</SelectItem>
-                      <SelectItem value="position">منصب معين</SelectItem>
-                      <SelectItem value="employee">موظف معين</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {joinRequestReviewerType === 'position' && (
-                  <div className="space-y-2">
-                    <Label>اختر المنصب</Label>
-                    <Select 
-                      value={joinRequestReviewerId || ''} 
-                      onValueChange={setJoinRequestReviewerId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر المنصب" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {positions.map((position) => (
-                          <SelectItem key={position.id} value={position.id}>
-                            {language === 'ar' && position.title_ar ? position.title_ar : position.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      سيتم إرسال طلبات الانضمام لأول موظف لديه هذا المنصب ومتصل بتليجرام
-                    </p>
-                  </div>
-                )}
-                
-                {joinRequestReviewerType === 'employee' && (
-                  <div className="space-y-2">
-                    <Label>اختر الموظف</Label>
-                    <Select 
-                      value={joinRequestReviewerId || ''} 
-                      onValueChange={setJoinRequestReviewerId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر الموظف" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employees.filter(e => e.telegram_chat_id).map((emp) => (
-                          <SelectItem key={emp.id} value={emp.id}>
-                            {emp.full_name} {emp.department ? `(${emp.department})` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      يظهر فقط الموظفون المتصلون بتليجرام
-                    </p>
-                  </div>
-                )}
-              </div>
-              
               <div className="p-4 bg-muted/50 rounded-lg">
                 <h4 className="font-medium mb-2">كيف يعمل هذا؟</h4>
                 <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                  <li>عند تقديم موظف جديد لطلب انضمام من تليجرام</li>
-                  <li>يُرسل الطلب للمراجع المحدد مع بيانات المتقدم الكاملة</li>
-                  <li>يحدد المراجع الراتب والمنصب للموظف الجديد</li>
-                  <li>يوافق أو يرفض الطلب مباشرة من تليجرام</li>
+                  <li>يمكنك تحديد عدة مناصب وموظفين للمراجعة</li>
+                  <li>عند تقديم طلب انضمام جديد، يتلقى جميع المراجعين إشعاراً</li>
+                  <li>أول مراجع يتخذ قراراً (قبول/رفض) ينهي الطلب</li>
                 </ul>
               </div>
-              
-              <Button 
-                onClick={handleSaveJoinRequestReviewer} 
-                className="btn-primary-gradient" 
-                disabled={saving || (joinRequestReviewerType && !joinRequestReviewerId)}
-              >
-                {saving && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
-                حفظ إعدادات المراجعة
-              </Button>
+              <p className="text-sm text-muted-foreground">
+                لإدارة المراجعين، انتقل إلى صفحة <a href="/dashboard/join-requests" className="text-primary hover:underline">طلبات الانضمام</a> واضغط على زر "إعدادات المراجعين"
+              </p>
             </CardContent>
           </Card>
         </motion.div>

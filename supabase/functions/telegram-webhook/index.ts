@@ -2230,16 +2230,22 @@ async function submitRegistration(
     return
   }
 
-  // Get company reviewer settings
+  // Get company name for notification
   const { data: company } = await supabase
     .from('companies')
-    .select('join_request_reviewer_type, join_request_reviewer_id, name')
+    .select('name')
     .eq('id', companyId)
     .single()
 
-  // Notify the reviewer if configured
-  if (company?.join_request_reviewer_type && company?.join_request_reviewer_id && newRequest?.id) {
-    await notifyJoinRequestReviewer(
+  // Get all configured reviewers from the new table
+  const { data: reviewers } = await supabase
+    .from('join_request_reviewers')
+    .select('reviewer_type, reviewer_id')
+    .eq('company_id', companyId)
+
+  // Notify all reviewers if configured
+  if (reviewers && reviewers.length > 0 && newRequest?.id) {
+    await notifyAllJoinRequestReviewers(
       supabase,
       botToken,
       companyId,
@@ -2247,9 +2253,8 @@ async function submitRegistration(
       sessionData,
       telegramChatId,
       username,
-      company.join_request_reviewer_type,
-      company.join_request_reviewer_id,
-      company.name
+      reviewers,
+      company?.name || ''
     )
   }
 
@@ -2271,8 +2276,8 @@ async function submitRegistration(
   )
 }
 
-// Notify the designated reviewer about a new join request
-async function notifyJoinRequestReviewer(
+// Notify all designated reviewers about a new join request
+async function notifyAllJoinRequestReviewers(
   supabase: any,
   botToken: string,
   companyId: string,
@@ -2280,48 +2285,51 @@ async function notifyJoinRequestReviewer(
   sessionData: SessionData,
   applicantChatId: string,
   applicantUsername: string | undefined,
-  reviewerType: string,
-  reviewerId: string,
+  reviewers: Array<{ reviewer_type: string; reviewer_id: string }>,
   companyName: string
 ) {
   try {
-    let reviewerChatId: string | null = null
+    // Collect all unique reviewer chat IDs
+    const reviewerChatIds = new Set<string>()
 
-    if (reviewerType === 'employee') {
-      // Get the specific employee
-      const { data: reviewer } = await supabase
-        .from('employees')
-        .select('telegram_chat_id, full_name')
-        .eq('id', reviewerId)
-        .eq('is_active', true)
-        .single()
-      
-      reviewerChatId = reviewer?.telegram_chat_id
-    } else if (reviewerType === 'position') {
-      // Get the first employee with this position who has telegram connected
-      const { data: reviewers } = await supabase
-        .from('employees')
-        .select('telegram_chat_id, full_name')
-        .eq('position_id', reviewerId)
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .not('telegram_chat_id', 'is', null)
-        .limit(1)
-      
-      reviewerChatId = reviewers?.[0]?.telegram_chat_id
+    for (const reviewer of reviewers) {
+      if (reviewer.reviewer_type === 'employee') {
+        // Get the specific employee
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('telegram_chat_id')
+          .eq('id', reviewer.reviewer_id)
+          .eq('is_active', true)
+          .not('telegram_chat_id', 'is', null)
+          .single()
+        
+        if (emp?.telegram_chat_id) {
+          reviewerChatIds.add(emp.telegram_chat_id)
+        }
+      } else if (reviewer.reviewer_type === 'position') {
+        // Get all employees with this position who have telegram connected
+        const { data: positionEmployees } = await supabase
+          .from('employees')
+          .select('telegram_chat_id')
+          .eq('position_id', reviewer.reviewer_id)
+          .eq('company_id', companyId)
+          .eq('is_active', true)
+          .not('telegram_chat_id', 'is', null)
+        
+        if (positionEmployees) {
+          for (const emp of positionEmployees) {
+            if (emp.telegram_chat_id) {
+              reviewerChatIds.add(emp.telegram_chat_id)
+            }
+          }
+        }
+      }
     }
 
-    if (!reviewerChatId) {
-      console.log('No reviewer found with telegram connected for join request:', joinRequestId)
+    if (reviewerChatIds.size === 0) {
+      console.log('No reviewers found with telegram connected for join request:', joinRequestId)
       return
     }
-
-    // Get positions list for the reviewer to choose from
-    const { data: positions } = await supabase
-      .from('positions')
-      .select('id, title, title_ar')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
 
     const message = 
       `🆕 <b>طلب انضمام جديد</b>\n\n` +
@@ -2345,10 +2353,14 @@ async function notifyJoinRequestReviewer(
       ]
     }
 
-    await sendMessage(botToken, parseInt(reviewerChatId), message, keyboard)
-    console.log('Join request notification sent to reviewer:', reviewerChatId)
+    // Send notification to all reviewers
+    for (const chatId of reviewerChatIds) {
+      await sendMessage(botToken, parseInt(chatId), message, keyboard)
+    }
+    
+    console.log(`Join request notification sent to ${reviewerChatIds.size} reviewers`)
   } catch (error) {
-    console.error('Failed to notify join request reviewer:', error)
+    console.error('Failed to notify join request reviewers:', error)
   }
 }
 

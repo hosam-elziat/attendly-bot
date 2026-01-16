@@ -478,6 +478,38 @@ export type Database = {
           },
         ]
       }
+      join_request_reviewers: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          reviewer_id: string
+          reviewer_type: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          reviewer_id: string
+          reviewer_type: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          reviewer_id?: string
+          reviewer_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "join_request_reviewers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       join_requests: {
         Row: {
           company_id: string
