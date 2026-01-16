@@ -50,10 +50,10 @@ const JoinRequestReviewersSettings = ({ open, onOpenChange }: JoinRequestReviewe
   const getReviewerName = (type: 'position' | 'employee', id: string) => {
     if (type === 'position') {
       const position = positions.find(p => p.id === id);
-      return position?.title || language === 'ar' ? 'منصب محذوف' : 'Deleted Position';
+      return position?.title || (language === 'ar' ? 'منصب محذوف' : 'Deleted Position');
     } else {
       const employee = employees.find(e => e.id === id);
-      return employee?.full_name || language === 'ar' ? 'موظف محذوف' : 'Deleted Employee';
+      return employee?.full_name || (language === 'ar' ? 'موظف محذوف' : 'Deleted Employee');
     }
   };
 
