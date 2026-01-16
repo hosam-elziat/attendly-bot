@@ -143,7 +143,7 @@ serve(async (req) => {
     // Check if employee exists
     const { data: employee } = await supabase
       .from('employees')
-      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id')
+      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id')
       .eq('telegram_chat_id', telegramChatId)
       .eq('company_id', companyId)
       .eq('is_active', true)
@@ -1231,6 +1231,88 @@ serve(async (req) => {
               `💰 أرسل قيمة ${actionText} (بالأرقام فقط):`
             )
           }
+          // Handle leave approval/rejection from manager
+          else if (callbackData.startsWith('approve_leave_') || callbackData.startsWith('reject_leave_')) {
+            const isApproval = callbackData.startsWith('approve_leave_')
+            const leaveRequestId = callbackData.replace(isApproval ? 'approve_leave_' : 'reject_leave_', '')
+            
+            // Check permission
+            if (!managerPermissions?.can_approve_leaves) {
+              await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية الموافقة على الإجازات', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            // Fetch leave request details
+            const { data: leaveRequest, error: leaveError } = await supabase
+              .from('leave_requests')
+              .select('*, employees(id, full_name, telegram_chat_id, leave_balance, emergency_leave_balance)')
+              .eq('id', leaveRequestId)
+              .eq('status', 'pending')
+              .single()
+            
+            if (leaveError || !leaveRequest) {
+              await sendMessage(botToken, chatId, '❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            // Update leave request status
+            const { error: updateError } = await supabase
+              .from('leave_requests')
+              .update({
+                status: isApproval ? 'approved' : 'rejected',
+                reviewed_by: employee?.user_id || null,
+                reviewed_at: new Date().toISOString()
+              })
+              .eq('id', leaveRequestId)
+            
+            if (updateError) {
+              console.error('Error updating leave request:', updateError)
+              await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء تحديث الطلب', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            // If approved, deduct from leave balance
+            if (isApproval) {
+              const empData = leaveRequest.employees
+              if (leaveRequest.leave_type === 'emergency') {
+                const currentBalance = empData.emergency_leave_balance || companyDefaults.emergency_leave_days
+                await supabase
+                  .from('employees')
+                  .update({ emergency_leave_balance: Math.max(0, currentBalance - leaveRequest.days) })
+                  .eq('id', leaveRequest.employee_id)
+              } else {
+                const currentBalance = empData.leave_balance || companyDefaults.annual_leave_days
+                await supabase
+                  .from('employees')
+                  .update({ leave_balance: Math.max(0, currentBalance - leaveRequest.days) })
+                  .eq('id', leaveRequest.employee_id)
+              }
+            }
+            
+            // Notify employee about the decision
+            try {
+              await supabase.functions.invoke('notify-leave-status', {
+                body: { leave_request_id: leaveRequestId, status: isApproval ? 'approved' : 'rejected' }
+              })
+            } catch (notifyError) {
+              console.error('Error notifying employee about leave status:', notifyError)
+            }
+            
+            // Confirmation message to manager
+            const statusText = isApproval ? '✅ تمت الموافقة' : '❌ تم الرفض'
+            const leaveTypeText = leaveRequest.leave_type === 'emergency' ? 'طارئة' : 'اعتيادية'
+            await sendMessage(botToken, chatId, 
+              `${statusText} على طلب الإجازة\n\n` +
+              `👤 الموظف: ${leaveRequest.employees.full_name}\n` +
+              `📋 نوع الإجازة: ${leaveTypeText}\n` +
+              `📅 التاريخ: ${leaveRequest.start_date}` +
+              (leaveRequest.start_date !== leaveRequest.end_date ? ` - ${leaveRequest.end_date}` : '') +
+              `\n📊 عدد الأيام: ${leaveRequest.days}`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            
+            console.log(`Manager ${employee?.full_name} ${isApproval ? 'approved' : 'rejected'} leave request ${leaveRequestId}`)
+          }
           break
       }
 
@@ -1527,7 +1609,7 @@ serve(async (req) => {
           }
           
           // Submit leave request to manager (no balance or regular leave)
-          await supabase.from('leave_requests').insert({
+          const { data: leaveRequestData, error: leaveError } = await supabase.from('leave_requests').insert({
             employee_id: employee.id,
             company_id: companyId,
             leave_type: leaveType as any,
@@ -1536,9 +1618,16 @@ serve(async (req) => {
             days: 1,
             reason: text,
             status: 'pending'
-          })
+          }).select('id').single()
           
-          // Notify managers about the leave request
+          if (leaveError) {
+            console.error('Error creating leave request:', leaveError)
+            await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إرسال طلب الإجازة', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          // Notify managers about the leave request with approval buttons
           await notifyManagersLeaveRequest(
             supabase, 
             botToken, 
@@ -1547,7 +1636,8 @@ serve(async (req) => {
             companyId, 
             leaveType, 
             leaveDate, 
-            text
+            text,
+            leaveRequestData.id
           )
           
           await deleteSession()
@@ -1811,7 +1901,7 @@ async function notifyManagers(
   }
 }
 
-// Notify managers about leave request
+// Notify managers about leave request with approval/rejection buttons
 async function notifyManagersLeaveRequest(
   supabase: any,
   botToken: string,
@@ -1820,7 +1910,8 @@ async function notifyManagersLeaveRequest(
   companyId: string,
   leaveType: string,
   leaveDate: string,
-  reason: string
+  reason: string,
+  leaveRequestId: string
 ) {
   try {
     const { data: managers, error } = await supabase
@@ -1842,12 +1933,23 @@ async function notifyManagersLeaveRequest(
       `👤 الموظف: ${employeeName}\n` +
       `📋 نوع الإجازة: ${leaveTypeText}\n` +
       `📅 التاريخ: ${leaveDate}\n` +
-      `📝 السبب: ${reason || 'لم يحدد'}`
+      `📝 السبب: ${reason || 'لم يحدد'}\n\n` +
+      `⚡ اختر قرارك:`
+    
+    // Approval/rejection buttons
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '✅ موافقة', callback_data: `approve_leave_${leaveRequestId}` },
+          { text: '❌ رفض', callback_data: `reject_leave_${leaveRequestId}` }
+        ]
+      ]
+    }
     
     for (const manager of managers) {
       if (manager.manager_telegram_chat_id) {
-        await sendMessage(botToken, parseInt(manager.manager_telegram_chat_id), message)
-        console.log(`Notified manager ${manager.manager_name} about ${employeeName}'s leave request`)
+        await sendMessage(botToken, parseInt(manager.manager_telegram_chat_id), message, keyboard)
+        console.log(`Notified manager ${manager.manager_name} about ${employeeName}'s leave request with action buttons`)
       }
     }
   } catch (error) {
