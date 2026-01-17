@@ -248,6 +248,15 @@ serve(async (req) => {
       'custom_time': '⏰ تحديد وقت مخصص',
       'use_default_weekend': '✅ استخدام إجازة الشركة',
       'confirm_weekend': '✅ تأكيد',
+      'leave_today': '📅 اليوم',
+      'leave_tomorrow': '📅 غداً',
+      'leave_day_after': '📅 بعد غد',
+      'leave_other_day': '📆 يوم آخر',
+      'cancel_registration': '❌ إلغاء التسجيل',
+      'team_add_bonus': '🎁 إضافة مكافأة',
+      'team_add_deduction': '📉 إضافة خصم',
+      'team_view_requests': '📋 طلبات الإجازات',
+      'back_to_main': '🔙 القائمة الرئيسية',
     }
 
     // Log incoming message if employee exists
@@ -265,22 +274,19 @@ serve(async (req) => {
       )
     }
 
-    // Helper function to send message and log it
+    // Set context for automatic message logging in sendMessage
+    setMessageLogContext({
+      supabase,
+      companyId,
+      employeeId: employee?.id || null,
+      telegramChatId
+    });
+
+    // Helper function to send message and log it (kept for backward compatibility)
     async function sendAndLogMessage(text: string, keyboard?: any) {
       if (!chatId) return
       await sendMessage(botToken, chatId, text, keyboard)
-      if (employee) {
-        await logTelegramMessage(
-          supabase,
-          companyId,
-          employee.id,
-          telegramChatId,
-          text.replace(/<[^>]*>/g, ''), // Remove HTML tags for logging
-          'outgoing',
-          'text',
-          keyboard ? { keyboard } : {}
-        )
-      }
+      // Note: logging is now handled automatically by sendMessage
     }
 
     // Helper functions for session management
@@ -3004,6 +3010,18 @@ async function logTelegramMessage(
   }
 }
 
+// Context for message logging - set by the main handler
+let messageLogContext: {
+  supabase: any;
+  companyId: string;
+  employeeId: string | null;
+  telegramChatId: string;
+} | null = null;
+
+function setMessageLogContext(ctx: typeof messageLogContext) {
+  messageLogContext = ctx;
+}
+
 async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {
   const body: any = {
     chat_id: chatId,
@@ -3021,9 +3039,32 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
     body: JSON.stringify(body)
   })
 
-  if (!res.ok) {
+  let telegramMessageId: number | undefined;
+  if (res.ok) {
+    try {
+      const result = await res.clone().json();
+      telegramMessageId = result.result?.message_id;
+    } catch (e) {
+      // Ignore JSON parse errors
+    }
+  } else {
     const txt = await res.text().catch(() => '')
     console.error('telegram-webhook: sendMessage failed', { status: res.status, body: txt })
+  }
+  
+  // Auto-log outgoing messages if context is set and chatId matches
+  if (messageLogContext && String(chatId) === messageLogContext.telegramChatId && messageLogContext.employeeId) {
+    await logTelegramMessage(
+      messageLogContext.supabase,
+      messageLogContext.companyId,
+      messageLogContext.employeeId,
+      messageLogContext.telegramChatId,
+      text.replace(/<[^>]*>/g, ''), // Remove HTML tags
+      'outgoing',
+      'text',
+      keyboard ? { keyboard } : {},
+      telegramMessageId
+    );
   }
   
   return res
