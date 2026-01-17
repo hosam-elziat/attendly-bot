@@ -3085,9 +3085,30 @@ async function sendMessageWithReplyKeyboard(botToken: string, chatId: number, te
     body: JSON.stringify(body)
   })
 
-  if (!res.ok) {
+  let telegramMessageId: number | undefined;
+  if (res.ok) {
+    try {
+      const result = await res.clone().json();
+      telegramMessageId = result.result?.message_id;
+    } catch (e) {}
+  } else {
     const txt = await res.text().catch(() => '')
     console.error('telegram-webhook: sendMessageWithReplyKeyboard failed', { status: res.status, body: txt })
+  }
+  
+  // Auto-log if context is set
+  if (messageLogContext && String(chatId) === messageLogContext.telegramChatId && messageLogContext.employeeId) {
+    await logTelegramMessage(
+      messageLogContext.supabase,
+      messageLogContext.companyId,
+      messageLogContext.employeeId,
+      messageLogContext.telegramChatId,
+      text.replace(/<[^>]*>/g, ''),
+      'outgoing',
+      'text',
+      { reply_keyboard: keyboard },
+      telegramMessageId
+    );
   }
 }
 
@@ -3106,9 +3127,30 @@ async function removeReplyKeyboard(botToken: string, chatId: number, text: strin
     body: JSON.stringify(body)
   })
 
-  if (!res.ok) {
+  let telegramMessageId: number | undefined;
+  if (res.ok) {
+    try {
+      const result = await res.clone().json();
+      telegramMessageId = result.result?.message_id;
+    } catch (e) {}
+  } else {
     const txt = await res.text().catch(() => '')
     console.error('telegram-webhook: removeReplyKeyboard failed', { status: res.status, body: txt })
+  }
+  
+  // Auto-log if context is set
+  if (messageLogContext && String(chatId) === messageLogContext.telegramChatId && messageLogContext.employeeId) {
+    await logTelegramMessage(
+      messageLogContext.supabase,
+      messageLogContext.companyId,
+      messageLogContext.employeeId,
+      messageLogContext.telegramChatId,
+      text.replace(/<[^>]*>/g, ''),
+      'outgoing',
+      'text',
+      {},
+      telegramMessageId
+    );
   }
 }
 
@@ -3588,6 +3630,8 @@ async function createPendingAttendance(
           ]
         }
       )
+    }
+  }
 }
 
 // Helper function to handle attendance approval/rejection via Telegram
@@ -3773,13 +3817,13 @@ async function handleAttendanceApproval(
       `⏰ الوقت: ${timeStr}`
     )
 
-    // Notify employee
+    // Notify employee and log the message
     if (employee.telegram_chat_id) {
       const msg = action === 'modify'
         ? `✅ تم قبول ${pendingRequest.request_type === 'check_in' ? 'حضورك' : 'انصرافك'} بوقت معدّل: ${timeStr}\n👤 بواسطة: ${managerName}`
         : `✅ تم اعتماد ${pendingRequest.request_type === 'check_in' ? 'حضورك' : 'انصرافك'}!\n📅 التاريخ: ${today}\n⏰ الوقت: ${timeStr}\n👤 المعتمد: ${managerName}`
       
-      await sendMessage(botToken, parseInt(employee.telegram_chat_id), msg)
+      await sendMessageAndLogToEmployee(supabase, botToken, employee.telegram_chat_id, msg, companyId, employee.id)
     }
 
   } else if (action === 'reject') {
@@ -3799,15 +3843,65 @@ async function handleAttendanceApproval(
       `👤 الموظف: ${employee.full_name}`
     )
 
-    // Notify employee
+    // Notify employee and log the message
     if (employee.telegram_chat_id) {
-      await sendMessage(botToken, parseInt(employee.telegram_chat_id),
-        `❌ تم رفض طلب ${pendingRequest.request_type === 'check_in' ? 'الحضور' : 'الانصراف'}\n` +
+      const msg = `❌ تم رفض طلب ${pendingRequest.request_type === 'check_in' ? 'الحضور' : 'الانصراف'}\n` +
         `📝 السبب: ${rejectionReason || 'غير محدد'}\n` +
         `👤 بواسطة: ${managerName}`
-      )
+      
+      await sendMessageAndLogToEmployee(supabase, botToken, employee.telegram_chat_id, msg, companyId, employee.id)
     }
   }
 }
+
+// Helper to send message to employee and log it when sending outside of current context
+async function sendMessageAndLogToEmployee(
+  supabase: any,
+  botToken: string,
+  telegramChatId: string,
+  text: string,
+  companyId: string,
+  employeeId: string,
+  keyboard?: any
+) {
+  const chatIdNum = parseInt(telegramChatId)
+  
+  const body: any = {
+    chat_id: chatIdNum,
+    text,
+    parse_mode: 'HTML'
   }
+  
+  if (keyboard) {
+    body.reply_markup = keyboard
+  }
+  
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  
+  let telegramMessageId: number | undefined
+  if (res.ok) {
+    try {
+      const result = await res.json()
+      telegramMessageId = result.result?.message_id
+    } catch (e) {}
+  } else {
+    console.error('sendMessageAndLogToEmployee failed:', await res.text().catch(() => ''))
+  }
+  
+  // Log the message
+  await logTelegramMessage(
+    supabase,
+    companyId,
+    employeeId,
+    telegramChatId,
+    text.replace(/<[^>]*>/g, ''),
+    'outgoing',
+    'text',
+    keyboard ? { keyboard } : {},
+    telegramMessageId
+  )
 }
