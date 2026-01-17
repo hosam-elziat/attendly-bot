@@ -21,7 +21,8 @@ import {
   CreditCard,
   History,
   UserPlus,
-  Building2
+  Building2,
+  MessageCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AISummaryButton from '@/components/ai/AISummaryButton';
@@ -45,6 +46,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: Clock, label: t('nav.attendance'), path: '/dashboard/attendance' },
     { icon: Calendar, label: t('nav.leaves'), path: '/dashboard/leaves' },
     { icon: DollarSign, label: t('nav.salaries'), path: '/dashboard/salaries' },
+    { icon: MessageCircle, label: language === 'ar' ? 'المحادثات' : 'Chats', path: '/dashboard/chats' },
     { icon: CreditCard, label: language === 'ar' ? 'الاشتراك' : 'Subscription', path: '/dashboard/subscription' },
     { icon: History, label: language === 'ar' ? 'سجل التعديلات' : 'History', path: '/dashboard/history' },
     { icon: Send, label: t('nav.telegram'), path: '/dashboard/telegram' },

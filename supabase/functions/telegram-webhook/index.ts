@@ -228,6 +228,37 @@ serve(async (req) => {
       managerPermissions = posPerms
     }
 
+    // Log incoming message if employee exists
+    const incomingText = update.message?.text || update.callback_query?.data || ''
+    if (employee && incomingText) {
+      await logTelegramMessage(
+        supabase,
+        companyId,
+        employee.id,
+        telegramChatId,
+        incomingText,
+        'incoming',
+        update.callback_query ? 'callback' : 'text'
+      )
+    }
+
+    // Helper function to send message and log it
+    async function sendAndLogMessage(text: string, keyboard?: any) {
+      if (!chatId) return
+      await sendMessage(botToken, chatId, text, keyboard)
+      if (employee) {
+        await logTelegramMessage(
+          supabase,
+          companyId,
+          employee.id,
+          telegramChatId,
+          text.replace(/<[^>]*>/g, ''), // Remove HTML tags for logging
+          'outgoing',
+          'text'
+        )
+      }
+    }
+
     // Helper functions for session management
     async function getSession(): Promise<{ step: string; data: SessionData } | null> {
       const { data } = await supabase
@@ -2919,6 +2950,36 @@ async function finalizeJoinRequestApproval(
   )
 }
 
+// Log message to telegram_messages table
+async function logTelegramMessage(
+  supabase: any,
+  companyId: string,
+  employeeId: string | null,
+  telegramChatId: string,
+  messageText: string,
+  direction: 'incoming' | 'outgoing',
+  messageType: string = 'text',
+  metadata: Record<string, unknown> = {},
+  telegramMessageId?: number
+) {
+  if (!employeeId) return // Only log messages for registered employees
+  
+  try {
+    await supabase.from('telegram_messages').insert({
+      company_id: companyId,
+      employee_id: employeeId,
+      telegram_chat_id: telegramChatId,
+      message_text: messageText.substring(0, 5000), // Limit message length
+      direction,
+      message_type: messageType,
+      metadata,
+      telegram_message_id: telegramMessageId
+    })
+  } catch (error) {
+    console.error('Failed to log telegram message:', error)
+  }
+}
+
 async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {
   const body: any = {
     chat_id: chatId,
@@ -2940,6 +3001,8 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
     const txt = await res.text().catch(() => '')
     console.error('telegram-webhook: sendMessage failed', { status: res.status, body: txt })
   }
+  
+  return res
 }
 
 // Send message with reply keyboard (for location requests)
