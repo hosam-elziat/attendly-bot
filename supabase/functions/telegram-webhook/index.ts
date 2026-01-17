@@ -6,6 +6,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper function to check monthly leave limit
+async function checkMonthlyLeaveLimit(
+  supabase: any,
+  employeeId: string,
+  companyId: string,
+  maxExcusedAbsenceDays: number = 2
+): Promise<{ allowed: boolean; usedDays: number; message: string }> {
+  const now = new Date()
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`
+  
+  // Count approved regular and emergency leaves this month
+  const { data: leaves, error } = await supabase
+    .from('leave_requests')
+    .select('days, leave_type')
+    .eq('employee_id', employeeId)
+    .eq('status', 'approved')
+    .in('leave_type', ['regular', 'emergency'])
+    .gte('start_date', monthStart)
+    .lt('start_date', monthEnd)
+  
+  if (error) {
+    console.error('Error checking leave limit:', error)
+    return { allowed: true, usedDays: 0, message: '' }
+  }
+  
+  const usedDays = (leaves || []).reduce((sum: number, l: any) => sum + (l.days || 0), 0)
+  
+  if (usedDays >= maxExcusedAbsenceDays) {
+    return {
+      allowed: false,
+      usedDays,
+      message: `❌ لقد استنفدت الحد الأقصى للإجازات هذا الشهر (${maxExcusedAbsenceDays} يوم)\n\n` +
+        `📊 الأيام المستخدمة: ${usedDays} يوم\n\n` +
+        `⚠️ يجب التواصل مع مديرك المباشر للحصول على إجازة إضافية.`
+    }
+  }
+  
+  return { allowed: true, usedDays, message: '' }
+}
+
 // Helper function to get current time in a specific timezone
 function getLocalTime(timezone: string = 'Africa/Cairo'): { date: string; time: string; isoString: string } {
   const now = new Date()
@@ -1955,6 +1997,16 @@ serve(async (req) => {
             }
           }
           
+          // Check monthly leave limit first
+          const maxExcusedAbsenceDays = 2 // Default: 2 days per month for regular/emergency leaves
+          const leaveLimitCheck = await checkMonthlyLeaveLimit(supabase, employee.id, companyId, maxExcusedAbsenceDays)
+          
+          if (!leaveLimitCheck.allowed) {
+            await deleteSession()
+            await sendMessage(botToken, chatId, leaveLimitCheck.message, getEmployeeKeyboard(managerPermissions))
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
           // For emergency leave with balance
           if (session.data.leave_type === 'emergency') {
             const { data: empData } = await supabase
@@ -1988,7 +2040,8 @@ serve(async (req) => {
               await sendMessage(botToken, chatId, 
                 `✅ <b>تمت الموافقة على إجازتك الطارئة!</b>\n\n` +
                 `📅 التاريخ: ${text}\n` +
-                `📊 الرصيد المتبقي: ${emergencyBalance - 1} يوم طارئ`,
+                `📊 الرصيد المتبقي: ${emergencyBalance - 1} يوم طارئ\n` +
+                `📊 إجازات الشهر: ${leaveLimitCheck.usedDays + 1}/${maxExcusedAbsenceDays} يوم`,
                 getEmployeeKeyboard(managerPermissions)
               )
               return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })

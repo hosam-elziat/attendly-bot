@@ -57,7 +57,12 @@ serve(async (req) => {
           break_duration_minutes,
           absence_without_permission_deduction,
           default_currency,
-          timezone
+          timezone,
+          auto_absent_after_hours,
+          checkin_reminder_count,
+          checkin_reminder_interval_minutes,
+          checkout_reminder_count,
+          checkout_reminder_interval_minutes
         )
       `)
       .eq('is_active', true)
@@ -84,15 +89,17 @@ serve(async (req) => {
     const employeesOnLeave = new Set((approvedLeaves || []).map(l => l.employee_id))
     console.log(`Employees on leave today: ${employeesOnLeave.size}`)
 
-    // Get public holidays for today (check all unique countries)
-    const { data: holidays } = await supabase
-      .from('companies')
-      .select('id, country_code')
-    
-    // For simplicity, we'll skip public holiday check for now and rely on leave requests
+    // Get approved public holidays for today
+    const { data: approvedHolidays } = await supabase
+      .from('approved_holidays')
+      .select('company_id')
+      .eq('holiday_date', today)
+      .eq('is_approved', true)
 
-    let checkInRemindersAtStart = 0
-    let checkInRemindersAfter10 = 0
+    const companiesWithHoliday = new Set((approvedHolidays || []).map(h => h.company_id))
+    console.log(`Companies with approved holiday today: ${companiesWithHoliday.size}`)
+
+    let checkInReminders = 0
     let checkOutReminders = 0
     let breakEndReminders = 0
     let absenceDeductions = 0
@@ -100,6 +107,14 @@ serve(async (req) => {
     for (const emp of employees || []) {
       // Skip if no telegram chat id
       if (!emp.telegram_chat_id) {
+        continue
+      }
+
+      const company = emp.companies as any
+
+      // Skip if today is an approved holiday for this company
+      if (companiesWithHoliday.has(emp.company_id)) {
+        console.log(`Skipping ${emp.full_name} - approved holiday today`)
         continue
       }
 
@@ -116,23 +131,39 @@ serve(async (req) => {
         continue
       }
 
-      const company = emp.companies as any
       const workStartTime = emp.work_start_time || company?.work_start_time || '09:00:00'
       const workEndTime = emp.work_end_time || company?.work_end_time || '17:00:00'
       const breakDuration = emp.break_duration_minutes || company?.break_duration_minutes || 60
       const absenceDeduction = company?.absence_without_permission_deduction || 1 // default 1 day deduction
       
+      // Get reminder settings from company
+      const autoAbsentAfterHours = company?.auto_absent_after_hours || 2 // default 2 hours
+      const checkinReminderCount = company?.checkin_reminder_count || 2
+      const checkinReminderInterval = company?.checkin_reminder_interval_minutes || 10
+      const checkoutReminderCount = company?.checkout_reminder_count || 2
+      const checkoutReminderInterval = company?.checkout_reminder_interval_minutes || 10
+      
       // Parse work times to minutes
       const startMinutes = timeToMinutes(workStartTime)
       const endMinutes = timeToMinutes(workEndTime)
       
-      // Calculate reminder times
-      const reminderAtStartMinutes = startMinutes // At work start time
-      const reminderAfter10Minutes = startMinutes + 10 // 10 minutes after start
-      const absenceCheckMinutes = startMinutes + 120 // 2 hours after start for absence
-      const reminderCheckOutMinutes = endMinutes + 10 // 10 minutes after end time
+      // Calculate reminder times dynamically based on settings
+      // First reminder is at work start time, subsequent reminders are at intervals
+      const checkinReminderTimes: number[] = []
+      for (let i = 0; i < checkinReminderCount; i++) {
+        checkinReminderTimes.push(startMinutes + (i * checkinReminderInterval))
+      }
+      
+      // Checkout reminders start after work end time
+      const checkoutReminderTimes: number[] = []
+      for (let i = 0; i < checkoutReminderCount; i++) {
+        checkoutReminderTimes.push(endMinutes + (i * checkoutReminderInterval))
+      }
+      
+      // Absence check time based on auto_absent_after_hours
+      const absenceCheckMinutes = startMinutes + (autoAbsentAfterHours * 60)
 
-      console.log(`Processing ${emp.full_name}: start=${workStartTime.substring(0,5)} (${startMinutes}), current=${currentMinutes}`)
+      console.log(`Processing ${emp.full_name}: start=${workStartTime.substring(0,5)} (${startMinutes}), current=${currentMinutes}, checkin reminders at: ${checkinReminderTimes.join(', ')}`)
 
       // Get bot token
       let bot: any = null
@@ -158,44 +189,47 @@ serve(async (req) => {
         .eq('date', today)
         .single()
 
-      // === REMINDER AT WORK START TIME ===
-      if (isWithinWindow(currentMinutes, reminderAtStartMinutes, 3) && !attendance) {
-        // Check if we already sent a reminder today (using a simple approach - check notes or create a tracking mechanism)
-        console.log(`Sending start-time reminder to ${emp.full_name}`)
-        await sendMessage(
-          bot.bot_token,
-          parseInt(emp.telegram_chat_id),
-          `🌅 <b>صباح الخير - موعد العمل</b>\n\n` +
-          `مرحباً ${emp.full_name}!\n` +
-          `حان موعد بدء العمل (${workStartTime.substring(0, 5)}).\n\n` +
-          `📝 يرجى تسجيل الحضور الآن.`,
-          getCheckInKeyboard()
-        )
-        checkInRemindersAtStart++
+      // === CHECK-IN REMINDERS (based on company settings) ===
+      for (let i = 0; i < checkinReminderTimes.length; i++) {
+        const reminderTime = checkinReminderTimes[i]
+        if (isWithinWindow(currentMinutes, reminderTime, 3) && !attendance) {
+          const reminderNumber = i + 1
+          const minutesLate = reminderTime - startMinutes
+          
+          let messageText = ''
+          if (reminderNumber === 1) {
+            // First reminder - at work start time
+            messageText = `🌅 <b>صباح الخير - موعد العمل</b>\n\n` +
+              `مرحباً ${emp.full_name}!\n` +
+              `حان موعد بدء العمل (${workStartTime.substring(0, 5)}).\n\n` +
+              `📝 يرجى تسجيل الحضور الآن.`
+          } else {
+            // Subsequent reminders
+            messageText = `⏰ <b>تذكير ${reminderNumber} بتسجيل الحضور</b>\n\n` +
+              `مرحباً ${emp.full_name}!\n` +
+              `لم تقم بتسجيل حضورك اليوم بعد.\n` +
+              `موعد العمل: ${workStartTime.substring(0, 5)}\n` +
+              `الوقت الحالي: ${currentTime}\n\n` +
+              `⚠️ <b>مضى ${minutesLate} دقيقة على موعد الحضور!</b>\n` +
+              `يرجى تسجيل الحضور فوراً.\n\n` +
+              `⏳ <i>سيتم تسجيل غياب تلقائي بعد ${autoAbsentAfterHours} ساعة من موعد العمل.</i>`
+          }
+          
+          console.log(`Sending check-in reminder ${reminderNumber} to ${emp.full_name}`)
+          await sendMessage(
+            bot.bot_token,
+            parseInt(emp.telegram_chat_id),
+            messageText,
+            getCheckInKeyboard()
+          )
+          checkInReminders++
+          break // Only send one reminder per run
+        }
       }
 
-      // === REMINDER 10 MINUTES AFTER START ===
-      if (isWithinWindow(currentMinutes, reminderAfter10Minutes, 3) && !attendance) {
-        console.log(`Sending 10-min reminder to ${emp.full_name}`)
-        await sendMessage(
-          bot.bot_token,
-          parseInt(emp.telegram_chat_id),
-          `⏰ <b>تذكير بتسجيل الحضور</b>\n\n` +
-          `مرحباً ${emp.full_name}!\n` +
-          `لم تقم بتسجيل حضورك اليوم بعد.\n` +
-          `موعد العمل: ${workStartTime.substring(0, 5)}\n` +
-          `الوقت الحالي: ${currentTime}\n\n` +
-          `⚠️ <b>مضى 10 دقائق على موعد الحضور!</b>\n` +
-          `يرجى تسجيل الحضور فوراً.\n\n` +
-          `⏳ <i>سيتم تسجيل غياب تلقائي بعد ساعتين من موعد العمل.</i>`,
-          getCheckInKeyboard()
-        )
-        checkInRemindersAfter10++
-      }
-
-      // === AUTO ABSENCE DEDUCTION (2 hours after work start) ===
+      // === AUTO ABSENCE DEDUCTION (based on auto_absent_after_hours) ===
       if (isWithinWindow(currentMinutes, absenceCheckMinutes, 3) && !attendance) {
-        console.log(`Checking absence for ${emp.full_name} at ${currentTime} (work starts at ${workStartTime.substring(0, 5)})`)
+        console.log(`Checking absence for ${emp.full_name} at ${currentTime} (work starts at ${workStartTime.substring(0, 5)}, absent after ${autoAbsentAfterHours}h)`)
         
         // Double-check employee is not on leave (re-fetch to be sure)
         const { data: leaveCheck } = await supabase
@@ -237,7 +271,7 @@ serve(async (req) => {
               company_id: emp.company_id,
               date: today,
               status: 'absent',
-              notes: `غياب تلقائي - لم يسجل حضور بعد ساعتين من موعد العمل (${workStartTime.substring(0, 5)})`
+              notes: `غياب تلقائي - لم يسجل حضور بعد ${autoAbsentAfterHours} ساعة من موعد العمل (${workStartTime.substring(0, 5)})`
             })
             .select('id')
             .single()
@@ -284,21 +318,31 @@ serve(async (req) => {
         }
       }
 
-      // === CHECK-OUT REMINDER (10 minutes after work end) ===
-      if (isWithinWindow(currentMinutes, reminderCheckOutMinutes, 3) && attendance && attendance.status !== 'checked_out' && !attendance.check_out_time) {
-        console.log(`Sending check-out reminder to ${emp.full_name}`)
-        await sendMessage(
-          bot.bot_token,
-          parseInt(emp.telegram_chat_id),
-          `⏰ <b>تذكير بتسجيل الانصراف</b>\n\n` +
-          `مرحباً ${emp.full_name}!\n` +
-          `انتهى وقت العمل (${workEndTime.substring(0, 5)}).\n` +
-          `لم تقم بتسجيل انصرافك بعد.\n\n` +
-          `⚠️ يرجى تسجيل الانصراف الآن.\n\n` +
-          `💡 <i>تجاهل هذه الرسالة إذا كنت تعمل وقت إضافي.</i>`,
-          getCheckOutKeyboard()
-        )
-        checkOutReminders++
+      // === CHECK-OUT REMINDERS (based on company settings) ===
+      if (attendance && attendance.status !== 'checked_out' && !attendance.check_out_time) {
+        for (let i = 0; i < checkoutReminderTimes.length; i++) {
+          const reminderTime = checkoutReminderTimes[i]
+          if (isWithinWindow(currentMinutes, reminderTime, 3)) {
+            const reminderNumber = i + 1
+            const minutesAfterEnd = reminderTime - endMinutes
+            
+            console.log(`Sending check-out reminder ${reminderNumber} to ${emp.full_name}`)
+            await sendMessage(
+              bot.bot_token,
+              parseInt(emp.telegram_chat_id),
+              `⏰ <b>تذكير ${reminderNumber} بتسجيل الانصراف</b>\n\n` +
+              `مرحباً ${emp.full_name}!\n` +
+              `انتهى وقت العمل (${workEndTime.substring(0, 5)})` + 
+              (minutesAfterEnd > 0 ? ` منذ ${minutesAfterEnd} دقيقة` : '') + `.\n` +
+              `لم تقم بتسجيل انصرافك بعد.\n\n` +
+              `⚠️ يرجى تسجيل الانصراف الآن.\n\n` +
+              `💡 <i>تجاهل هذه الرسالة إذا كنت تعمل وقت إضافي.</i>`,
+              getCheckOutKeyboard()
+            )
+            checkOutReminders++
+            break // Only send one reminder per run
+          }
+        }
       }
 
       // Check for employees on break - auto-end break after break_duration_minutes
@@ -352,8 +396,7 @@ serve(async (req) => {
 
     const result = { 
       success: true, 
-      checkInRemindersAtStart,
-      checkInRemindersAfter10,
+      checkInReminders,
       checkOutReminders,
       breakEndReminders,
       absenceDeductions,
