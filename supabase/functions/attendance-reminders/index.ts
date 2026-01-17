@@ -12,9 +12,47 @@ function timeToMinutes(timeStr: string): number {
   return parseInt(parts[0]) * 60 + parseInt(parts[1])
 }
 
-// Helper to check if current time is within a window of target time
-function isWithinWindow(currentMinutes: number, targetMinutes: number, windowMinutes: number = 2): boolean {
-  return currentMinutes >= targetMinutes && currentMinutes < targetMinutes + windowMinutes
+// Helper to check if current time EXACTLY matches target time (within 1 minute window)
+// This prevents sending multiple reminders when cron runs every minute
+function isExactMinute(currentMinutes: number, targetMinutes: number): boolean {
+  return currentMinutes === targetMinutes
+}
+
+// Helper to convert UTC date to timezone-adjusted date
+function getLocalTime(date: Date, timezone: string): { time: string; minutes: number; dayName: string; dateStr: string } {
+  try {
+    const options: Intl.DateTimeFormatOptions = { 
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }
+    const timeStr = date.toLocaleTimeString('en-GB', options).substring(0, 5)
+    const minutes = timeToMinutes(timeStr)
+    
+    const dayOptions: Intl.DateTimeFormatOptions = { 
+      timeZone: timezone,
+      weekday: 'long'
+    }
+    const dayName = date.toLocaleDateString('en-US', dayOptions).toLowerCase()
+    
+    const dateOptions: Intl.DateTimeFormatOptions = { 
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }
+    const localDate = date.toLocaleDateString('en-CA', dateOptions) // YYYY-MM-DD format
+    
+    return { time: timeStr, minutes, dayName, dateStr: localDate }
+  } catch (e) {
+    // Fallback to UTC if timezone is invalid
+    const timeStr = date.toTimeString().substring(0, 5)
+    const minutes = timeToMinutes(timeStr)
+    const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][date.getDay()]
+    const dateStr = date.toISOString().split('T')[0]
+    return { time: timeStr, minutes, dayName, dateStr }
+  }
 }
 
 serve(async (req) => {
@@ -28,12 +66,8 @@ serve(async (req) => {
 
   try {
     const now = new Date()
-    const currentTime = now.toTimeString().substring(0, 5) // HH:MM format
-    const currentMinutes = timeToMinutes(currentTime)
-    const today = now.toISOString().split('T')[0]
-    const currentDayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()]
-
-    console.log('attendance-reminders: running at', currentTime, `(${currentMinutes} minutes)`, 'on', currentDayName, today)
+    
+    console.log('attendance-reminders: running at UTC', now.toISOString())
 
     // Get all active employees with their telegram_chat_id and work times
     const { data: employees, error: empError } = await supabase
@@ -78,27 +112,6 @@ serve(async (req) => {
 
     console.log(`Found ${employees?.length || 0} employees with telegram`)
 
-    // Get approved leave requests for today
-    const { data: approvedLeaves } = await supabase
-      .from('leave_requests')
-      .select('employee_id')
-      .eq('status', 'approved')
-      .lte('start_date', today)
-      .gte('end_date', today)
-
-    const employeesOnLeave = new Set((approvedLeaves || []).map(l => l.employee_id))
-    console.log(`Employees on leave today: ${employeesOnLeave.size}`)
-
-    // Get approved public holidays for today
-    const { data: approvedHolidays } = await supabase
-      .from('approved_holidays')
-      .select('company_id')
-      .eq('holiday_date', today)
-      .eq('is_approved', true)
-
-    const companiesWithHoliday = new Set((approvedHolidays || []).map(h => h.company_id))
-    console.log(`Companies with approved holiday today: ${companiesWithHoliday.size}`)
-
     let checkInReminders = 0
     let checkOutReminders = 0
     let breakEndReminders = 0
@@ -111,9 +124,38 @@ serve(async (req) => {
       }
 
       const company = emp.companies as any
+      
+      // Get local time for this company's timezone
+      const companyTimezone = company?.timezone || 'Africa/Cairo'
+      const { time: currentTime, minutes: currentMinutes, dayName: currentDayName, dateStr: today } = getLocalTime(now, companyTimezone)
 
-      // Skip if today is an approved holiday for this company
-      if (companiesWithHoliday.has(emp.company_id)) {
+      console.log(`Employee ${emp.full_name}: timezone=${companyTimezone}, localTime=${currentTime}, localDate=${today}, day=${currentDayName}`)
+
+      // Get approved leave requests for today for this employee
+      const { data: leaveData } = await supabase
+        .from('leave_requests')
+        .select('id')
+        .eq('employee_id', emp.id)
+        .eq('status', 'approved')
+        .lte('start_date', today)
+        .gte('end_date', today)
+        .single()
+
+      if (leaveData) {
+        console.log(`Skipping ${emp.full_name} - on approved leave`)
+        continue
+      }
+
+      // Check if today is an approved holiday for this company
+      const { data: holidayData } = await supabase
+        .from('approved_holidays')
+        .select('id')
+        .eq('company_id', emp.company_id)
+        .eq('holiday_date', today)
+        .eq('is_approved', true)
+        .single()
+
+      if (holidayData) {
         console.log(`Skipping ${emp.full_name} - approved holiday today`)
         continue
       }
@@ -122,12 +164,6 @@ serve(async (req) => {
       const weekendDays = emp.weekend_days || ['friday', 'saturday']
       if (weekendDays.includes(currentDayName)) {
         console.log(`Skipping ${emp.full_name} - today is weekend (${currentDayName})`)
-        continue
-      }
-
-      // Skip if employee is on approved leave
-      if (employeesOnLeave.has(emp.id)) {
-        console.log(`Skipping ${emp.full_name} - on approved leave`)
         continue
       }
 
@@ -163,7 +199,7 @@ serve(async (req) => {
       // Absence check time based on auto_absent_after_hours
       const absenceCheckMinutes = startMinutes + (autoAbsentAfterHours * 60)
 
-      console.log(`Processing ${emp.full_name}: start=${workStartTime.substring(0,5)} (${startMinutes}), current=${currentMinutes}, checkin reminders at: ${checkinReminderTimes.join(', ')}`)
+      console.log(`Processing ${emp.full_name}: start=${workStartTime.substring(0,5)} (${startMinutes}), current=${currentMinutes}, checkin reminders at: ${checkinReminderTimes.join(', ')}, checkout at: ${checkoutReminderTimes.join(', ')}`)
 
       // Get bot token
       let bot: any = null
@@ -190,62 +226,52 @@ serve(async (req) => {
         .single()
 
       // === CHECK-IN REMINDERS (based on company settings) ===
-      for (let i = 0; i < checkinReminderTimes.length; i++) {
-        const reminderTime = checkinReminderTimes[i]
-        if (isWithinWindow(currentMinutes, reminderTime, 3) && !attendance) {
-          const reminderNumber = i + 1
-          const minutesLate = reminderTime - startMinutes
-          
-          let messageText = ''
-          if (reminderNumber === 1) {
-            // First reminder - at work start time
-            messageText = `🌅 <b>صباح الخير - موعد العمل</b>\n\n` +
-              `مرحباً ${emp.full_name}!\n` +
-              `حان موعد بدء العمل (${workStartTime.substring(0, 5)}).\n\n` +
-              `📝 يرجى تسجيل الحضور الآن.`
-          } else {
-            // Subsequent reminders
-            messageText = `⏰ <b>تذكير ${reminderNumber} بتسجيل الحضور</b>\n\n` +
-              `مرحباً ${emp.full_name}!\n` +
-              `لم تقم بتسجيل حضورك اليوم بعد.\n` +
-              `موعد العمل: ${workStartTime.substring(0, 5)}\n` +
-              `الوقت الحالي: ${currentTime}\n\n` +
-              `⚠️ <b>مضى ${minutesLate} دقيقة على موعد الحضور!</b>\n` +
-              `يرجى تسجيل الحضور فوراً.\n\n` +
-              `⏳ <i>سيتم تسجيل غياب تلقائي بعد ${autoAbsentAfterHours} ساعة من موعد العمل.</i>`
+      // Only send if no attendance record exists
+      if (!attendance) {
+        for (let i = 0; i < checkinReminderTimes.length; i++) {
+          const reminderTime = checkinReminderTimes[i]
+          // Use exact minute matching to prevent duplicate reminders
+          if (isExactMinute(currentMinutes, reminderTime)) {
+            const reminderNumber = i + 1
+            const minutesLate = reminderTime - startMinutes
+            
+            let messageText = ''
+            if (reminderNumber === 1) {
+              // First reminder - at work start time
+              messageText = `🌅 <b>صباح الخير - موعد العمل</b>\n\n` +
+                `مرحباً ${emp.full_name}!\n` +
+                `حان موعد بدء العمل (${workStartTime.substring(0, 5)}).\n` +
+                `🕐 الوقت الحالي: ${currentTime}\n\n` +
+                `📝 يرجى تسجيل الحضور الآن.`
+            } else {
+              // Subsequent reminders
+              messageText = `⏰ <b>تذكير ${reminderNumber} بتسجيل الحضور</b>\n\n` +
+                `مرحباً ${emp.full_name}!\n` +
+                `لم تقم بتسجيل حضورك اليوم بعد.\n` +
+                `موعد العمل: ${workStartTime.substring(0, 5)}\n` +
+                `🕐 الوقت الحالي: ${currentTime}\n\n` +
+                `⚠️ <b>مضى ${minutesLate} دقيقة على موعد الحضور!</b>\n` +
+                `يرجى تسجيل الحضور فوراً.\n\n` +
+                `⏳ <i>سيتم تسجيل غياب تلقائي بعد ${autoAbsentAfterHours} ساعة من موعد العمل.</i>`
+            }
+            
+            console.log(`Sending check-in reminder ${reminderNumber} to ${emp.full_name} at local time ${currentTime}`)
+            await sendAndLogMessage(
+              supabase,
+              bot.bot_token,
+              emp,
+              messageText,
+              getCheckInKeyboard()
+            )
+            checkInReminders++
+            break // Only send one reminder per run
           }
-          
-          console.log(`Sending check-in reminder ${reminderNumber} to ${emp.full_name}`)
-          await sendAndLogMessage(
-            supabase,
-            bot.bot_token,
-            emp,
-            messageText,
-            getCheckInKeyboard()
-          )
-          checkInReminders++
-          break // Only send one reminder per run
         }
       }
 
       // === AUTO ABSENCE DEDUCTION (based on auto_absent_after_hours) ===
-      if (isWithinWindow(currentMinutes, absenceCheckMinutes, 3) && !attendance) {
+      if (isExactMinute(currentMinutes, absenceCheckMinutes) && !attendance) {
         console.log(`Checking absence for ${emp.full_name} at ${currentTime} (work starts at ${workStartTime.substring(0, 5)}, absent after ${autoAbsentAfterHours}h)`)
-        
-        // Double-check employee is not on leave (re-fetch to be sure)
-        const { data: leaveCheck } = await supabase
-          .from('leave_requests')
-          .select('id')
-          .eq('employee_id', emp.id)
-          .eq('status', 'approved')
-          .lte('start_date', today)
-          .gte('end_date', today)
-          .single()
-        
-        if (leaveCheck) {
-          console.log(`${emp.full_name} is on approved leave, skipping absence deduction`)
-          continue
-        }
         
         // Check if we already recorded absence today (look for auto-generated absence deduction for this specific date)
         const { data: existingAbsence } = await supabase
@@ -324,11 +350,12 @@ serve(async (req) => {
       if (attendance && attendance.status !== 'checked_out' && !attendance.check_out_time) {
         for (let i = 0; i < checkoutReminderTimes.length; i++) {
           const reminderTime = checkoutReminderTimes[i]
-          if (isWithinWindow(currentMinutes, reminderTime, 3)) {
+          // Use exact minute matching to prevent duplicate reminders
+          if (isExactMinute(currentMinutes, reminderTime)) {
             const reminderNumber = i + 1
             const minutesAfterEnd = reminderTime - endMinutes
             
-            console.log(`Sending check-out reminder ${reminderNumber} to ${emp.full_name}`)
+            console.log(`Sending check-out reminder ${reminderNumber} to ${emp.full_name} at local time ${currentTime}`)
             await sendAndLogMessage(
               supabase,
               bot.bot_token,
@@ -337,7 +364,8 @@ serve(async (req) => {
               `مرحباً ${emp.full_name}!\n` +
               `انتهى وقت العمل (${workEndTime.substring(0, 5)})` + 
               (minutesAfterEnd > 0 ? ` منذ ${minutesAfterEnd} دقيقة` : '') + `.\n` +
-              `لم تقم بتسجيل انصرافك بعد.\n\n` +
+              `لم تقم بتسجيل انصرافك بعد.\n` +
+              `🕐 الوقت الحالي: ${currentTime}\n\n` +
               `⚠️ يرجى تسجيل الانصراف الآن.\n\n` +
               `💡 <i>تجاهل هذه الرسالة إذا كنت تعمل وقت إضافي.</i>`,
               getCheckOutKeyboard()
@@ -404,9 +432,7 @@ serve(async (req) => {
       checkOutReminders,
       breakEndReminders,
       absenceDeductions,
-      time: currentTime,
-      date: today,
-      day: currentDayName
+      utcTime: now.toISOString()
     }
     
     console.log('attendance-reminders: completed', result)
