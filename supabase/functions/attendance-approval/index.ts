@@ -282,9 +282,21 @@ serve(async (req) => {
       message = `❌ تم رفض طلب ${pendingRequest.request_type === 'check_in' ? 'الحضور' : 'الانصراف'}\n📝 السبب: ${rejection_reason || 'غير محدد'}\n👤 بواسطة: ${manager_name || 'المدير'}`
     }
 
-    // Notify employee
+    // Notify employee and log the message
     if (notifyEmployee && employee.telegram_chat_id) {
-      await sendMessage(botToken, parseInt(employee.telegram_chat_id), message)
+      const messageId = await sendMessage(botToken, parseInt(employee.telegram_chat_id), message)
+      
+      // Log the message to telegram_messages table
+      await supabase.from('telegram_messages').insert({
+        company_id: companyId,
+        employee_id: employee.id,
+        telegram_chat_id: employee.telegram_chat_id,
+        message_text: message.replace(/<[^>]*>/g, ''), // Remove HTML tags
+        direction: 'outgoing',
+        message_type: 'text',
+        telegram_message_id: messageId,
+        metadata: {}
+      })
     }
 
     return new Response(
@@ -306,7 +318,7 @@ serve(async (req) => {
   }
 })
 
-async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {
+async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any): Promise<number | undefined> {
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`
   const response = await fetch(url, {
     method: 'POST',
@@ -321,5 +333,13 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
 
   if (!response.ok) {
     console.error('Failed to send message:', await response.text())
+    return undefined
+  }
+  
+  try {
+    const result = await response.json()
+    return result.result?.message_id
+  } catch (e) {
+    return undefined
   }
 }
