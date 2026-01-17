@@ -35,12 +35,12 @@ import {
   Eye,
   Settings
 } from 'lucide-react';
-import { useJoinRequests, useApproveJoinRequest, useRejectJoinRequest, useCheckDeletedEmployee, useRestoreDeletedEmployee, JoinRequest } from '@/hooks/useJoinRequests';
+import { useJoinRequests, useApproveJoinRequest, useRejectJoinRequest, useCheckDeletedEmployee, useRestoreDeletedEmployee, useCheckInactiveEmployee, useReactivateEmployee, JoinRequest } from '@/hooks/useJoinRequests';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import JoinRequestReviewersSettings from '@/components/join-requests/JoinRequestReviewersSettings';
 import { useJoinRequestReviewers } from '@/hooks/useJoinRequestReviewers';
-import { RotateCcw, AlertTriangle } from 'lucide-react';
+import { RotateCcw, AlertTriangle, UserX } from 'lucide-react';
 
 const JoinRequests = () => {
   const { language } = useLanguage();
@@ -50,6 +50,8 @@ const JoinRequests = () => {
   const rejectRequest = useRejectJoinRequest();
   const checkDeletedEmployee = useCheckDeletedEmployee();
   const restoreEmployee = useRestoreDeletedEmployee();
+  const checkInactiveEmployee = useCheckInactiveEmployee();
+  const reactivateEmployee = useReactivateEmployee();
   
   const [selectedRequest, setSelectedRequest] = useState<JoinRequest | null>(null);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
@@ -57,8 +59,11 @@ const JoinRequests = () => {
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [showReactivateDialog, setShowReactivateDialog] = useState(false);
   const [deletedEmployeeData, setDeletedEmployeeData] = useState<any>(null);
+  const [inactiveEmployeeData, setInactiveEmployeeData] = useState<any>(null);
   const [deletedEmployeesMap, setDeletedEmployeesMap] = useState<Record<string, any>>({});
+  const [inactiveEmployeesMap, setInactiveEmployeesMap] = useState<Record<string, any>>({});
   const [rejectionReason, setRejectionReason] = useState('');
   const [employeeData, setEmployeeData] = useState({
     department: '',
@@ -68,28 +73,38 @@ const JoinRequests = () => {
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const processedRequests = requests.filter(r => r.status !== 'pending');
 
-  // Check deleted employees for all pending requests
+  // Check deleted and inactive employees for all pending requests
   useEffect(() => {
-    const checkAllDeletedEmployees = async () => {
+    const checkAllEmployees = async () => {
       if (pendingRequests.length === 0) return;
       
-      const newMap: Record<string, any> = {};
+      const newDeletedMap: Record<string, any> = {};
+      const newInactiveMap: Record<string, any> = {};
       
       for (const request of pendingRequests) {
         try {
-          const result = await checkDeletedEmployee.mutateAsync(request.telegram_chat_id);
-          if (result) {
-            newMap[request.id] = result;
+          // Check for inactive employee first
+          const inactiveResult = await checkInactiveEmployee.mutateAsync(request.telegram_chat_id);
+          if (inactiveResult) {
+            newInactiveMap[request.id] = inactiveResult;
+            continue; // Skip deleted check if found inactive
+          }
+          
+          // Check for deleted employee
+          const deletedResult = await checkDeletedEmployee.mutateAsync(request.telegram_chat_id);
+          if (deletedResult) {
+            newDeletedMap[request.id] = deletedResult;
           }
         } catch (error) {
           // Ignore errors
         }
       }
       
-      setDeletedEmployeesMap(newMap);
+      setDeletedEmployeesMap(newDeletedMap);
+      setInactiveEmployeesMap(newInactiveMap);
     };
     
-    checkAllDeletedEmployees();
+    checkAllEmployees();
   }, [requests]);
   
   // Check if a request has a deleted employee record
@@ -97,13 +112,30 @@ const JoinRequests = () => {
     return !!deletedEmployeesMap[requestId];
   };
   
+  // Check if a request has an inactive employee record
+  const hasInactiveEmployee = (requestId: string) => {
+    return !!inactiveEmployeesMap[requestId];
+  };
+  
   const getDeletedEmployeeData = (requestId: string) => {
     return deletedEmployeesMap[requestId];
   };
+  
+  const getInactiveEmployeeData = (requestId: string) => {
+    return inactiveEmployeesMap[requestId];
+  };
 
-  // Check for deleted employee when clicking approve
+  // Check for inactive/deleted employee when clicking approve
   const handleCheckAndApprove = async (request: JoinRequest) => {
     setSelectedRequest(request);
+    
+    // Check if we already have inactive employee data cached
+    const cachedInactiveEmployee = inactiveEmployeesMap[request.id];
+    if (cachedInactiveEmployee) {
+      setInactiveEmployeeData(cachedInactiveEmployee);
+      setShowReactivateDialog(true);
+      return;
+    }
     
     // Check if we already have deleted employee data cached
     const cachedDeletedEmployee = deletedEmployeesMap[request.id];
@@ -113,7 +145,19 @@ const JoinRequests = () => {
       return;
     }
     
-    // Double-check by making a fresh request
+    // Fresh check - first for inactive employee
+    try {
+      const inactiveResult = await checkInactiveEmployee.mutateAsync(request.telegram_chat_id);
+      if (inactiveResult) {
+        setInactiveEmployeeData(inactiveResult);
+        setShowReactivateDialog(true);
+        return;
+      }
+    } catch (error) {
+      // Continue to deleted check
+    }
+    
+    // Check for deleted employee
     checkDeletedEmployee.mutate(request.telegram_chat_id, {
       onSuccess: (deletedRecord) => {
         if (deletedRecord) {
@@ -121,13 +165,29 @@ const JoinRequests = () => {
           setDeletedEmployeeData(deletedRecord);
           setShowRestoreDialog(true);
         } else {
-          // No deleted employee - proceed with normal approval
+          // No deleted/inactive employee - proceed with normal approval
           setShowApproveDialog(true);
         }
       },
       onError: () => {
         // If check fails, proceed with normal approval
         setShowApproveDialog(true);
+      }
+    });
+  };
+  
+  const handleReactivate = () => {
+    if (!selectedRequest || !inactiveEmployeeData) return;
+    
+    reactivateEmployee.mutate({
+      employeeId: inactiveEmployeeData.id,
+      joinRequestId: selectedRequest.id,
+      telegram_chat_id: selectedRequest.telegram_chat_id,
+    }, {
+      onSuccess: () => {
+        setShowReactivateDialog(false);
+        setSelectedRequest(null);
+        setInactiveEmployeeData(null);
       }
     });
   };
@@ -275,11 +335,17 @@ const JoinRequests = () => {
                 </TableHeader>
                 <TableBody>
                   {pendingRequests.map((request) => (
-                    <TableRow key={request.id} className={hasDeletedEmployee(request.id) ? 'bg-amber-500/10' : ''}>
+                    <TableRow key={request.id} className={hasInactiveEmployee(request.id) ? 'bg-orange-500/10' : hasDeletedEmployee(request.id) ? 'bg-amber-500/10' : ''}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {request.full_name}
-                          {hasDeletedEmployee(request.id) && (
+                          {hasInactiveEmployee(request.id) && (
+                            <Badge variant="outline" className="bg-orange-500/20 text-orange-600 border-orange-500/30">
+                              <UserX className="w-3 h-3 mr-1" />
+                              {language === 'ar' ? 'موظف غير نشط' : 'Inactive Employee'}
+                            </Badge>
+                          )}
+                          {hasDeletedEmployee(request.id) && !hasInactiveEmployee(request.id) && (
                             <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
                               <RotateCcw className="w-3 h-3 mr-1" />
                               {language === 'ar' ? 'موظف سابق' : 'Previous Employee'}
@@ -577,6 +643,83 @@ const JoinRequests = () => {
               {restoreEmployee.isPending 
                 ? (language === 'ar' ? 'جاري الاستعادة...' : 'Restoring...') 
                 : (language === 'ar' ? 'استعادة الموظف السابق' : 'Restore Previous Employee')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reactivate Inactive Employee Dialog */}
+      <Dialog open={showReactivateDialog} onOpenChange={(open) => {
+        setShowReactivateDialog(open);
+        if (!open) {
+          setInactiveEmployeeData(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserX className="w-5 h-5 text-orange-500" />
+              {language === 'ar' ? 'موظف غير نشط' : 'Inactive Employee'}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar' 
+                ? 'تم العثور على موظف غير نشط بنفس معرف تليجرام. هل تريد إعادة تفعيله مباشرة؟' 
+                : 'An inactive employee with the same Telegram ID was found. Would you like to reactivate them?'}
+            </DialogDescription>
+          </DialogHeader>
+          {inactiveEmployeeData && (
+            <div className="space-y-4">
+              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 space-y-2">
+                <p className="font-medium flex items-center gap-2">
+                  <UserX className="w-4 h-4" />
+                  {language === 'ar' ? 'بيانات الموظف غير النشط:' : 'Inactive Employee Data:'}
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">{language === 'ar' ? 'الاسم:' : 'Name:'}</span>
+                    <span className="ms-1 font-medium">{inactiveEmployeeData.full_name}</span>
+                  </div>
+                  {inactiveEmployeeData.email && (
+                    <div>
+                      <span className="text-muted-foreground">{language === 'ar' ? 'البريد:' : 'Email:'}</span>
+                      <span className="ms-1 font-medium">{inactiveEmployeeData.email}</span>
+                    </div>
+                  )}
+                  {inactiveEmployeeData.department && (
+                    <div>
+                      <span className="text-muted-foreground">{language === 'ar' ? 'القسم:' : 'Department:'}</span>
+                      <span className="ms-1 font-medium">{inactiveEmployeeData.department}</span>
+                    </div>
+                  )}
+                  {inactiveEmployeeData.phone && (
+                    <div>
+                      <span className="text-muted-foreground">{language === 'ar' ? 'الهاتف:' : 'Phone:'}</span>
+                      <span className="ms-1 font-medium">{inactiveEmployeeData.phone}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowReactivateDialog(false);
+                setInactiveEmployeeData(null);
+              }}
+            >
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button 
+              className="bg-orange-600 hover:bg-orange-700"
+              onClick={handleReactivate}
+              disabled={reactivateEmployee.isPending}
+            >
+              <CheckCircle className="w-4 h-4 mr-1" />
+              {reactivateEmployee.isPending 
+                ? (language === 'ar' ? 'جاري التفعيل...' : 'Reactivating...') 
+                : (language === 'ar' ? 'إعادة تفعيل الموظف' : 'Reactivate Employee')}
             </Button>
           </DialogFooter>
         </DialogContent>
