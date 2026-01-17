@@ -228,8 +228,31 @@ serve(async (req) => {
       managerPermissions = posPerms
     }
 
+    // Map callback data to readable button text
+    const callbackToText: Record<string, string> = {
+      'check_in': '✅ تسجيل حضور',
+      'check_out': '🔴 تسجيل انصراف',
+      'start_break': '☕ بدء استراحة',
+      'end_break': '↩️ إنهاء استراحة',
+      'request_leave': '📝 طلب إجازة',
+      'my_salary': '💰 راتبي',
+      'my_status': '📊 حالتي',
+      'manage_team': '👥 إدارة الفريق',
+      'cancel_action': '❌ إلغاء',
+      'cancel_leave': '❌ إلغاء',
+      'leave_emergency': '🚨 إجازة طارئة',
+      'leave_regular': '📅 إجازة اعتيادية',
+      'start_registration': '📝 تسجيل موظف جديد',
+      'check_status': '🔍 حالة طلبي',
+      'use_default_time': '✅ استخدام وقت الشركة',
+      'custom_time': '⏰ تحديد وقت مخصص',
+      'use_default_weekend': '✅ استخدام إجازة الشركة',
+      'confirm_weekend': '✅ تأكيد',
+    }
+
     // Log incoming message if employee exists
-    const incomingText = update.message?.text || update.callback_query?.data || ''
+    const rawIncoming = update.message?.text || update.callback_query?.data || ''
+    const incomingText = callbackToText[rawIncoming] || rawIncoming
     if (employee && incomingText) {
       await logTelegramMessage(
         supabase,
@@ -893,7 +916,7 @@ serve(async (req) => {
         case 'leave_regular': {
           // Regular leave needs 48 hours notice - show date picker
           await setSession('leave_date_choice', { leave_type: 'regular' })
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `📅 <b>إجازة اعتيادية</b>\n\n` +
             `📊 رصيدك المتاح: ${employee.leave_balance ?? companyDefaults.annual_leave_days} يوم\n\n` +
             `⚠️ الإجازة الاعتيادية تحتاج إبلاغ مسبق قبل 48 ساعة على الأقل.\n\n` +
@@ -936,7 +959,7 @@ serve(async (req) => {
             targetDate.setHours(0, 0, 0, 0)
             
             if (targetDate < minDate) {
-              await sendMessage(botToken, chatId,
+              await sendAndLogMessage(
                 `❌ الإجازة الاعتيادية تحتاج إبلاغ مسبق قبل 48 ساعة على الأقل.\n\n` +
                 `📅 أقرب تاريخ متاح: بعد غد`,
                 {
@@ -952,7 +975,7 @@ serve(async (req) => {
           
           // Always ask for reason now (both emergency and regular)
           await setSession('leave_reason', { ...session.data, leave_date: dateStr })
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `📅 تاريخ الإجازة: ${dayLabel} (${dateStr})\n\n` +
             `📝 أرسل سبب الإجازة:`
           )
@@ -965,7 +988,7 @@ serve(async (req) => {
           
           // Show next 7 days as buttons
           await setSession('leave_date_picker', session.data)
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `📆 اختر تاريخ الإجازة:`,
             getExtendedDatePickerKeyboard(session.data.leave_type || 'emergency')
           )
@@ -974,7 +997,7 @@ serve(async (req) => {
 
         case 'cancel_leave':
           await deleteSession()
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `❌ تم إلغاء طلب الإجازة`,
             getEmployeeKeyboard(managerPermissions)
           )
@@ -989,7 +1012,7 @@ serve(async (req) => {
           const isLastDay = currentDate.getDate() === lastDayOfMonth
           
           if (!isLastDay) {
-            await sendMessage(botToken, chatId, 
+            await sendAndLogMessage(
               `⏳ <b>المرتب غير متاح حالياً</b>\n\n` +
               `يمكنك الاطلاع على تقرير مرتبك في آخر يوم من الشهر فقط.\n\n` +
               `📅 اليوم الحالي: ${currentDate.getDate()}\n` +
@@ -1068,7 +1091,7 @@ serve(async (req) => {
             salaryMsg += `\n💵 <b>الإجمالي: ${netSalary.toLocaleString()} ${currency}</b>\n`
             salaryMsg += `\n📅 أيام العمل: ${workDays} يوم`
             
-            await sendMessage(botToken, chatId, salaryMsg, getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage(salaryMsg, getEmployeeKeyboard(managerPermissions))
           }
           break
 
@@ -1089,17 +1112,17 @@ serve(async (req) => {
             statusMsg += `📅 لم تسجل حضورك اليوم بعد`
           }
 
-          await sendMessage(botToken, chatId, statusMsg, getEmployeeKeyboard(managerPermissions))
+          await sendAndLogMessage(statusMsg, getEmployeeKeyboard(managerPermissions))
           break
           
         case 'manage_team':
           // Check if employee has manager permissions
           if (!managerPermissions?.can_add_bonuses && !managerPermissions?.can_make_deductions && !managerPermissions?.can_approve_leaves) {
-            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحيات إدارية', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('❌ ليس لديك صلاحيات إدارية', getEmployeeKeyboard(managerPermissions))
             break
           }
           
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             '👥 <b>صلاحيات المدير</b>\n\nاختر الإجراء المطلوب:',
             getManagerTeamKeyboard(managerPermissions)
           )
@@ -1111,11 +1134,11 @@ serve(async (req) => {
           
           // Check permission
           if (isBonus && !managerPermissions?.can_add_bonuses) {
-            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة مكافآت', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('❌ ليس لديك صلاحية إضافة مكافآت', getEmployeeKeyboard(managerPermissions))
             break
           }
           if (!isBonus && !managerPermissions?.can_make_deductions) {
-            await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية إضافة خصومات', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('❌ ليس لديك صلاحية إضافة خصومات', getEmployeeKeyboard(managerPermissions))
             break
           }
           
@@ -1126,7 +1149,7 @@ serve(async (req) => {
           console.log('Subordinates for manager:', employee.id, subordinates, subError)
           
           if (!subordinates || subordinates.length === 0) {
-            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين تحت إدارتك في الهيكل التنظيمي', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('❌ لا يوجد موظفين تحت إدارتك في الهيكل التنظيمي', getEmployeeKeyboard(managerPermissions))
             break
           }
           
@@ -1138,7 +1161,7 @@ serve(async (req) => {
             .eq('is_active', true)
           
           if (!subEmployees || subEmployees.length === 0) {
-            await sendMessage(botToken, chatId, '❌ لا يوجد موظفين نشطين تحت إدارتك', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('❌ لا يوجد موظفين نشطين تحت إدارتك', getEmployeeKeyboard(managerPermissions))
             break
           }
           
@@ -1155,7 +1178,7 @@ serve(async (req) => {
           subButtons.push([{ text: '🔙 رجوع', callback_data: 'manage_team' }])
           subButtons.push([{ text: '❌ إلغاء', callback_data: 'cancel_mgr_action' }])
           
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `📋 <b>${actionText}</b>\n\n👥 الموظفين تحت إدارتك:\n` +
             `(يتم عرض الموظفين المرتبطين بمنصبك في الهيكل التنظيمي)\n\nاختر الموظف:`,
             { inline_keyboard: subButtons }
@@ -1165,14 +1188,14 @@ serve(async (req) => {
           
         case 'cancel_mgr_action':
           await deleteSession()
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             'تم الإلغاء',
             getEmployeeKeyboard(managerPermissions)
           )
           break
           
         case 'back_to_main':
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             'اختر من الأزرار أدناه:',
             getEmployeeKeyboard(managerPermissions)
           )
@@ -1212,7 +1235,7 @@ serve(async (req) => {
               .single()
             
             if (!targetEmp) {
-              await sendMessage(botToken, chatId, '❌ الموظف غير موجود', getEmployeeKeyboard(managerPermissions))
+              await sendAndLogMessage('❌ الموظف غير موجود', getEmployeeKeyboard(managerPermissions))
               break
             }
             
@@ -1251,7 +1274,7 @@ serve(async (req) => {
             amountButtons.push([{ text: '🔙 رجوع', callback_data: isBonus ? 'mgr_add_bonus' : 'mgr_add_deduction' }])
             amountButtons.push([{ text: '❌ إلغاء', callback_data: 'cancel_mgr_action' }])
             
-            await sendMessage(botToken, chatId, 
+            await sendAndLogMessage(
               `👤 الموظف: ${targetEmp.full_name}\n` +
               (baseSalary > 0 ? `💵 الراتب: ${baseSalary}\n📊 اليومي: ${Math.round(dailyRate)}\n\n` : '\n') +
               `اختر قيمة ال${actionText}:`,
@@ -1301,7 +1324,7 @@ serve(async (req) => {
             
             // Check permission
             if (!managerPermissions?.can_approve_leaves) {
-              await sendMessage(botToken, chatId, '❌ ليس لديك صلاحية الموافقة على الإجازات', getEmployeeKeyboard(managerPermissions))
+              await sendAndLogMessage('❌ ليس لديك صلاحية الموافقة على الإجازات', getEmployeeKeyboard(managerPermissions))
               break
             }
             
@@ -1314,7 +1337,7 @@ serve(async (req) => {
               .single()
             
             if (leaveError || !leaveRequest) {
-              await sendMessage(botToken, chatId, '❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
+              await sendAndLogMessage('❌ هذا الطلب غير موجود أو تم اتخاذ قرار بشأنه بالفعل', getEmployeeKeyboard(managerPermissions))
               break
             }
             
@@ -1330,7 +1353,7 @@ serve(async (req) => {
             
             if (updateError) {
               console.error('Error updating leave request:', updateError)
-              await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء تحديث الطلب', getEmployeeKeyboard(managerPermissions))
+              await sendAndLogMessage('❌ حدث خطأ أثناء تحديث الطلب', getEmployeeKeyboard(managerPermissions))
               break
             }
             
@@ -1364,7 +1387,7 @@ serve(async (req) => {
             // Confirmation message to manager
             const statusText = isApproval ? '✅ تمت الموافقة' : '❌ تم الرفض'
             const leaveTypeText = leaveRequest.leave_type === 'emergency' ? 'طارئة' : 'اعتيادية'
-            await sendMessage(botToken, chatId, 
+            await sendAndLogMessage(
               `${statusText} على طلب الإجازة\n\n` +
               `👤 الموظف: ${leaveRequest.employees.full_name}\n` +
               `📋 نوع الإجازة: ${leaveTypeText}\n` +
