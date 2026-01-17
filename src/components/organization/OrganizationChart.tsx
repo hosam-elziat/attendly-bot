@@ -294,10 +294,36 @@ const OrganizationChart = ({ positions, onEdit, onDelete, onMove }: Organization
   // Build tree structure using legacy reports_to field
   const { childrenMap, rootPositions } = useMemo(() => {
     const childrenMap = new Map<string | null, PositionWithPermissions[]>();
+    const positionMap = new Map<string, PositionWithPermissions>();
     
-    // Group positions by their parent
+    // Create position lookup map
     positions.forEach(pos => {
-      const parentId = pos.reports_to;
+      positionMap.set(pos.id, pos);
+    });
+    
+    // Detect circular dependencies
+    const hasCircularDependency = (posId: string, visited: Set<string> = new Set()): boolean => {
+      if (visited.has(posId)) return true;
+      visited.add(posId);
+      const pos = positionMap.get(posId);
+      if (pos?.reports_to) {
+        return hasCircularDependency(pos.reports_to, visited);
+      }
+      return false;
+    };
+    
+    // Group positions by their parent, handling circular dependencies
+    const circularPositions = new Set<string>();
+    positions.forEach(pos => {
+      // Check for circular dependency
+      if (pos.reports_to && hasCircularDependency(pos.id)) {
+        circularPositions.add(pos.id);
+      }
+    });
+    
+    positions.forEach(pos => {
+      // If position is in a circular dependency, treat it as root
+      const parentId = circularPositions.has(pos.id) ? null : pos.reports_to;
       if (!childrenMap.has(parentId)) {
         childrenMap.set(parentId, []);
       }
@@ -309,7 +335,7 @@ const OrganizationChart = ({ positions, onEdit, onDelete, onMove }: Organization
       children.sort((a, b) => a.level - b.level);
     });
     
-    // Get root positions (those with no parent)
+    // Get root positions (those with no parent or broken out of circular dependency)
     const rootPositions = childrenMap.get(null) || [];
     
     return { childrenMap, rootPositions };
