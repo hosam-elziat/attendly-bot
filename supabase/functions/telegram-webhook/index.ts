@@ -675,9 +675,38 @@ serve(async (req) => {
                 if (companyPolicies?.overtime_multiplier && empDetails?.base_salary) {
                   const hourlyRate = empDetails.base_salary / 30 / 8 // Assuming 8 hours work day
                   const overtimePay = (overtimeMinutes / 60) * hourlyRate * companyPolicies.overtime_multiplier
+                  const monthKey = attendanceDate.substring(0, 7) + '-01'
+                  
+                  // Record overtime bonus in salary_adjustments table
+                  if (overtimePay > 0) {
+                    const { error: bonusError } = await supabase.from('salary_adjustments').insert({
+                      employee_id: employee.id,
+                      company_id: companyId,
+                      month: monthKey,
+                      bonus: Math.round(overtimePay * 100) / 100,
+                      deduction: 0,
+                      adjustment_days: null,
+                      description: `مكافأة وقت إضافي يوم ${attendanceDate} - ${overtimeMinutes} دقيقة (${(overtimeMinutes / 60).toFixed(2)} ساعة) × ${companyPolicies.overtime_multiplier}`,
+                      added_by_name: 'النظام التلقائي',
+                      attendance_log_id: attendance.id,
+                      is_auto_generated: true
+                    })
+                    
+                    if (bonusError) {
+                      console.error('Failed to create overtime bonus adjustment:', bonusError)
+                    } else {
+                      console.log('Created overtime bonus:', {
+                        employee_id: employee.id,
+                        overtimeMinutes,
+                        overtimePay,
+                        monthKey
+                      })
+                    }
+                  }
                   
                   overtimeMessage = `\n\n⏰ <b>وقت إضافي:</b> ${overtimeHours > 0 ? `${overtimeHours} ساعة و ` : ''}${overtimeMins} دقيقة\n` +
                     `💰 قيمة الوقت الإضافي: ${overtimePay.toFixed(2)} ${empDetails.currency || 'SAR'}\n` +
+                    `🎁 تم إضافة المكافأة لحسابك\n` +
                     `📊 معامل الوقت الإضافي: ${companyPolicies.overtime_multiplier}x`
                 } else {
                   overtimeMessage = `\n\n⏰ <b>وقت إضافي:</b> ${overtimeHours > 0 ? `${overtimeHours} ساعة و ` : ''}${overtimeMins} دقيقة`

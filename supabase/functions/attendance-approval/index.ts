@@ -237,6 +237,21 @@ serve(async (req) => {
           : `✅ تم اعتماد حضورك!\n📅 التاريخ: ${today}\n⏰ الوقت: ${new Date(attendanceTime).toLocaleTimeString('ar-EG')}\n👤 المعتمد: ${manager_name || 'المدير'}`
 
       } else if (pendingRequest.request_type === 'check_out') {
+        // Get the attendance log first
+        const { data: attendanceLog, error: logError } = await supabase
+          .from('attendance_logs')
+          .select('id, check_in_time')
+          .eq('employee_id', employee.id)
+          .eq('company_id', companyId)
+          .eq('date', today)
+          .is('check_out_time', null)
+          .single()
+
+        if (logError) {
+          console.error('Failed to get attendance log:', logError)
+          throw logError
+        }
+
         // Update attendance log with checkout time
         const { error: updateError } = await supabase
           .from('attendance_logs')
@@ -244,17 +259,74 @@ serve(async (req) => {
             check_out_time: attendanceTime,
             status: 'checked_out'
           })
-          .eq('employee_id', employee.id)
-          .eq('company_id', companyId)
-          .eq('date', today)
-          .is('check_out_time', null)
+          .eq('id', attendanceLog.id)
 
         if (updateError) {
           console.error('Failed to update attendance:', updateError)
           throw updateError
         }
 
-        message = `✅ تم اعتماد انصرافك!\n📅 التاريخ: ${today}\n⏰ الوقت: ${new Date(attendanceTime).toLocaleTimeString('ar-EG')}\n👤 المعتمد: ${manager_name || 'المدير'}`
+        // Calculate overtime bonus if applicable
+        let overtimeMessage = ''
+        if (attendanceLog.check_in_time && employee.work_end_time && employee.base_salary) {
+          const checkOutTime = new Date(attendanceTime)
+          const workEndTime = employee.work_end_time
+          const [endH, endM] = workEndTime.split(':').map(Number)
+          
+          const expectedEnd = new Date(checkOutTime)
+          expectedEnd.setHours(endH, endM, 0, 0)
+
+          // Calculate expected work minutes
+          const workStartTime = employee.work_start_time || '09:00:00'
+          const [startH, startM] = workStartTime.split(':').map(Number)
+          const expectedDailyMinutes = ((endH * 60 + endM) - (startH * 60 + startM))
+
+          // Calculate actual work minutes
+          const checkInTime = new Date(attendanceLog.check_in_time)
+          const actualWorkedMinutes = Math.floor((checkOutTime.getTime() - checkInTime.getTime()) / 60000)
+
+          // Get overtime multiplier from company
+          const { data: companyData } = await supabase
+            .from('companies')
+            .select('overtime_multiplier, break_duration_minutes')
+            .eq('id', companyId)
+            .single()
+
+          const breakMinutes = companyData?.break_duration_minutes || 60
+          const overtimeMultiplier = companyData?.overtime_multiplier || 1.5
+
+          // Net worked minutes (minus break)
+          const netWorkedMinutes = actualWorkedMinutes - breakMinutes
+
+          if (netWorkedMinutes > expectedDailyMinutes) {
+            const overtimeMinutes = netWorkedMinutes - expectedDailyMinutes
+            const overtimeHours = overtimeMinutes / 60
+
+            // Calculate overtime bonus
+            const hourlyRate = employee.base_salary / 30 / (expectedDailyMinutes / 60)
+            const overtimeAmount = overtimeHours * hourlyRate * overtimeMultiplier
+            const monthKey = today.substring(0, 7) + '-01'
+
+            if (overtimeAmount > 0) {
+              await supabase.from('salary_adjustments').insert({
+                employee_id: employee.id,
+                company_id: companyId,
+                month: monthKey,
+                bonus: Math.round(overtimeAmount * 100) / 100,
+                deduction: 0,
+                adjustment_days: null,
+                description: `مكافأة وقت إضافي - ${overtimeMinutes} دقيقة (${overtimeHours.toFixed(2)} ساعة) × ${overtimeMultiplier}`,
+                added_by_name: 'النظام التلقائي',
+                attendance_log_id: attendanceLog.id,
+                is_auto_generated: true
+              })
+
+              overtimeMessage = `\n\n🎁 مكافأة وقت إضافي:\n⏱️ ${overtimeMinutes} دقيقة (${overtimeHours.toFixed(2)} ساعة)\n💰 +${Math.round(overtimeAmount).toLocaleString()} ${employee.currency || 'EGP'}`
+            }
+          }
+        }
+
+        message = `✅ تم اعتماد انصرافك!\n📅 التاريخ: ${today}\n⏰ الوقت: ${new Date(attendanceTime).toLocaleTimeString('ar-EG')}\n👤 المعتمد: ${manager_name || 'المدير'}${overtimeMessage}`
       }
 
       // Update pending request status
