@@ -21,7 +21,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck, Bell, BellRing, UserX } from 'lucide-react';
 import AttendanceVerificationSettings from '@/components/settings/AttendanceVerificationSettings';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -64,6 +64,13 @@ const Settings = () => {
   const [annualLeaveDays, setAnnualLeaveDays] = useState(21);
   const [emergencyLeaveDays, setEmergencyLeaveDays] = useState(7);
 
+  // Reminder and auto-absence states
+  const [autoAbsentAfterHours, setAutoAbsentAfterHours] = useState(2);
+  const [checkinReminderCount, setCheckinReminderCount] = useState(3);
+  const [checkinReminderInterval, setCheckinReminderInterval] = useState(10);
+  const [checkoutReminderCount, setCheckoutReminderCount] = useState(2);
+  const [checkoutReminderInterval, setCheckoutReminderInterval] = useState(10);
+
   // Join request reviewer states
   const [joinRequestReviewerType, setJoinRequestReviewerType] = useState<string | null>(null);
   const [joinRequestReviewerId, setJoinRequestReviewerId] = useState<string | null>(null);
@@ -102,6 +109,13 @@ const Settings = () => {
       // Leave policy
       setAnnualLeaveDays((company as any).annual_leave_days || 21);
       setEmergencyLeaveDays((company as any).emergency_leave_days || 7);
+      
+      // Reminder and auto-absence settings
+      setAutoAbsentAfterHours((company as any).auto_absent_after_hours || 2);
+      setCheckinReminderCount((company as any).checkin_reminder_count || 3);
+      setCheckinReminderInterval((company as any).checkin_reminder_interval_minutes || 10);
+      setCheckoutReminderCount((company as any).checkout_reminder_count || 2);
+      setCheckoutReminderInterval((company as any).checkout_reminder_interval_minutes || 10);
       
       // Default weekend days
       setWeekendDays((company as any).default_weekend_days || ['friday']);
@@ -276,6 +290,11 @@ const Settings = () => {
           country_code: countryCode,
           annual_leave_days: annualLeaveDays,
           emergency_leave_days: emergencyLeaveDays,
+          auto_absent_after_hours: autoAbsentAfterHours,
+          checkin_reminder_count: checkinReminderCount,
+          checkin_reminder_interval_minutes: checkinReminderInterval,
+          checkout_reminder_count: checkoutReminderCount,
+          checkout_reminder_interval_minutes: checkoutReminderInterval,
         } as any)
         .eq('id', company.id);
 
@@ -680,6 +699,109 @@ const Settings = () => {
                 </div>
               </div>
 
+              {/* Auto Absence & Reminders */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <BellRing className="w-4 h-4" />
+                  الغياب التلقائي والتذكيرات
+                </h3>
+                
+                {/* Auto Absence */}
+                <div className="p-4 border rounded-lg bg-destructive/5 border-destructive/30 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <UserX className="w-4 h-4 text-destructive" />
+                    <Label className="font-medium text-destructive">الغياب التلقائي</Label>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="auto-absent-hours">يتم احتساب الموظف غائب بعد (ساعة)</Label>
+                      <NumberInput 
+                        id="auto-absent-hours" 
+                        min={1}
+                        max={8}
+                        value={autoAbsentAfterHours}
+                        onChange={setAutoAbsentAfterHours}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        إذا لم يسجل الموظف حضوره خلال {autoAbsentAfterHours} ساعة من موعد بدء العمل، يُحتسب غائباً تلقائياً
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Check-in Reminders */}
+                <div className="p-4 border rounded-lg bg-primary/5 border-primary/20 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-primary" />
+                    <Label className="font-medium text-primary">تذكيرات الحضور</Label>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="checkin-reminder-count">عدد التذكيرات</Label>
+                      <NumberInput 
+                        id="checkin-reminder-count" 
+                        min={0}
+                        max={10}
+                        value={checkinReminderCount}
+                        onChange={setCheckinReminderCount}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        عدد مرات إرسال تذكير الحضور للموظف (0 = بدون تذكيرات)
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="checkin-reminder-interval">الفترة بين كل تذكير (دقيقة)</Label>
+                      <NumberInput 
+                        id="checkin-reminder-interval" 
+                        min={5}
+                        max={60}
+                        value={checkinReminderInterval}
+                        onChange={setCheckinReminderInterval}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        يبدأ التذكير من موعد الحضور ثم كل {checkinReminderInterval} دقيقة
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Check-out Reminders */}
+                <div className="p-4 border rounded-lg bg-amber-500/10 border-amber-500/30 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-amber-600" />
+                    <Label className="font-medium text-amber-600">تذكيرات الانصراف</Label>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="checkout-reminder-count">عدد التذكيرات</Label>
+                      <NumberInput 
+                        id="checkout-reminder-count" 
+                        min={0}
+                        max={10}
+                        value={checkoutReminderCount}
+                        onChange={setCheckoutReminderCount}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        عدد مرات إرسال تذكير الانصراف للموظف (0 = بدون تذكيرات)
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="checkout-reminder-interval">الفترة بين كل تذكير (دقيقة)</Label>
+                      <NumberInput 
+                        id="checkout-reminder-interval" 
+                        min={5}
+                        max={60}
+                        value={checkoutReminderInterval}
+                        onChange={setCheckoutReminderInterval}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        يبدأ التذكير بعد موعد الانصراف ثم كل {checkoutReminderInterval} دقيقة
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Deduction Rules */}
               <div className="space-y-4">
                 <h3 className="font-medium text-foreground flex items-center gap-2">
@@ -838,6 +960,9 @@ const Settings = () => {
                 <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
                   <li>السماحية اليومية: {dailyLateAllowance} دقيقة</li>
                   <li>رصيد التأخيرات الشهري: {monthlyLateAllowance} دقيقة</li>
+                  <li className="text-destructive">الغياب التلقائي: بعد {autoAbsentAfterHours} ساعة من موعد الحضور</li>
+                  <li className="text-primary">تذكيرات الحضور: {checkinReminderCount} مرات، كل {checkinReminderInterval} دقيقة</li>
+                  <li className="text-amber-600">تذكيرات الانصراف: {checkoutReminderCount} مرات، كل {checkoutReminderInterval} دقيقة</li>
                   <li>تأخير أقل من 15 دقيقة (بعد انتهاء الرصيد): خصم {lateUnder15Deduction} يوم</li>
                   <li>تأخير 15-30 دقيقة: خصم {late15To30Deduction} يوم</li>
                   <li>تأخير أكثر من 30 دقيقة: خصم {lateOver30Deduction} يوم</li>
