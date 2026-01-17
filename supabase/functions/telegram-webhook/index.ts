@@ -2344,7 +2344,8 @@ async function notifyManagers(
   companyId: string,
   action: 'check_in' | 'check_out',
   time: string,
-  date: string
+  date: string,
+  locationName?: string
 ) {
   try {
     // Get managers using the database function
@@ -2364,11 +2365,16 @@ async function notifyManagers(
     const actionText = action === 'check_in' ? 'سجّل حضوره' : 'سجّل انصرافه'
     const emoji = action === 'check_in' ? '✅' : '🔴'
     
-    const message = `${emoji} <b>إشعار حضور</b>\n\n` +
+    let message = `${emoji} <b>إشعار حضور</b>\n\n` +
       `👤 الموظف: ${employeeName}\n` +
       `📋 ${actionText}\n` +
       `📅 التاريخ: ${date}\n` +
       `⏰ الوقت: ${time}`
+    
+    // Add location info if available (Level 3 verification)
+    if (locationName) {
+      message += `\n📍 الموقع: ${locationName}`
+    }
     
     // Send notification to each manager
     for (const manager of managers) {
@@ -3305,7 +3311,7 @@ async function processDirectCheckIn(
     getEmployeeKeyboard(managerPermissions)
   )
   
-  await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_in', checkInTime, today)
+  await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_in', checkInTime, today, locationInfo?.locationName)
 }
 
 // Helper function to create pending attendance for Level 2 (manager approval)
