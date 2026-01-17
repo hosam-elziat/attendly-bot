@@ -3300,21 +3300,17 @@ async function processDirectCheckIn(
           `📊 رصيدك المتبقي: ${newBalance} دقيقة`
       } else {
         let balanceUsed = 0
+        // Only deduct from monthly balance if late <= 15 minutes
         if (currentLateBalance > 0 && lateMinutes <= 15) {
           balanceUsed = Math.min(currentLateBalance, balanceApplicableMinutes)
           await supabase
             .from('employees')
             .update({ monthly_late_balance_minutes: currentLateBalance - balanceUsed })
             .eq('id', employee.id)
-        } else if (currentLateBalance > 0 && lateMinutes > 15) {
-          balanceUsed = Math.min(currentLateBalance, 15)
-          await supabase
-            .from('employees')
-            .update({ monthly_late_balance_minutes: Math.max(0, currentLateBalance - balanceUsed) })
-            .eq('id', employee.id)
         }
+        // NOTE: When late > 15 minutes, do NOT deduct from monthly balance
         
-        const effectiveLateMinutes = lateMinutes > 15 ? lateMinutes : (lateMinutes - balanceUsed)
+        const effectiveLateMinutes = lateMinutes <= 15 ? (lateMinutes - balanceUsed) : 0
         
         let deductionDays = 0
         let deductionText = ''

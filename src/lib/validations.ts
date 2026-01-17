@@ -83,6 +83,11 @@ export const EmployeeSchema = z.object({
     z.string().max(50).nullable().optional()
   ),
   allowed_wifi_ips: z.array(z.string()).nullable().optional(),
+  
+  // Leave balance settings
+  leave_balance: z.number().min(0).nullable().optional(),
+  emergency_leave_balance: z.number().min(0).nullable().optional(),
+  monthly_late_balance_minutes: z.number().min(0).nullable().optional(),
 });
 
 export type ValidatedEmployeeData = z.infer<typeof EmployeeSchema>;
