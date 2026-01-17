@@ -22,12 +22,14 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, Download, TrendingUp, TrendingDown, Minus, Edit, Loader2, ListOrdered } from 'lucide-react';
+import { DollarSign, Download, TrendingUp, TrendingDown, Minus, Edit, Loader2, ListOrdered, FileSpreadsheet } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfMonth } from 'date-fns';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import { useSalaryAdjustments } from '@/hooks/useSalaryAdjustments';
+import { exportSalaryReport } from '@/lib/exportUtils';
+import { toast } from 'sonner';
 
 interface EmployeeWithSalary {
   id: string;
@@ -172,8 +174,18 @@ const Salaries = () => {
               {t('salaries.manage')}
             </p>
           </div>
-          <Button variant="outline">
-            <Download className="w-4 h-4 me-2" />
+          <Button 
+            variant="outline"
+            onClick={() => {
+              if (employees.length === 0) {
+                toast.error(language === 'ar' ? 'لا توجد بيانات للتصدير' : 'No data to export');
+                return;
+              }
+              exportSalaryReport(employees, selectedMonth, direction === 'rtl');
+              toast.success(language === 'ar' ? 'تم تصدير التقرير بنجاح' : 'Report exported successfully');
+            }}
+          >
+            <FileSpreadsheet className="w-4 h-4 me-2" />
             {t('salaries.exportReport')}
           </Button>
         </motion.div>

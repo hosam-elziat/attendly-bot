@@ -26,6 +26,8 @@ import History from "./pages/History";
 import Organization from "./pages/Organization";
 import Chats from "./pages/Chats";
 import NotFound from "./pages/NotFound";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 // Super Admin Pages
 import SuperAdminAuth from "./pages/super-admin/SuperAdminAuth";
@@ -53,6 +55,8 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/dashboard" element={
                     <ProtectedRoute><Dashboard /></ProtectedRoute>
                   } />
