@@ -54,7 +54,7 @@ import {
   Settings,
   Building2
 } from 'lucide-react';
-import { useBackups, useBackupStats, useCreateBackup, useSendBackupEmail, useRestoreBackup, useDeleteBackup, Backup } from '@/hooks/useBackups';
+import { useBackups, useBackupStats, useCreateBackup, useSendBackupEmail, useRestoreBackup, useDeleteBackup, useCreateFullBackup, useRestoreFullBackup, useSendFullBackupEmail, Backup } from '@/hooks/useBackups';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -68,6 +68,7 @@ const SuperAdminBackups = () => {
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [fileRestoreDialogOpen, setFileRestoreDialogOpen] = useState(false);
+  const [fullRestoreDialogOpen, setFullRestoreDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<Backup | null>(null);
@@ -75,7 +76,10 @@ const SuperAdminBackups = () => {
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [targetCompanyId, setTargetCompanyId] = useState<string>('');
   const [createNewCompany, setCreateNewCompany] = useState(false);
+  const [fullBackupFile, setFullBackupFile] = useState<any>(null);
+  const [fullBackupFileName, setFullBackupFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fullFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: backups, isLoading } = useBackups(selectedCompany === 'all' ? undefined : selectedCompany);
   const { data: stats } = useBackupStats();
@@ -83,8 +87,11 @@ const SuperAdminBackups = () => {
   const sendBackupEmail = useSendBackupEmail();
   const restoreBackup = useRestoreBackup();
   const deleteBackup = useDeleteBackup();
+  const createFullBackup = useCreateFullBackup();
+  const restoreFullBackup = useRestoreFullBackup();
+  const sendFullBackupEmail = useSendFullBackupEmail();
 
-  const { data: companies } = useQuery({
+  const { data: companies, refetch: refetchCompanies } = useQuery({
     queryKey: ['companies-list'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -102,6 +109,14 @@ const SuperAdminBackups = () => {
       backupAll: !companyId,
       createdBy: user?.id
     });
+  };
+
+  const handleCreateFullBackup = async () => {
+    await createFullBackup.mutateAsync({ createdBy: user?.id });
+  };
+
+  const handleSendFullBackupEmail = async (backupId?: string) => {
+    await sendFullBackupEmail.mutateAsync({ backupId });
   };
 
   const handleSendEmails = async () => {
@@ -214,6 +229,49 @@ const SuperAdminBackups = () => {
     setSelectedBackup(null);
   };
 
+  const handleFullFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setFullBackupFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string);
+        
+        if (!json.backup_info || json.backup_info.backup_type !== 'full_system') {
+          toast.error('ملف غير صالح: يجب أن يكون نسخة احتياطية كاملة للنظام');
+          return;
+        }
+
+        setFullBackupFile(json);
+        toast.success(`تم تحميل الملف: ${json.backup_info.total_companies} شركة، ${json.backup_info.total_records} سجل`);
+      } catch (error) {
+        toast.error('ملف JSON غير صالح');
+        setFullBackupFile(null);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleRestoreFullBackup = async () => {
+    if (!fullBackupFile) {
+      toast.error('يرجى رفع ملف النسخة الاحتياطية الكاملة');
+      return;
+    }
+
+    await restoreFullBackup.mutateAsync({
+      backupData: fullBackupFile,
+      restoredBy: user?.id
+    });
+
+    setFullRestoreDialogOpen(false);
+    setFullBackupFile(null);
+    setFullBackupFileName('');
+    refetchCompanies();
+  };
+
   const formatSize = (bytes: number | null) => {
     if (!bytes) return '0 KB';
     if (bytes < 1024) return `${bytes} B`;
@@ -236,6 +294,17 @@ const SuperAdminBackups = () => {
     }
   };
 
+  const getBackupTypeBadge = (backup: Backup) => {
+    if (backup.backup_type === 'full_system') {
+      return <Badge className="bg-purple-500/20 text-purple-400">نسخة كاملة</Badge>;
+    }
+    return (
+      <Badge variant={backup.backup_type === 'automatic' ? 'secondary' : 'outline'}>
+        {backup.backup_type === 'automatic' ? 'تلقائي' : 'يدوي'}
+      </Badge>
+    );
+  };
+
   return (
     <SuperAdminLayout>
       <div className="space-y-6">
@@ -255,12 +324,20 @@ const SuperAdminBackups = () => {
               الإعدادات
             </Button>
             <Button 
+              onClick={handleCreateFullBackup} 
+              disabled={createFullBackup.isPending}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              <Building2 className="w-4 h-4 ml-2" />
+              {createFullBackup.isPending ? 'جاري النسخ...' : 'نسخة كاملة للنظام'}
+            </Button>
+            <Button 
               onClick={() => handleCreateBackup()} 
               disabled={createBackup.isPending}
               className="bg-primary hover:bg-primary/90"
             >
               <Database className="w-4 h-4 ml-2" />
-              {createBackup.isPending ? 'جاري النسخ...' : 'نسخة احتياطية للكل'}
+              {createBackup.isPending ? 'جاري النسخ...' : 'نسخة لكل شركة'}
             </Button>
             <Button 
               onClick={handleSendEmails} 
@@ -273,6 +350,48 @@ const SuperAdminBackups = () => {
             </Button>
           </div>
         </div>
+
+        {/* Full System Backup Card */}
+        <Card className="bg-gradient-to-r from-purple-900/50 to-slate-900 border-purple-700/50">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-purple-400" />
+              النسخ الاحتياطي الكامل للنظام
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-slate-400 mb-4">
+              ملف واحد يحتوي على جميع الشركات وبياناتها الكاملة - يمكن استخدامه لاستعادة النظام بالكامل
+            </p>
+            <div className="flex gap-4 flex-wrap">
+              <Button
+                onClick={handleCreateFullBackup}
+                disabled={createFullBackup.isPending}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                <Database className="w-4 h-4 ml-2" />
+                {createFullBackup.isPending ? 'جاري إنشاء النسخة...' : 'إنشاء نسخة كاملة'}
+              </Button>
+              <Button
+                onClick={() => handleSendFullBackupEmail()}
+                disabled={sendFullBackupEmail.isPending}
+                variant="outline"
+                className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+              >
+                <Mail className="w-4 h-4 ml-2" />
+                {sendFullBackupEmail.isPending ? 'جاري الإرسال...' : 'إرسال على الإيميل'}
+              </Button>
+              <Button
+                onClick={() => setFullRestoreDialogOpen(true)}
+                variant="outline"
+                className="border-green-500/50 text-green-400 hover:bg-green-500/10"
+              >
+                <Upload className="w-4 h-4 ml-2" />
+                استعادة النظام بالكامل
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -412,17 +531,18 @@ const SuperAdminBackups = () => {
                   </TableHeader>
                   <TableBody>
                     {backups?.map((backup) => (
-                      <TableRow key={backup.id} className="border-slate-800 hover:bg-slate-800/50">
+                      <TableRow key={backup.id} className={`border-slate-800 hover:bg-slate-800/50 ${backup.backup_type === 'full_system' ? 'bg-purple-900/20' : ''}`}>
                         <TableCell className="text-white font-medium">
-                          {backup.companies?.name || 'غير معروف'}
+                          {backup.backup_type === 'full_system' 
+                            ? `جميع الشركات (${backup.backup_data?.backup_info?.total_companies || 0})`
+                            : (backup.companies?.name || 'غير معروف')
+                          }
                         </TableCell>
                         <TableCell className="text-slate-300">
                           {format(new Date(backup.created_at), 'dd MMM yyyy - HH:mm', { locale: ar })}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={backup.backup_type === 'automatic' ? 'secondary' : 'outline'}>
-                            {backup.backup_type === 'automatic' ? 'تلقائي' : 'يدوي'}
-                          </Badge>
+                          {getBackupTypeBadge(backup)}
                         </TableCell>
                         <TableCell className="text-slate-300">
                           {formatSize(backup.size_bytes)}
@@ -681,6 +801,77 @@ const SuperAdminBackups = () => {
 
       {/* Settings Dialog */}
       <BackupSettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
+
+      {/* Full System Restore Dialog */}
+      <Dialog open={fullRestoreDialogOpen} onOpenChange={setFullRestoreDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-purple-400" />
+              استعادة النظام بالكامل
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              رفع ملف النسخة الاحتياطية الكاملة لاستعادة جميع الشركات وبياناتها
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div 
+              onClick={() => fullFileInputRef.current?.click()}
+              className="p-8 border-2 border-dashed border-purple-700 rounded-lg text-center cursor-pointer hover:border-purple-500 transition-colors"
+            >
+              <FileJson className="w-12 h-12 mx-auto mb-4 text-purple-500" />
+              {fullBackupFileName ? (
+                <p className="text-green-400">{fullBackupFileName}</p>
+              ) : (
+                <p className="text-slate-400">اضغط لرفع ملف النسخة الكاملة</p>
+              )}
+            </div>
+            <input
+              ref={fullFileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFullFileUpload}
+              className="hidden"
+            />
+
+            {fullBackupFile && (
+              <div className="p-4 rounded-lg bg-purple-900/30 border border-purple-700/50 space-y-2">
+                <p><strong>عدد الشركات:</strong> {fullBackupFile.backup_info?.total_companies}</p>
+                <p><strong>إجمالي السجلات:</strong> {fullBackupFile.backup_info?.total_records}</p>
+                <p><strong>تاريخ النسخة:</strong> {fullBackupFile.backup_info?.backup_date ? format(new Date(fullBackupFile.backup_info.backup_date), 'dd MMM yyyy - HH:mm', { locale: ar }) : 'غير معروف'}</p>
+              </div>
+            )}
+
+            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 mt-0.5" />
+                <div>
+                  <p className="font-medium">تحذير خطير!</p>
+                  <p className="text-sm">سيتم استبدال بيانات جميع الشركات الموجودة بالبيانات من الملف. الشركات غير الموجودة سيتم إنشاؤها.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => {
+              setFullRestoreDialogOpen(false);
+              setFullBackupFile(null);
+              setFullBackupFileName('');
+            }}>
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleRestoreFullBackup}
+              disabled={!fullBackupFile || restoreFullBackup.isPending}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {restoreFullBackup.isPending ? 'جاري الاستعادة...' : 'استعادة النظام بالكامل'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SuperAdminLayout>
   );
 };

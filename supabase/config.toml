@@ -38,3 +38,12 @@ verify_jwt = false
 
 [functions.restore-backup]
 verify_jwt = false
+
+[functions.create-full-backup]
+verify_jwt = false
+
+[functions.restore-full-backup]
+verify_jwt = false
+
+[functions.send-full-backup-email]
+verify_jwt = false
