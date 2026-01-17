@@ -334,7 +334,12 @@ export type Database = {
           attendance_approver_id: string | null
           attendance_approver_type: string | null
           attendance_verification_level: number | null
+          auto_absent_after_hours: number | null
           break_duration_minutes: number | null
+          checkin_reminder_count: number | null
+          checkin_reminder_interval_minutes: number | null
+          checkout_reminder_count: number | null
+          checkout_reminder_interval_minutes: number | null
           company_latitude: number | null
           company_longitude: number | null
           country_code: string | null
@@ -369,7 +374,12 @@ export type Database = {
           attendance_approver_id?: string | null
           attendance_approver_type?: string | null
           attendance_verification_level?: number | null
+          auto_absent_after_hours?: number | null
           break_duration_minutes?: number | null
+          checkin_reminder_count?: number | null
+          checkin_reminder_interval_minutes?: number | null
+          checkout_reminder_count?: number | null
+          checkout_reminder_interval_minutes?: number | null
           company_latitude?: number | null
           company_longitude?: number | null
           country_code?: string | null
@@ -404,7 +414,12 @@ export type Database = {
           attendance_approver_id?: string | null
           attendance_approver_type?: string | null
           attendance_verification_level?: number | null
+          auto_absent_after_hours?: number | null
           break_duration_minutes?: number | null
+          checkin_reminder_count?: number | null
+          checkin_reminder_interval_minutes?: number | null
+          checkout_reminder_count?: number | null
+          checkout_reminder_interval_minutes?: number | null
           company_latitude?: number | null
           company_longitude?: number | null
           country_code?: string | null
