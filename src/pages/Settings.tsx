@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck, Bell, BellRing, UserX } from 'lucide-react';
 import AttendanceVerificationSettings from '@/components/settings/AttendanceVerificationSettings';
+import CompanyLocationsManager from '@/components/settings/CompanyLocationsManager';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -989,6 +990,15 @@ const Settings = () => {
           transition={{ duration: 0.4, delay: 0.7 }}
         >
           <AttendanceVerificationSettings company={company} onRefetch={refetch} />
+        </motion.div>
+
+        {/* Company Locations Manager */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.8 }}
+        >
+          <CompanyLocationsManager />
         </motion.div>
       </div>
     </DashboardLayout>
