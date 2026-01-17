@@ -216,9 +216,10 @@ serve(async (req) => {
           }
           
           console.log(`Sending check-in reminder ${reminderNumber} to ${emp.full_name}`)
-          await sendMessage(
+          await sendAndLogMessage(
+            supabase,
             bot.bot_token,
-            parseInt(emp.telegram_chat_id),
+            emp,
             messageText,
             getCheckInKeyboard()
           )
@@ -302,9 +303,10 @@ serve(async (req) => {
             absenceDeductions++
 
             // Notify employee via Telegram
-            await sendMessage(
+            await sendAndLogMessage(
+              supabase,
               bot.bot_token,
-              parseInt(emp.telegram_chat_id),
+              emp,
               `⚠️ <b>تم تسجيل غياب</b>\n\n` +
               `مرحباً ${emp.full_name}!\n` +
               `لم يتم تسجيل حضورك اليوم حتى الساعة ${currentTime}.\n` +
@@ -327,9 +329,10 @@ serve(async (req) => {
             const minutesAfterEnd = reminderTime - endMinutes
             
             console.log(`Sending check-out reminder ${reminderNumber} to ${emp.full_name}`)
-            await sendMessage(
+            await sendAndLogMessage(
+              supabase,
               bot.bot_token,
-              parseInt(emp.telegram_chat_id),
+              emp,
               `⏰ <b>تذكير ${reminderNumber} بتسجيل الانصراف</b>\n\n` +
               `مرحباً ${emp.full_name}!\n` +
               `انتهى وقت العمل (${workEndTime.substring(0, 5)})` + 
@@ -377,9 +380,10 @@ serve(async (req) => {
               .update({ status: 'checked_in' })
               .eq('id', attendance.id)
 
-            await sendMessage(
+            await sendAndLogMessage(
+              supabase,
               bot.bot_token,
-              parseInt(emp.telegram_chat_id),
+              emp,
               `☕ <b>انتهت الاستراحة تلقائياً</b>\n\n` +
               `مرحباً ${emp.full_name}!\n` +
               `انتهت فترة الاستراحة المسموحة (${breakDuration} دقيقة).\n` +
@@ -418,7 +422,14 @@ serve(async (req) => {
   }
 })
 
-async function sendMessage(botToken: string, chatId: number, text: string, keyboard?: any) {
+async function sendAndLogMessage(
+  supabase: any,
+  botToken: string, 
+  employee: any,
+  text: string,
+  keyboard?: any
+) {
+  const chatId = parseInt(employee.telegram_chat_id)
   const body: any = {
     chat_id: chatId,
     text,
@@ -429,6 +440,8 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
     body.reply_markup = keyboard
   }
 
+  let telegramMessageId = null
+
   try {
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
@@ -436,21 +449,42 @@ async function sendMessage(botToken: string, chatId: number, text: string, keybo
       body: JSON.stringify(body)
     })
 
-    if (!res.ok) {
+    if (res.ok) {
+      const result = await res.json()
+      telegramMessageId = result.result?.message_id
+      console.log('sendMessage success', { chatId })
+    } else {
       const txt = await res.text().catch(() => '')
       console.error('sendMessage failed', { chatId, status: res.status, body: txt })
-    } else {
-      console.log('sendMessage success', { chatId })
     }
   } catch (error) {
     console.error('sendMessage error', { chatId, error: String(error) })
+  }
+
+  // Log the message
+  try {
+    await supabase.from('telegram_messages').insert({
+      company_id: employee.company_id,
+      employee_id: employee.id,
+      telegram_chat_id: employee.telegram_chat_id,
+      message_text: text.replace(/<[^>]*>/g, ''), // Strip HTML
+      direction: 'outgoing',
+      message_type: 'reminder',
+      telegram_message_id: telegramMessageId,
+      metadata: { 
+        source: 'attendance-reminders',
+        keyboard: keyboard 
+      }
+    })
+  } catch (logError) {
+    console.error('Failed to log message:', logError)
   }
 }
 
 function getCheckInKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '✅ تسجيل حضور الآن', callback_data: 'check_in' }]
+      [{ text: '✅ تسجيل حضور', callback_data: 'check_in' }]
     ]
   }
 }
@@ -458,8 +492,7 @@ function getCheckInKeyboard() {
 function getCheckOutKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🔴 تسجيل انصراف الآن', callback_data: 'check_out' }],
-      [{ text: '⏰ مكمل وقت إضافي', callback_data: 'dismiss_checkout_reminder' }]
+      [{ text: '🚪 تسجيل انصراف', callback_data: 'check_out' }]
     ]
   }
 }
@@ -469,15 +502,9 @@ function getEmployeeKeyboard() {
     inline_keyboard: [
       [
         { text: '✅ تسجيل حضور', callback_data: 'check_in' },
-        { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+        { text: '🚪 تسجيل انصراف', callback_data: 'check_out' }
       ],
-      [
-        { text: '☕ بدء استراحة', callback_data: 'start_break' },
-        { text: '🔙 إنهاء استراحة', callback_data: 'end_break' }
-      ],
-      [
-        { text: '📋 حالتي', callback_data: 'my_status' }
-      ]
+      [{ text: '📊 حالتي', callback_data: 'my_status' }]
     ]
   }
 }

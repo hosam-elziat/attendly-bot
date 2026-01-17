@@ -58,7 +58,7 @@ serve(async (req) => {
     // Get all active employees with telegram chat IDs
     const { data: employees, error: empError } = await supabase
       .from('employees')
-      .select('id, full_name, telegram_chat_id')
+      .select('id, full_name, telegram_chat_id, company_id')
       .eq('company_id', holiday.company_id)
       .eq('is_active', true)
       .not('telegram_chat_id', 'is', null);
@@ -116,6 +116,25 @@ serve(async (req) => {
         });
 
         if (response.ok) {
+          const result = await response.json();
+          const telegramMessageId = result.result?.message_id;
+          
+          // Log the message
+          try {
+            await supabase.from('telegram_messages').insert({
+              company_id: employee.company_id,
+              employee_id: employee.id,
+              telegram_chat_id: employee.telegram_chat_id,
+              message_text: message.replace(/<[^>]*>/g, ''), // Strip HTML
+              direction: 'outgoing',
+              message_type: 'notification',
+              telegram_message_id: telegramMessageId,
+              metadata: { source: 'notify-holiday-approval', holiday_id: holidayId }
+            });
+          } catch (logError) {
+            console.error('Failed to log message:', logError);
+          }
+          
           successCount++;
         } else {
           failCount++;

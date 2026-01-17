@@ -150,7 +150,7 @@ serve(async (req) => {
       }
     }
 
-    await sendMessage(bot.bot_token, parseInt(employee.telegram_chat_id), message)
+    await sendAndLogMessage(supabase, bot.bot_token, employee, message)
 
     console.log(`Notification sent to ${employee.full_name} for action: ${action}`)
 
@@ -165,7 +165,13 @@ serve(async (req) => {
   }
 })
 
-async function sendMessage(botToken: string, chatId: number, text: string) {
+async function sendAndLogMessage(
+  supabase: any,
+  botToken: string, 
+  employee: any,
+  text: string
+) {
+  const chatId = parseInt(employee.telegram_chat_id)
   const body = {
     chat_id: chatId,
     text,
@@ -178,8 +184,28 @@ async function sendMessage(botToken: string, chatId: number, text: string) {
     body: JSON.stringify(body)
   })
 
-  if (!res.ok) {
+  let telegramMessageId = null
+  if (res.ok) {
+    const result = await res.json()
+    telegramMessageId = result.result?.message_id
+  } else {
     const txt = await res.text().catch(() => '')
     console.error('sendMessage failed', { status: res.status, body: txt })
+  }
+
+  // Log the message
+  try {
+    await supabase.from('telegram_messages').insert({
+      company_id: employee.company_id,
+      employee_id: employee.id,
+      telegram_chat_id: employee.telegram_chat_id,
+      message_text: text.replace(/<[^>]*>/g, ''), // Strip HTML
+      direction: 'outgoing',
+      message_type: 'notification',
+      telegram_message_id: telegramMessageId,
+      metadata: { source: 'notify-employee' }
+    })
+  } catch (logError) {
+    console.error('Failed to log message:', logError)
   }
 }
