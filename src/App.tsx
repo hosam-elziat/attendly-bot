@@ -24,6 +24,7 @@ import Settings from "./pages/Settings";
 import Subscription from "./pages/Subscription";
 import History from "./pages/History";
 import Organization from "./pages/Organization";
+import Chats from "./pages/Chats";
 import NotFound from "./pages/NotFound";
 
 // Super Admin Pages
@@ -87,6 +88,9 @@ const App = () => (
                   } />
                   <Route path="/dashboard/organization" element={
                     <ProtectedRoute><Organization /></ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/chats" element={
+                    <ProtectedRoute><Chats /></ProtectedRoute>
                   } />
                   
                   {/* Super Admin Routes */}

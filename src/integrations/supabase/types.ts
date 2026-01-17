@@ -1726,6 +1726,60 @@ export type Database = {
           },
         ]
       }
+      telegram_messages: {
+        Row: {
+          company_id: string
+          created_at: string
+          direction: string
+          employee_id: string
+          id: string
+          message_text: string
+          message_type: string | null
+          metadata: Json | null
+          telegram_chat_id: string
+          telegram_message_id: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          direction: string
+          employee_id: string
+          id?: string
+          message_text: string
+          message_type?: string | null
+          metadata?: Json | null
+          telegram_chat_id: string
+          telegram_message_id?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          direction?: string
+          employee_id?: string
+          id?: string
+          message_text?: string
+          message_type?: string | null
+          metadata?: Json | null
+          telegram_chat_id?: string
+          telegram_message_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_messages_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           company_id: string
