@@ -304,11 +304,36 @@ const PositionDialog = ({ open, onOpenChange, position, positions }: PositionDia
           
           {/* Permissions */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <h3 className="font-medium text-sm text-muted-foreground">
-                {language === 'ar' ? 'الصلاحيات' : 'Permissions'}
-              </h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                <h3 className="font-medium text-sm text-muted-foreground">
+                  {language === 'ar' ? 'الصلاحيات' : 'Permissions'}
+                </h3>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const allChecked = Object.values(permissions).every(v => v);
+                  const newValue = !allChecked;
+                  setPermissions({
+                    can_manage_attendance: newValue,
+                    can_approve_leaves: newValue,
+                    can_make_deductions: newValue,
+                    can_add_bonuses: newValue,
+                    can_view_salaries: newValue,
+                    can_manage_subordinates: newValue,
+                    can_view_reports: newValue,
+                  });
+                }}
+              >
+                {Object.values(permissions).every(v => v)
+                  ? (language === 'ar' ? 'إلغاء تحديد الكل' : 'Deselect All')
+                  : (language === 'ar' ? 'تحديد الكل' : 'Select All')
+                }
+              </Button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
