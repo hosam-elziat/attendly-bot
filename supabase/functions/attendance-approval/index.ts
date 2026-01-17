@@ -45,7 +45,8 @@ serve(async (req) => {
           work_start_time,
           work_end_time,
           base_salary,
-          currency
+          currency,
+          monthly_late_balance_minutes
         )
       `)
       .eq('id', pending_id)
@@ -97,7 +98,7 @@ serve(async (req) => {
       // Get company policies for late deduction
       const { data: company } = await supabase
         .from('companies')
-        .select('late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction, timezone')
+        .select('late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction, monthly_late_allowance_minutes, timezone')
         .eq('id', companyId)
         .single()
 
@@ -141,7 +142,7 @@ serve(async (req) => {
           throw attendanceError
         }
 
-        // Check for lateness and apply deductions
+        // Check for lateness and apply deductions with monthly balance logic
         const checkInTime = new Date(attendanceTime)
         const workStartTime = employee.work_start_time || '09:00:00'
         const [startH, startM] = workStartTime.split(':').map(Number)
@@ -152,18 +153,53 @@ serve(async (req) => {
         if (checkInTime > expectedStart) {
           const lateMinutes = Math.floor((checkInTime.getTime() - expectedStart.getTime()) / 60000)
           
+          // Get current late balance
+          let currentLateBalance = employee.monthly_late_balance_minutes ?? company?.monthly_late_allowance_minutes ?? 60
+          
           let deductionDays = 0
           let deductionText = ''
+          let lateMessage = ''
           
           if (lateMinutes > 30 && company?.late_over_30_deduction) {
+            // More than 30 minutes - direct deduction, no balance usage
             deductionDays = company.late_over_30_deduction
             deductionText = `تأخر أكثر من 30 دقيقة`
           } else if (lateMinutes > 15 && company?.late_15_to_30_deduction) {
+            // 15-30 minutes - direct deduction, no balance usage
             deductionDays = company.late_15_to_30_deduction
             deductionText = `تأخر من 15 إلى 30 دقيقة`
-          } else if (lateMinutes > 0 && company?.late_under_15_deduction) {
-            deductionDays = company.late_under_15_deduction
-            deductionText = `تأخر أقل من 15 دقيقة`
+          } else if (lateMinutes > 0 && lateMinutes <= 15) {
+            // Less than 15 minutes - use monthly balance first
+            if (currentLateBalance >= lateMinutes) {
+              // Enough balance - deduct from balance, no salary deduction
+              const newBalance = currentLateBalance - lateMinutes
+              await supabase
+                .from('employees')
+                .update({ monthly_late_balance_minutes: newBalance })
+                .eq('id', employee.id)
+              
+              lateMessage = `\n\n⏱️ التأخير: ${lateMinutes} دقيقة\n✅ تم خصم من رصيد السماحية\n📊 رصيدك المتبقي: ${newBalance} دقيقة`
+            } else if (currentLateBalance > 0) {
+              // Partial balance - use what's left and apply deduction
+              const balanceUsed = currentLateBalance
+              await supabase
+                .from('employees')
+                .update({ monthly_late_balance_minutes: 0 })
+                .eq('id', employee.id)
+              
+              // Apply deduction since balance exhausted
+              if (company?.late_under_15_deduction) {
+                deductionDays = company.late_under_15_deduction
+                deductionText = `تأخر أقل من 15 دقيقة (رصيد السماحية منتهي)`
+              }
+              lateMessage = `\n\n⏱️ التأخير: ${lateMinutes} دقيقة\n⚠️ تم استخدام آخر ${balanceUsed} دقيقة من الرصيد`
+            } else {
+              // No balance left - apply deduction directly
+              if (company?.late_under_15_deduction) {
+                deductionDays = company.late_under_15_deduction
+                deductionText = `تأخر أقل من 15 دقيقة`
+              }
+            }
           }
 
           if (deductionDays > 0) {
@@ -184,6 +220,15 @@ serve(async (req) => {
               attendance_log_id: newAttendance.id,
               is_auto_generated: true
             })
+            
+            lateMessage += `\n📛 تم تطبيق خصم ${deductionDays} يوم\n📝 السبب: ${deductionText}`
+          }
+
+          // Update notes with late info
+          if (lateMessage) {
+            await supabase.from('attendance_logs')
+              .update({ notes: `تأخر ${lateMinutes} دقيقة - موعد العمل: ${workStartTime}` })
+              .eq('id', newAttendance.id)
           }
         }
 
