@@ -47,3 +47,15 @@ verify_jwt = false
 
 [functions.send-full-backup-email]
 verify_jwt = false
+
+[functions.attendance-approval]
+verify_jwt = false
+
+[functions.create-super-admin]
+verify_jwt = false
+
+[functions.notify-holiday-approval]
+verify_jwt = false
+
+[functions.send-monthly-holidays]
+verify_jwt = false

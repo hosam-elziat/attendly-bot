@@ -5,7 +5,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendanceStats } from '@/hooks/useAttendance';
 import { useAdvancedStats, COUNTRIES } from '@/hooks/useAdvancedStats';
-import { usePublicHolidays } from '@/hooks/usePublicHolidays';
 import { useRealtimeNotifications, usePendingCounts } from '@/hooks/useRealtimeNotifications';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +32,7 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import SubscriptionCard from '@/components/dashboard/SubscriptionCard';
 import AbsentEmployeesDialog from '@/components/dashboard/AbsentEmployeesDialog';
+import HolidayApprovalCard from '@/components/dashboard/HolidayApprovalCard';
 
 const Dashboard = () => {
   const { t, language } = useLanguage();
@@ -40,7 +40,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { data: stats, isLoading } = useAttendanceStats();
   const { data: advancedStats, isLoading: advancedLoading } = useAdvancedStats();
-  const { data: holidays, isLoading: holidaysLoading } = usePublicHolidays();
   const [absentDialogOpen, setAbsentDialogOpen] = useState(false);
   
   // Enable realtime notifications
@@ -321,34 +320,8 @@ const Dashboard = () => {
                   )}
                 </div>
 
-                {/* Public Holidays */}
-                {!holidaysLoading && holidays && holidays.length > 0 && (
-                  <Card className="mt-4 border-primary/30 bg-primary/5">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Flag className="w-4 h-4 text-primary" />
-                        {language === 'ar' ? 'الإجازات الرسمية هذا الشهر' : 'Public Holidays This Month'}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {holidays.map((holiday, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-background/50">
-                            <div>
-                              <p className="font-medium text-foreground">
-                                {language === 'ar' ? holiday.localName : holiday.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(new Date(holiday.date), 'EEEE, d MMMM', { locale: language === 'ar' ? ar : undefined })}
-                              </p>
-                            </div>
-                            <Calendar className="w-4 h-4 text-primary" />
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                {/* Public Holidays with Approval */}
+                <HolidayApprovalCard />
               </motion.div>
             )}
           </>
