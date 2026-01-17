@@ -173,7 +173,7 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, company_latitude, company_longitude, location_radius_meters, level3_verification_mode')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, company_latitude, company_longitude, location_radius_meters, level3_verification_mode, max_excused_absence_days, late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction, monthly_late_allowance_minutes')
       .eq('id', companyId)
       .single()
 
@@ -187,7 +187,12 @@ serve(async (req) => {
       annual_leave_days: company?.annual_leave_days || 21,
       emergency_leave_days: company?.emergency_leave_days || 7,
       currency: company?.default_currency || 'EGP',
-      absence_deduction_days: company?.absence_without_permission_deduction || 1
+      absence_deduction_days: company?.absence_without_permission_deduction || 1,
+      max_excused_absence_days: (company as any)?.max_excused_absence_days || 2,
+      late_under_15_deduction: (company as any)?.late_under_15_deduction || 0.25,
+      late_15_to_30_deduction: (company as any)?.late_15_to_30_deduction || 0.5,
+      late_over_30_deduction: (company as any)?.late_over_30_deduction || 1,
+      monthly_late_allowance_minutes: (company as any)?.monthly_late_allowance_minutes || 60
     }
 
     // Check if employee exists
@@ -1998,7 +2003,7 @@ serve(async (req) => {
           }
           
           // Check monthly leave limit first
-          const maxExcusedAbsenceDays = 2 // Default: 2 days per month for regular/emergency leaves
+          const maxExcusedAbsenceDays = companyDefaults.max_excused_absence_days
           const leaveLimitCheck = await checkMonthlyLeaveLimit(supabase, employee.id, companyId, maxExcusedAbsenceDays)
           
           if (!leaveLimitCheck.allowed) {
