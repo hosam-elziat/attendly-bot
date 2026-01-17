@@ -6,6 +6,7 @@ type Direction = 'ltr' | 'rtl';
 interface LanguageContextType {
   language: Language;
   direction: Direction;
+  isRTL: boolean;
   setLanguage: (lang: Language) => void;
   t: (key: string) => string;
 }
@@ -630,6 +631,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>('ar');
   const direction: Direction = language === 'ar' ? 'rtl' : 'ltr';
+  const isRTL = direction === 'rtl';
 
   useEffect(() => {
     const saved = localStorage.getItem('language') as Language;
@@ -653,7 +655,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   return (
-    <LanguageContext.Provider value={{ language, direction, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, direction, isRTL, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );
