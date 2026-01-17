@@ -115,6 +115,25 @@ const AdjustmentsList = ({
           action: 'delete',
           oldData: adjustmentToDelete as unknown as Record<string, unknown>,
         });
+
+        // Notify employee via Telegram
+        const isBonus = adjustmentToDelete.bonus > 0;
+        const amount = isBonus ? adjustmentToDelete.bonus : adjustmentToDelete.deduction;
+        
+        try {
+          await supabase.functions.invoke('notify-employee', {
+            body: {
+              employee_id: adjustmentToDelete.employee_id,
+              type: isBonus ? 'bonus' : 'deduction',
+              action: 'delete',
+              amount,
+              description: adjustmentToDelete.description,
+              added_by_name: profile?.full_name || 'المدير',
+            }
+          });
+        } catch (notifyError) {
+          console.error('Failed to notify employee:', notifyError);
+        }
       }
 
       toast.success(language === 'ar' ? 'تم حذف التعديل بنجاح' : 'Adjustment deleted successfully');
@@ -141,6 +160,7 @@ const AdjustmentsList = ({
     try {
       const amount = parseFloat(editAmount) || 0;
       const isBonus = editAdjustment.bonus > 0;
+      const oldAmount = isBonus ? editAdjustment.bonus : editAdjustment.deduction;
       
       const updates = {
         bonus: isBonus ? amount : 0,
@@ -163,6 +183,23 @@ const AdjustmentsList = ({
         oldData: editAdjustment as unknown as Record<string, unknown>,
         newData: { ...editAdjustment, ...updates } as unknown as Record<string, unknown>,
       });
+
+      // Notify employee via Telegram
+      try {
+        await supabase.functions.invoke('notify-employee', {
+          body: {
+            employee_id: editAdjustment.employee_id,
+            type: isBonus ? 'bonus' : 'deduction',
+            action: 'update',
+            amount,
+            old_amount: oldAmount,
+            description: editDescription,
+            added_by_name: profile?.full_name || 'المدير',
+          }
+        });
+      } catch (notifyError) {
+        console.error('Failed to notify employee:', notifyError);
+      }
 
       toast.success(language === 'ar' ? 'تم تحديث التعديل بنجاح' : 'Adjustment updated successfully');
       setEditAdjustment(null);

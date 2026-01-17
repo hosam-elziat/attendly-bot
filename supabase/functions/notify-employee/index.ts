@@ -9,7 +9,9 @@ const corsHeaders = {
 interface NotifyRequest {
   employee_id: string
   type: 'bonus' | 'deduction'
+  action: 'add' | 'update' | 'delete'
   amount: number
+  old_amount?: number
   days?: number
   description?: string
   added_by_name: string
@@ -28,7 +30,18 @@ serve(async (req) => {
 
   try {
     const body: NotifyRequest = await req.json()
-    const { employee_id, type, amount, days, description, added_by_name, total_deductions, total_bonuses } = body
+    const { 
+      employee_id, 
+      type, 
+      action = 'add', 
+      amount, 
+      old_amount,
+      days, 
+      description, 
+      added_by_name, 
+      total_deductions, 
+      total_bonuses 
+    } = body
 
     console.log('notify-employee: received request', body)
 
@@ -79,38 +92,67 @@ serve(async (req) => {
       })
     }
 
-    // Build notification message
+    // Build notification message based on action
     let message = ''
     const typeText = type === 'bonus' ? 'مكافأة' : 'خصم'
-    const emoji = type === 'bonus' ? '🎉' : '⚠️'
-
-    if (days && days > 0) {
-      const daysText = days === 0.25 ? 'ربع يوم' 
-        : days === 0.5 ? 'نصف يوم'
-        : days === 1 ? 'يوم واحد'
-        : `${days} أيام`
+    
+    if (action === 'delete') {
+      // Deletion notification
+      const emoji = '🗑️'
+      message = `${emoji} <b>إلغاء ${typeText}</b>\n\n` +
+        `📋 تم إلغاء ${typeText} بقيمة ${amount.toFixed(2)} ج.م\n` +
+        (description ? `📝 السبب الأصلي: ${description}\n` : '') +
+        `👤 بواسطة: ${added_by_name}`
+    } else if (action === 'update') {
+      // Update notification
+      const emoji = '✏️'
+      message = `${emoji} <b>تعديل ${typeText}</b>\n\n`
       
-      message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
-        `📋 ${added_by_name} سجّل لك ${typeText} ${daysText}\n` +
-        (description ? `📝 السبب: ${description}\n` : '') +
-        `💰 القيمة: ${amount.toFixed(2)} ج.م`
+      if (old_amount !== undefined && old_amount !== amount) {
+        message += `📋 تم تعديل قيمة ${typeText}\n` +
+          `💰 القيمة القديمة: ${old_amount.toFixed(2)} ج.م\n` +
+          `💰 القيمة الجديدة: ${amount.toFixed(2)} ج.م\n`
+      } else {
+        message += `📋 تم تعديل بيانات ${typeText}\n` +
+          `💰 القيمة: ${amount.toFixed(2)} ج.م\n`
+      }
+      
+      if (description) {
+        message += `📝 السبب: ${description}\n`
+      }
+      message += `👤 بواسطة: ${added_by_name}`
     } else {
-      message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
-        `📋 ${added_by_name} سجّل لك ${typeText}\n` +
-        (description ? `📝 السبب: ${description}\n` : '') +
-        `💰 القيمة: ${amount.toFixed(2)} ج.م`
-    }
+      // Add notification (original behavior)
+      const emoji = type === 'bonus' ? '🎉' : '⚠️'
+      
+      if (days && days > 0) {
+        const daysText = days === 0.25 ? 'ربع يوم' 
+          : days === 0.5 ? 'نصف يوم'
+          : days === 1 ? 'يوم واحد'
+          : `${days} أيام`
+        
+        message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
+          `📋 ${added_by_name} سجّل لك ${typeText} ${daysText}\n` +
+          (description ? `📝 السبب: ${description}\n` : '') +
+          `💰 القيمة: ${amount.toFixed(2)} ج.م`
+      } else {
+        message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
+          `📋 ${added_by_name} سجّل لك ${typeText}\n` +
+          (description ? `📝 السبب: ${description}\n` : '') +
+          `💰 القيمة: ${amount.toFixed(2)} ج.م`
+      }
 
-    // Add totals if available
-    if (type === 'deduction' && total_deductions !== undefined) {
-      message += `\n\n📊 إجمالي الخصومات هذا الشهر: ${total_deductions.toFixed(2)} ج.م`
-    } else if (type === 'bonus' && total_bonuses !== undefined) {
-      message += `\n\n📊 إجمالي المكافآت هذا الشهر: ${total_bonuses.toFixed(2)} ج.م`
+      // Add totals if available
+      if (type === 'deduction' && total_deductions !== undefined) {
+        message += `\n\n📊 إجمالي الخصومات هذا الشهر: ${total_deductions.toFixed(2)} ج.م`
+      } else if (type === 'bonus' && total_bonuses !== undefined) {
+        message += `\n\n📊 إجمالي المكافآت هذا الشهر: ${total_bonuses.toFixed(2)} ج.م`
+      }
     }
 
     await sendMessage(bot.bot_token, parseInt(employee.telegram_chat_id), message)
 
-    console.log(`Notification sent to ${employee.full_name}`)
+    console.log(`Notification sent to ${employee.full_name} for action: ${action}`)
 
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders })
 
