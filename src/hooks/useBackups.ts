@@ -4,8 +4,8 @@ import { toast } from 'sonner';
 
 export interface Backup {
   id: string;
-  company_id: string;
-  backup_type: 'automatic' | 'manual';
+  company_id: string | null;
+  backup_type: 'automatic' | 'manual' | 'full_system';
   backup_data: any;
   tables_included: string[];
   created_at: string;
@@ -17,7 +17,7 @@ export interface Backup {
   notes: string | null;
   companies?: {
     name: string;
-  };
+  } | null;
 }
 
 export interface BackupSettings {
@@ -264,6 +264,86 @@ export const useBackupStats = () => {
         emailsSent,
         lastBackup
       };
+    },
+  });
+};
+
+// Full System Backup hooks
+export const useCreateFullBackup = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ createdBy }: { createdBy?: string }) => {
+      const { data, error } = await supabase.functions.invoke('create-full-backup', {
+        body: { created_by: createdBy }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['backups'] });
+      toast.success(`تم إنشاء النسخة الاحتياطية الكاملة: ${data.total_companies} شركة، ${data.total_records} سجل`);
+    },
+    onError: (error: any) => {
+      console.error('Error creating full backup:', error);
+      toast.error('حدث خطأ أثناء إنشاء النسخة الاحتياطية الكاملة');
+    },
+  });
+};
+
+export const useRestoreFullBackup = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      backupData,
+      restoredBy
+    }: { 
+      backupData: any;
+      restoredBy?: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('restore-full-backup', {
+        body: {
+          backup_data: backupData,
+          restored_by: restoredBy
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['backups'] });
+      queryClient.invalidateQueries({ queryKey: ['companies-list'] });
+      toast.success(`تم استعادة البيانات: ${data.companies_created} شركة جديدة، ${data.companies_updated} شركة محدثة`);
+    },
+    onError: (error: any) => {
+      console.error('Error restoring full backup:', error);
+      toast.error('حدث خطأ أثناء استعادة البيانات');
+    },
+  });
+};
+
+export const useSendFullBackupEmail = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ backupId }: { backupId?: string }) => {
+      const { data, error } = await supabase.functions.invoke('send-full-backup-email', {
+        body: { backup_id: backupId }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['backups'] });
+      toast.success('تم إرسال النسخة الاحتياطية الكاملة بنجاح');
+    },
+    onError: (error: any) => {
+      console.error('Error sending full backup email:', error);
+      toast.error('حدث خطأ أثناء إرسال الإيميل');
     },
   });
 };
