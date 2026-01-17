@@ -10,6 +10,7 @@ import { Loader2, Clock } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { format } from 'date-fns';
 import { useLogAction } from '@/hooks/useAuditLogs';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AttendanceRecord {
   id: string;
@@ -32,6 +33,7 @@ interface EditAttendanceDialogProps {
 
 const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAttendanceDialogProps) => {
   const { language } = useLanguage();
+  const { profile } = useAuth();
   const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
   const [checkInTime, setCheckInTime] = useState('');
@@ -83,10 +85,13 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
       };
 
       const tzOffset = getTimezoneOffset();
+      const oldCheckInTime = record.check_in_time;
+      let newCheckInTimeFormatted = '';
 
       if (checkInTime) {
         // Include timezone offset to ensure correct time is stored
-        updates.check_in_time = `${recordDate}T${checkInTime}:00${tzOffset}`;
+        newCheckInTimeFormatted = `${recordDate}T${checkInTime}:00${tzOffset}`;
+        updates.check_in_time = newCheckInTimeFormatted;
       }
 
       if (checkOutTime) {
@@ -116,6 +121,44 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         oldData,
         newData: { ...data, full_name: record.employees?.full_name },
       });
+
+      // If check-in time was modified, recalculate deductions
+      if (checkInTime && oldCheckInTime !== newCheckInTimeFormatted) {
+        console.log('Check-in time changed, recalculating deductions...');
+        
+        try {
+          const { data: result, error: recalcError } = await supabase.functions.invoke('recalculate-attendance-deduction', {
+            body: {
+              attendance_log_id: record.id,
+              old_check_in_time: oldCheckInTime,
+              new_check_in_time: newCheckInTimeFormatted,
+              editor_name: profile?.full_name || 'المدير'
+            }
+          });
+
+          if (recalcError) {
+            console.error('Error recalculating deductions:', recalcError);
+          } else {
+            console.log('Deduction recalculation result:', result);
+            
+            if (result?.deduction_days > 0) {
+              toast.info(
+                language === 'ar' 
+                  ? `تم تطبيق خصم ${result.deduction_days} يوم` 
+                  : `Applied ${result.deduction_days} day deduction`
+              );
+            } else if (result?.old_late_minutes > 0 && result?.new_late_minutes === 0) {
+              toast.info(
+                language === 'ar' 
+                  ? 'تم إلغاء الخصم السابق' 
+                  : 'Previous deduction removed'
+              );
+            }
+          }
+        } catch (recalcErr) {
+          console.error('Failed to recalculate deductions:', recalcErr);
+        }
+      }
 
       toast.success(language === 'ar' ? 'تم تحديث الحضور بنجاح' : 'Attendance updated successfully');
       onOpenChange(false);

@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.send-monthly-holidays]
 verify_jwt = false
+
+[functions.recalculate-attendance-deduction]
+verify_jwt = false
