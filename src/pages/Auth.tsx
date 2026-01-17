@@ -71,7 +71,7 @@ const Auth = () => {
             toast.error(error.message);
           }
         } else {
-          toast.success('تم إنشاء الحساب بنجاح! مرحباً بك في AttendEase.');
+          toast.success('تم إنشاء الحساب بنجاح! مرحباً بك في Auto Missions Bot.');
           navigate('/dashboard');
         }
       } else {
@@ -139,10 +139,8 @@ const Auth = () => {
           >
             {/* Logo */}
             <div className="flex items-center gap-2 mb-8">
-              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">HR</span>
-              </div>
-              <span className="font-semibold text-foreground text-xl">AttendEase</span>
+              <img src="/logo.png" alt="Auto Missions Bot" className="w-10 h-10 rounded-lg" />
+              <span className="font-semibold text-foreground text-xl">Auto Missions Bot</span>
             </div>
 
             <h1 className="text-2xl font-bold text-foreground mb-2">
