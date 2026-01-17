@@ -11,6 +11,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { format } from 'date-fns';
 import { useLogAction } from '@/hooks/useAuditLogs';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCompany } from '@/hooks/useCompany';
 
 interface AttendanceRecord {
   id: string;
@@ -19,6 +20,7 @@ interface AttendanceRecord {
   check_in_time: string | null;
   check_out_time: string | null;
   status: string;
+  company_id: string;
   employees?: {
     full_name: string;
   };
@@ -34,6 +36,7 @@ interface EditAttendanceDialogProps {
 const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAttendanceDialogProps) => {
   const { language } = useLanguage();
   const { profile } = useAuth();
+  const { data: company } = useCompany();
   const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
   const [checkInTime, setCheckInTime] = useState('');
@@ -70,9 +73,11 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
     try {
       // Use the record's actual date, not today
       const recordDate = record.date;
+      const wasAbsent = record.status === 'absent';
+      const isNowAbsent = status === 'absent';
       
       const updates: any = {
-        status: status as "checked_in" | "on_break" | "checked_out",
+        status: status as "checked_in" | "on_break" | "checked_out" | "absent",
       };
 
       // Get local timezone offset to preserve the intended time
@@ -88,14 +93,20 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
       const oldCheckInTime = record.check_in_time;
       let newCheckInTimeFormatted = '';
 
-      if (checkInTime) {
-        // Include timezone offset to ensure correct time is stored
-        newCheckInTimeFormatted = `${recordDate}T${checkInTime}:00${tzOffset}`;
-        updates.check_in_time = newCheckInTimeFormatted;
-      }
+      // If marking as absent, clear times
+      if (isNowAbsent) {
+        updates.check_in_time = null;
+        updates.check_out_time = null;
+      } else {
+        if (checkInTime) {
+          // Include timezone offset to ensure correct time is stored
+          newCheckInTimeFormatted = `${recordDate}T${checkInTime}:00${tzOffset}`;
+          updates.check_in_time = newCheckInTimeFormatted;
+        }
 
-      if (checkOutTime) {
-        updates.check_out_time = `${recordDate}T${checkOutTime}:00${tzOffset}`;
+        if (checkOutTime) {
+          updates.check_out_time = `${recordDate}T${checkOutTime}:00${tzOffset}`;
+        }
       }
 
       // Store old data for logging
@@ -122,8 +133,67 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         newData: { ...data, full_name: record.employees?.full_name },
       });
 
-      // If check-in time was modified, recalculate deductions
-      if (checkInTime && oldCheckInTime !== newCheckInTimeFormatted) {
+      // If status changed to absent, apply absence deduction
+      if (!wasAbsent && isNowAbsent) {
+        console.log('Status changed to absent, applying deduction...');
+        
+        // Get absence deduction amount from company settings
+        const absenceDeduction = company?.absence_without_permission_deduction || 1;
+        const month = recordDate.substring(0, 7); // YYYY-MM format
+        
+        // First, remove any existing auto-generated deductions for this attendance log
+        await supabase
+          .from('salary_adjustments')
+          .delete()
+          .eq('attendance_log_id', record.id)
+          .eq('is_auto_generated', true);
+        
+        // Insert absence deduction
+        const { error: deductionError } = await supabase
+          .from('salary_adjustments')
+          .insert({
+            employee_id: record.employee_id,
+            company_id: record.company_id,
+            month: month,
+            deduction: 0,
+            adjustment_days: absenceDeduction,
+            description: language === 'ar' 
+              ? `غياب بدون إذن - ${recordDate}` 
+              : `Absence without permission - ${recordDate}`,
+            is_auto_generated: true,
+            attendance_log_id: record.id,
+            added_by: profile?.user_id,
+            added_by_name: profile?.full_name || 'المدير'
+          });
+
+        if (deductionError) {
+          console.error('Error applying absence deduction:', deductionError);
+        } else {
+          toast.info(
+            language === 'ar' 
+              ? `تم تطبيق خصم ${absenceDeduction} يوم للغياب` 
+              : `Applied ${absenceDeduction} day absence deduction`
+          );
+        }
+      } 
+      // If status changed FROM absent to something else, remove absence deduction
+      else if (wasAbsent && !isNowAbsent) {
+        console.log('Status changed from absent, removing deduction...');
+        
+        await supabase
+          .from('salary_adjustments')
+          .delete()
+          .eq('attendance_log_id', record.id)
+          .eq('is_auto_generated', true);
+        
+        toast.info(
+          language === 'ar' 
+            ? 'تم إلغاء خصم الغياب' 
+            : 'Absence deduction removed'
+        );
+      }
+      // If check-in time was modified (and not absent), recalculate deductions
+      else if (!isNowAbsent && checkInTime && oldCheckInTime !== newCheckInTimeFormatted) {
         console.log('Check-in time changed, recalculating deductions...');
         
         try {
@@ -171,6 +241,8 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
     }
   };
 
+  const isAbsent = status === 'absent';
+
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent className="sm:max-w-md">
@@ -187,25 +259,6 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
               <p className="font-medium text-foreground">{record.employees?.full_name}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{language === 'ar' ? 'وقت الحضور' : 'Check-in Time'}</Label>
-                <Input
-                  type="time"
-                  value={checkInTime}
-                  onChange={(e) => setCheckInTime(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{language === 'ar' ? 'وقت الانصراف' : 'Check-out Time'}</Label>
-                <Input
-                  type="time"
-                  value={checkOutTime}
-                  onChange={(e) => setCheckOutTime(e.target.value)}
-                />
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'الحالة' : 'Status'}</Label>
               <Select value={status} onValueChange={setStatus}>
@@ -216,9 +269,41 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
                   <SelectItem value="checked_in">{language === 'ar' ? 'حاضر' : 'Checked In'}</SelectItem>
                   <SelectItem value="on_break">{language === 'ar' ? 'استراحة' : 'On Break'}</SelectItem>
                   <SelectItem value="checked_out">{language === 'ar' ? 'انصرف' : 'Checked Out'}</SelectItem>
+                  <SelectItem value="absent">{language === 'ar' ? 'غائب' : 'Absent'}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {!isAbsent && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{language === 'ar' ? 'وقت الحضور' : 'Check-in Time'}</Label>
+                  <Input
+                    type="time"
+                    value={checkInTime}
+                    onChange={(e) => setCheckInTime(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{language === 'ar' ? 'وقت الانصراف' : 'Check-out Time'}</Label>
+                  <Input
+                    type="time"
+                    value={checkOutTime}
+                    onChange={(e) => setCheckOutTime(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {isAbsent && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                <p className="text-sm text-destructive">
+                  {language === 'ar' 
+                    ? `سيتم تطبيق خصم ${company?.absence_without_permission_deduction || 1} يوم على الراتب` 
+                    : `A deduction of ${company?.absence_without_permission_deduction || 1} day(s) will be applied to salary`}
+                </p>
+              </div>
+            )}
 
             <div className="flex gap-2 pt-4">
               <Button 
