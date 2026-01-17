@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      approved_holidays: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          company_id: string
+          created_at: string
+          days_count: number
+          holiday_date: string
+          holiday_name: string
+          holiday_name_local: string | null
+          id: string
+          is_approved: boolean | null
+          month: number
+          notified_at: string | null
+          notified_employees: boolean | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id: string
+          created_at?: string
+          days_count?: number
+          holiday_date: string
+          holiday_name: string
+          holiday_name_local?: string | null
+          id?: string
+          is_approved?: boolean | null
+          month: number
+          notified_at?: string | null
+          notified_employees?: boolean | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id?: string
+          created_at?: string
+          days_count?: number
+          holiday_date?: string
+          holiday_name?: string
+          holiday_name_local?: string | null
+          id?: string
+          is_approved?: boolean | null
+          month?: number
+          notified_at?: string | null
+          notified_employees?: boolean | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approved_holidays_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_logs: {
         Row: {
           check_in_time: string | null
