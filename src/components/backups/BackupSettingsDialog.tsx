@@ -54,6 +54,7 @@ const BackupSettingsDialog = ({ open, onOpenChange }: BackupSettingsDialogProps)
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [backupHour, setBackupHour] = useState('3');
   const [backupMinute, setBackupMinute] = useState('0');
+  const [backupFrequencyHours, setBackupFrequencyHours] = useState('24');
   const [autoEmailEnabled, setAutoEmailEnabled] = useState(true);
 
   const { data: recipients, isLoading } = useBackupEmailRecipients();
@@ -69,6 +70,7 @@ const BackupSettingsDialog = ({ open, onOpenChange }: BackupSettingsDialogProps)
       setAutoBackupEnabled(globalSettings.auto_backup_enabled);
       setBackupHour(String(globalSettings.backup_hour));
       setBackupMinute(String(globalSettings.backup_minute));
+      setBackupFrequencyHours(String(globalSettings.backup_frequency_hours || 24));
       setAutoEmailEnabled(globalSettings.auto_email_enabled);
     }
   }, [globalSettings]);
@@ -78,6 +80,7 @@ const BackupSettingsDialog = ({ open, onOpenChange }: BackupSettingsDialogProps)
       auto_backup_enabled: autoBackupEnabled,
       backup_hour: parseInt(backupHour),
       backup_minute: parseInt(backupMinute),
+      backup_frequency_hours: parseInt(backupFrequencyHours),
       auto_email_enabled: autoEmailEnabled,
     });
   };
@@ -140,6 +143,19 @@ const BackupSettingsDialog = ({ open, onOpenChange }: BackupSettingsDialogProps)
     { value: '45', label: '45' }
   ];
 
+  // Frequency options in hours
+  const frequencyOptions = [
+    { value: '1', label: 'كل ساعة' },
+    { value: '2', label: 'كل ساعتين' },
+    { value: '3', label: 'كل 3 ساعات' },
+    { value: '6', label: 'كل 6 ساعات' },
+    { value: '12', label: 'كل 12 ساعة' },
+    { value: '24', label: 'مرة يومياً' },
+    { value: '48', label: 'كل يومين' },
+    { value: '72', label: 'كل 3 أيام' },
+    { value: '168', label: 'مرة أسبوعياً' }
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-2xl">
@@ -164,7 +180,7 @@ const BackupSettingsDialog = ({ open, onOpenChange }: BackupSettingsDialogProps)
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-base">تفعيل النسخ التلقائي</Label>
-                <p className="text-sm text-slate-400">إنشاء نسخة احتياطية كاملة للنظام يومياً</p>
+                <p className="text-sm text-slate-400">إنشاء نسخة احتياطية كاملة للنظام بشكل دوري</p>
               </div>
               <Switch
                 checked={autoBackupEnabled}
@@ -174,11 +190,30 @@ const BackupSettingsDialog = ({ open, onOpenChange }: BackupSettingsDialogProps)
 
             {autoBackupEnabled && (
               <>
+                {/* Frequency Selection */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    التكرار
+                  </Label>
+                  <Select value={backupFrequencyHours} onValueChange={setBackupFrequencyHours}>
+                    <SelectTrigger className="bg-slate-700 border-slate-600">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {frequencyOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Start Time */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      الساعة
+                      بداية من الساعة
                     </Label>
                     <Select value={backupHour} onValueChange={setBackupHour}>
                       <SelectTrigger className="bg-slate-700 border-slate-600">

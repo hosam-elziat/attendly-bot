@@ -872,6 +872,7 @@ export type Database = {
         Row: {
           auto_backup_enabled: boolean | null
           auto_email_enabled: boolean | null
+          backup_frequency_hours: number | null
           backup_hour: number | null
           backup_minute: number | null
           created_at: string
@@ -883,6 +884,7 @@ export type Database = {
         Insert: {
           auto_backup_enabled?: boolean | null
           auto_email_enabled?: boolean | null
+          backup_frequency_hours?: number | null
           backup_hour?: number | null
           backup_minute?: number | null
           created_at?: string
@@ -894,6 +896,7 @@ export type Database = {
         Update: {
           auto_backup_enabled?: boolean | null
           auto_email_enabled?: boolean | null
+          backup_frequency_hours?: number | null
           backup_hour?: number | null
           backup_minute?: number | null
           created_at?: string

@@ -60,9 +60,9 @@ serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    console.log("Starting automatic full system backup...");
+    console.log("Checking automatic full system backup...");
 
-    // Check if auto backup is enabled
+    // Check if auto backup is enabled and settings exist
     const { data: settings } = await supabase
       .from('global_backup_settings')
       .select('*')
@@ -76,6 +76,29 @@ serve(async (req: Request) => {
         { headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+
+    // Check if it's time for backup based on frequency
+    const frequencyHours = (settings as { backup_frequency_hours?: number }).backup_frequency_hours || 24;
+    const lastBackupAt = settings.last_auto_backup_at ? new Date(settings.last_auto_backup_at) : null;
+    const now = new Date();
+
+    if (lastBackupAt) {
+      const hoursSinceLastBackup = (now.getTime() - lastBackupAt.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLastBackup < frequencyHours) {
+        console.log(`Last backup was ${hoursSinceLastBackup.toFixed(1)} hours ago. Next backup in ${(frequencyHours - hoursSinceLastBackup).toFixed(1)} hours.`);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Not time for backup yet',
+            hours_since_last: hoursSinceLastBackup,
+            next_backup_in_hours: frequencyHours - hoursSinceLastBackup
+          }),
+          { headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    }
+
+    console.log("Starting automatic full system backup...");
 
     // Get all companies
     const { data: companiesData, error: companiesError } = await supabase
@@ -172,12 +195,13 @@ serve(async (req: Request) => {
 
     console.log(`Backup created with ID: ${backupRecord.id}`);
 
-    // Update settings
+    // Update settings with next backup time
+    const nextBackupAt = new Date(Date.now() + frequencyHours * 60 * 60 * 1000);
     await supabase
       .from('global_backup_settings')
       .update({
         last_auto_backup_at: new Date().toISOString(),
-        next_auto_backup_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        next_auto_backup_at: nextBackupAt.toISOString()
       })
       .eq('id', settings.id);
 
