@@ -16,7 +16,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { holidayId } = await req.json();
+    const { holidayId, isCancellation = false } = await req.json();
 
     if (!holidayId) {
       return new Response(
@@ -89,14 +89,20 @@ serve(async (req) => {
     for (const employee of employees || []) {
       if (!employee.telegram_chat_id) continue;
 
-      const message = 
-        `🎉 <b>تهنئة بمناسبة إجازة رسمية!</b>\n\n` +
-        `مرحباً ${employee.full_name}،\n\n` +
-        `نتقدم إليكم بأطيب التهاني بمناسبة:\n` +
-        `🏷️ <b>${holiday.holiday_name_local || holiday.holiday_name}</b>\n\n` +
-        `📅 التاريخ: ${formattedDate}\n` +
-        `⏰ المدة: ${daysText}\n\n` +
-        `كل عام وأنتم بخير! 🌟`;
+      const message = isCancellation
+        ? `⚠️ <b>إلغاء إجازة رسمية</b>\n\n` +
+          `مرحباً ${employee.full_name}،\n\n` +
+          `نود إبلاغكم بأنه تم إلغاء الإجازة الرسمية:\n` +
+          `🏷️ <b>${holiday.holiday_name_local || holiday.holiday_name}</b>\n\n` +
+          `📅 التاريخ: ${formattedDate}\n\n` +
+          `يرجى العلم بأن هذا اليوم سيكون يوم عمل عادي.`
+        : `🎉 <b>تهنئة بمناسبة إجازة رسمية!</b>\n\n` +
+          `مرحباً ${employee.full_name}،\n\n` +
+          `نتقدم إليكم بأطيب التهاني بمناسبة:\n` +
+          `🏷️ <b>${holiday.holiday_name_local || holiday.holiday_name}</b>\n\n` +
+          `📅 التاريخ: ${formattedDate}\n` +
+          `⏰ المدة: ${daysText}\n\n` +
+          `كل عام وأنتم بخير! 🌟`;
 
       try {
         const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

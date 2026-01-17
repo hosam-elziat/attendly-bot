@@ -115,19 +115,28 @@ export const useRejectHoliday = () => {
         .eq('id', holidayId);
 
       if (error) throw error;
+
+      // Notify employees about cancellation
+      const { error: notifyError } = await supabase.functions.invoke('notify-holiday-approval', {
+        body: { holidayId, isCancellation: true },
+      });
+
+      if (notifyError) {
+        console.error('Failed to notify employees:', notifyError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['approved-holidays'] });
       toast({
-        title: 'تم رفض الإجازة',
-        description: 'لن يتم تطبيق هذه الإجازة على الموظفين',
+        title: 'تم إلغاء الإجازة',
+        description: 'تم إبلاغ جميع الموظفين بإلغاء هذه الإجازة',
       });
     },
     onError: (error) => {
       console.error('Error rejecting holiday:', error);
       toast({
         title: 'خطأ',
-        description: 'فشل في رفض الإجازة',
+        description: 'فشل في إلغاء الإجازة',
         variant: 'destructive',
       });
     },
