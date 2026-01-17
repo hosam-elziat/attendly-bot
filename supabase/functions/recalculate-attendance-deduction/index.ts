@@ -71,6 +71,21 @@ serve(async (req) => {
 
     const companyTimezone = company?.timezone || 'Africa/Cairo'
 
+    // Helper function to get hours and minutes in company timezone
+    const getTimeInTimezone = (dateStr: string) => {
+      const date = new Date(dateStr)
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: companyTimezone,
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false
+      })
+      const parts = formatter.formatToParts(date)
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0')
+      const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0')
+      return { hour, minute, totalMinutes: hour * 60 + minute }
+    }
+
     // Helper function to format time in company timezone
     const formatTimeInTimezone = (dateStr: string) => {
       const date = new Date(dateStr)
@@ -102,25 +117,35 @@ serve(async (req) => {
     const monthKey = attendanceLog.date.substring(0, 7) + '-01'
     const workStartTime = employee.work_start_time || '09:00:00'
     const [startH, startM] = workStartTime.split(':').map(Number)
+    const expectedStartMinutes = startH * 60 + startM
 
-    // Calculate late minutes for new time
-    const newCheckInTime = new Date(new_check_in_time)
-    const expectedStart = new Date(newCheckInTime)
-    expectedStart.setHours(startH, startM, 0, 0)
-
-    const newLateMinutes = newCheckInTime > expectedStart 
-      ? Math.floor((newCheckInTime.getTime() - expectedStart.getTime()) / 60000)
+    // Calculate late minutes for new time using company timezone
+    const newTimeInTz = getTimeInTimezone(new_check_in_time)
+    const newLateMinutes = newTimeInTz.totalMinutes > expectedStartMinutes 
+      ? newTimeInTz.totalMinutes - expectedStartMinutes
       : 0
+
+    console.log('New time calculation:', { 
+      newCheckInTime: new_check_in_time,
+      newTimeInTz,
+      expectedStartMinutes,
+      newLateMinutes 
+    })
 
     // Calculate late minutes for old time (if provided)
     let oldLateMinutes = 0
     if (old_check_in_time) {
-      const oldCheckInTime = new Date(old_check_in_time)
-      const oldExpectedStart = new Date(oldCheckInTime)
-      oldExpectedStart.setHours(startH, startM, 0, 0)
-      oldLateMinutes = oldCheckInTime > oldExpectedStart
-        ? Math.floor((oldCheckInTime.getTime() - oldExpectedStart.getTime()) / 60000)
+      const oldTimeInTz = getTimeInTimezone(old_check_in_time)
+      oldLateMinutes = oldTimeInTz.totalMinutes > expectedStartMinutes
+        ? oldTimeInTz.totalMinutes - expectedStartMinutes
         : 0
+      
+      console.log('Old time calculation:', { 
+        oldCheckInTime: old_check_in_time,
+        oldTimeInTz,
+        expectedStartMinutes,
+        oldLateMinutes 
+      })
     }
 
     console.log('Late minutes calculation:', { oldLateMinutes, newLateMinutes })
