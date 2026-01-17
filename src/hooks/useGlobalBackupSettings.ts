@@ -7,6 +7,7 @@ export interface GlobalBackupSettings {
   auto_backup_enabled: boolean;
   backup_hour: number;
   backup_minute: number;
+  backup_frequency_hours: number;
   auto_email_enabled: boolean;
   last_auto_backup_at: string | null;
   next_auto_backup_at: string | null;
