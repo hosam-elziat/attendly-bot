@@ -126,6 +126,7 @@ const translations: Record<Language, Record<string, string>> = {
     'employees.roleAdmin': 'Admin',
     'employees.roleManager': 'Manager',
     'employees.roleEmployee': 'Employee',
+    'employees.position': 'Position',
     
     // Attendance
     'attendance.title': 'Attendance',
@@ -431,6 +432,7 @@ const translations: Record<Language, Record<string, string>> = {
     'employees.roleAdmin': 'مدير',
     'employees.roleManager': 'مشرف',
     'employees.roleEmployee': 'موظف',
+    'employees.position': 'المنصب',
     
     // Attendance
     'attendance.title': 'الحضور',
