@@ -162,6 +162,33 @@ export type Database = {
           },
         ]
       }
+      backup_email_recipients: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean | null
+          name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       backup_settings: {
         Row: {
           company_id: string | null
