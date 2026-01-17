@@ -307,7 +307,7 @@ const Employees = () => {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-foreground text-sm truncate">{employee.full_name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{employee.department || '—'}</p>
+                              <p className="text-xs text-muted-foreground truncate">{positions.find(p => p.id === employee.position_id)?.title || '—'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -364,7 +364,7 @@ const Employees = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('employees.fullName')}</TableHead>
-                      <TableHead>{t('employees.department')}</TableHead>
+                      <TableHead>{t('employees.position')}</TableHead>
                       <TableHead>{t('employees.workHours')}</TableHead>
                       <TableHead>{t('employees.salary')}</TableHead>
                       <TableHead>{t('employees.status')}</TableHead>
@@ -388,7 +388,7 @@ const Employees = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {employee.department || '—'}
+                          {positions.find(p => p.id === employee.position_id)?.title || '—'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           <div className="flex items-center gap-1">
