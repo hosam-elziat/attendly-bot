@@ -40,6 +40,8 @@ import {
 } from '@/components/ui/select';
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle } from 'lucide-react';
 import EmployeeVerificationForm from '@/components/employees/EmployeeVerificationForm';
+import EmployeeLocationSelector from '@/components/employees/EmployeeLocationSelector';
+import { useEmployeeLocations, useUpdateEmployeeLocations } from '@/hooks/useCompanyLocations';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -869,6 +871,25 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     allowedWifiIps: ((employee as any).allowed_wifi_ips || []).join(', '),
   });
 
+  // Employee locations state
+  const { data: employeeLocationsData = [] } = useEmployeeLocations(employee.id);
+  const updateEmployeeLocations = useUpdateEmployeeLocations();
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+
+  // Initialize selected locations when data loads
+  useState(() => {
+    if (employeeLocationsData.length > 0) {
+      setSelectedLocationIds(employeeLocationsData.map(loc => loc.location_id));
+    }
+  });
+
+  // Effect to update selected locations when data loads
+  const [locationsInitialized, setLocationsInitialized] = useState(false);
+  if (!locationsInitialized && employeeLocationsData.length > 0) {
+    setSelectedLocationIds(employeeLocationsData.map(loc => loc.location_id));
+    setLocationsInitialized(true);
+  }
+
   const getLevel3ModeString = (requirements: string[]): string => {
     const hasLocation = requirements.includes('location');
     const hasSelfie = requirements.includes('selfie');
@@ -906,6 +927,12 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         ? verificationSettings.allowedWifiIps.split(',').map(ip => ip.trim()).filter(ip => ip) 
         : null,
     };
+
+    // Update employee locations
+    await updateEmployeeLocations.mutateAsync({
+      employeeId: employee.id,
+      locationIds: selectedLocationIds,
+    });
 
     await onSubmit({
       ...formData,
@@ -1150,6 +1177,17 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         value={verificationSettings}
         onChange={setVerificationSettings}
       />
+
+      {/* Employee Locations */}
+      {(verificationSettings.verificationLevel === 3 || (verificationSettings.useCompanyDefault && (company as any)?.attendance_verification_level === 3)) && (
+        <div className="border-t pt-4">
+          <EmployeeLocationSelector
+            employeeId={employee.id}
+            selectedLocationIds={selectedLocationIds}
+            onChange={setSelectedLocationIds}
+          />
+        </div>
+      )}
 
       {/* Notes */}
       <div className="border-t pt-4 space-y-2">
