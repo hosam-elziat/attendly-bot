@@ -341,6 +341,19 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
               </p>
             </div>
 
+            {/* Multi-location Notice */}
+            <div className="p-3 bg-primary/10 rounded-lg">
+              <h5 className="font-medium text-sm mb-2 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                دعم المواقع المتعددة:
+              </h5>
+              <p className="text-xs text-muted-foreground">
+                يمكنك إضافة مواقع متعددة للشركة من "إعدادات مواقع الشركة" أعلاه. 
+                عند تعيين موظف لأكثر من موقع، سيتمكن من تسجيل الحضور من أي منها.
+                سيتم تتبع الموقع الذي سجل منه الموظف في سجل الحضور.
+              </p>
+            </div>
+
             {/* Anti-fraud Notice */}
             <div className="p-3 bg-destructive/10 rounded-lg">
               <h5 className="font-medium text-sm mb-2 flex items-center gap-2">

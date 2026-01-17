@@ -22,7 +22,13 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2 } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2, MapPin } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { format, subDays, startOfWeek, startOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -98,6 +104,9 @@ const Attendance = () => {
               employees (
                 full_name,
                 email
+              ),
+              company_locations!check_in_location_id (
+                name
               )
             `)
             .eq('company_id', profile.company_id)
@@ -110,6 +119,9 @@ const Attendance = () => {
               employees (
                 full_name,
                 email
+              ),
+              company_locations!check_in_location_id (
+                name
               )
             `)
             .eq('company_id', profile.company_id)
@@ -137,6 +149,9 @@ const Attendance = () => {
           employees (
             full_name,
             email
+          ),
+          company_locations!check_in_location_id (
+            name
           )
         `)
         .eq('company_id', profile.company_id)
@@ -466,7 +481,7 @@ const Attendance = () => {
                           </div>
                           
                           <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                               <div className="flex items-center gap-1">
                                 <LogIn className="w-3 h-3 text-success" />
                                 <span>{formatTime(record.check_in_time)}</span>
@@ -475,6 +490,12 @@ const Attendance = () => {
                                 <LogOut className="w-3 h-3" />
                                 <span>{formatTime(record.check_out_time)}</span>
                               </div>
+                              {record.company_locations?.name && (
+                                <div className="flex items-center gap-1 text-primary">
+                                  <MapPin className="w-3 h-3" />
+                                  <span>{record.company_locations.name}</span>
+                                </div>
+                              )}
                             </div>
                             <div className="flex gap-1">
                               <Button
@@ -509,6 +530,7 @@ const Attendance = () => {
                           <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
                           <TableHead>{t('attendance.checkIn')}</TableHead>
                           <TableHead>{t('attendance.checkOut')}</TableHead>
+                          <TableHead>{language === 'ar' ? 'الموقع' : 'Location'}</TableHead>
                           <TableHead>{t('employees.status')}</TableHead>
                           <TableHead>{t('common.actions') || 'Actions'}</TableHead>
                         </TableRow>
@@ -539,6 +561,30 @@ const Attendance = () => {
                             </TableCell>
                             <TableCell className="text-muted-foreground">
                               {formatTime(record.check_out_time)}
+                            </TableCell>
+                            <TableCell>
+                              {record.company_locations?.name ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-1 text-primary cursor-default">
+                                        <MapPin className="w-3 h-3" />
+                                        <span className="text-sm">{record.company_locations.name}</span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{language === 'ar' ? 'تم التسجيل من هذا الموقع' : 'Checked in from this location'}</p>
+                                      {record.check_in_latitude && record.check_in_longitude && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {record.check_in_latitude}, {record.check_in_longitude}
+                                        </p>
+                                      )}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
                             </TableCell>
                             <TableCell>{getStatusBadge(record.status, record.isNightShift)}</TableCell>
                             <TableCell>
