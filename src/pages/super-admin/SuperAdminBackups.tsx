@@ -50,7 +50,9 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  FileJson
+  FileJson,
+  Settings,
+  Building2
 } from 'lucide-react';
 import { useBackups, useBackupStats, useCreateBackup, useSendBackupEmail, useRestoreBackup, useDeleteBackup, Backup } from '@/hooks/useBackups';
 import { useQuery } from '@tanstack/react-query';
@@ -59,6 +61,7 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useSuperAdmin } from '@/contexts/SuperAdminContext';
+import BackupSettingsDialog from '@/components/backups/BackupSettingsDialog';
 
 const SuperAdminBackups = () => {
   const { user } = useSuperAdmin();
@@ -66,10 +69,12 @@ const SuperAdminBackups = () => {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [fileRestoreDialogOpen, setFileRestoreDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<Backup | null>(null);
   const [uploadedFile, setUploadedFile] = useState<any>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [targetCompanyId, setTargetCompanyId] = useState<string>('');
+  const [createNewCompany, setCreateNewCompany] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: backups, isLoading } = useBackups(selectedCompany === 'all' ? undefined : selectedCompany);
@@ -148,9 +153,19 @@ const SuperAdminBackups = () => {
 
         setUploadedFile(json);
         
-        // Auto-select company if available
-        if (json.backup_info.company_id) {
-          setTargetCompanyId(json.backup_info.company_id);
+        // Check if company exists
+        const companyId = json.backup_info.company_id;
+        if (companyId) {
+          const companyExists = companies?.some(c => c.id === companyId);
+          if (companyExists) {
+            setTargetCompanyId(companyId);
+            setCreateNewCompany(false);
+          } else {
+            // Company doesn't exist - offer to create it
+            setTargetCompanyId(companyId);
+            setCreateNewCompany(true);
+            toast.info(`الشركة "${json.backup_info.company_name}" غير موجودة - سيتم إنشاؤها تلقائياً`);
+          }
         }
         
         toast.success('تم تحميل الملف بنجاح');
@@ -163,14 +178,24 @@ const SuperAdminBackups = () => {
   };
 
   const handleRestoreFromFile = async () => {
-    if (!uploadedFile || !targetCompanyId) {
+    if (!uploadedFile) {
+      toast.error('يرجى رفع ملف النسخة الاحتياطية');
+      return;
+    }
+
+    // Use company_id from backup if creating new company, otherwise use selected
+    const companyIdToUse = createNewCompany 
+      ? uploadedFile.backup_info.company_id 
+      : targetCompanyId;
+
+    if (!companyIdToUse) {
       toast.error('يرجى اختيار الشركة المستهدفة');
       return;
     }
 
     await restoreBackup.mutateAsync({
       backupData: uploadedFile,
-      companyId: targetCompanyId,
+      companyId: companyIdToUse,
       restoredBy: user?.id
     });
 
@@ -178,6 +203,7 @@ const SuperAdminBackups = () => {
     setUploadedFile(null);
     setUploadedFileName('');
     setTargetCompanyId('');
+    setCreateNewCompany(false);
   };
 
   const handleDelete = async () => {
@@ -220,6 +246,14 @@ const SuperAdminBackups = () => {
             <p className="text-slate-400">إدارة النسخ الاحتياطية واستعادة البيانات</p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={() => setSettingsDialogOpen(true)}
+              variant="outline"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              <Settings className="w-4 h-4 ml-2" />
+              الإعدادات
+            </Button>
             <Button 
               onClick={() => handleCreateBackup()} 
               disabled={createBackup.isPending}
@@ -644,6 +678,9 @@ const SuperAdminBackups = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Settings Dialog */}
+      <BackupSettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
     </SuperAdminLayout>
   );
 };
