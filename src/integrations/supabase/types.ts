@@ -868,6 +868,42 @@ export type Database = {
           },
         ]
       }
+      global_backup_settings: {
+        Row: {
+          auto_backup_enabled: boolean | null
+          auto_email_enabled: boolean | null
+          backup_hour: number | null
+          backup_minute: number | null
+          created_at: string
+          id: string
+          last_auto_backup_at: string | null
+          next_auto_backup_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          auto_backup_enabled?: boolean | null
+          auto_email_enabled?: boolean | null
+          backup_hour?: number | null
+          backup_minute?: number | null
+          created_at?: string
+          id?: string
+          last_auto_backup_at?: string | null
+          next_auto_backup_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_backup_enabled?: boolean | null
+          auto_email_enabled?: boolean | null
+          backup_hour?: number | null
+          backup_minute?: number | null
+          created_at?: string
+          id?: string
+          last_auto_backup_at?: string | null
+          next_auto_backup_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       join_request_reviewers: {
         Row: {
           company_id: string
