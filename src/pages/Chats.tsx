@@ -13,7 +13,7 @@ const Chats = () => {
 
   return (
     <DashboardLayout>
-      <div className="h-[calc(100vh-4rem)] flex overflow-hidden rounded-lg border bg-card shadow-sm">
+      <div className="h-[calc(100vh-7rem)] flex overflow-hidden rounded-xl shadow-xl border border-white/10">
         {/* Chat List - Hidden on mobile when chat is selected */}
         <div className={cn(
           'w-full md:w-80 lg:w-96 shrink-0',
@@ -27,7 +27,7 @@ const Chats = () => {
 
         {/* Chat View */}
         <div className={cn(
-          'flex-1',
+          'flex-1 bg-[#0e1621]',
           !selectedEmployee && 'hidden md:flex'
         )}>
           <ChatView

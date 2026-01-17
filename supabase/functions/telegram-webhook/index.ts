@@ -254,7 +254,8 @@ serve(async (req) => {
           telegramChatId,
           text.replace(/<[^>]*>/g, ''), // Remove HTML tags for logging
           'outgoing',
-          'text'
+          'text',
+          keyboard ? { keyboard } : {}
         )
       }
     }
@@ -575,7 +576,7 @@ serve(async (req) => {
         case 'check_in':
           // For check_in, only check today's attendance (not yesterday's open shift)
           if (todayAttendance) {
-            await sendMessage(botToken, chatId, '⚠️ لقد سجلت حضورك اليوم بالفعل!', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('⚠️ لقد سجلت حضورك اليوم بالفعل!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
@@ -805,7 +806,7 @@ serve(async (req) => {
               .update({ status: 'on_break' })
               .eq('id', attendance.id)
 
-            await sendMessage(botToken, chatId, 
+            await sendAndLogMessage(
               `☕ بدأت الاستراحة\n\n⏰ الوقت: ${localTime.time}${nightShiftNote}`,
               getEmployeeKeyboard(managerPermissions)
             )
@@ -814,9 +815,9 @@ serve(async (req) => {
 
         case 'end_break':
           if (!attendance) {
-            await sendMessage(botToken, chatId, '⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('⚠️ لم تسجل حضورك بعد! لا يوجد سجل حضور مفتوح.', getEmployeeKeyboard(managerPermissions))
           } else if (attendance.status !== 'on_break') {
-            await sendMessage(botToken, chatId, '⚠️ أنت لست في استراحة!', getEmployeeKeyboard(managerPermissions))
+            await sendAndLogMessage('⚠️ أنت لست في استراحة!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
@@ -851,7 +852,7 @@ serve(async (req) => {
               .update({ status: 'checked_in' })
               .eq('id', attendance.id)
 
-            await sendMessage(botToken, chatId, 
+            await sendAndLogMessage(
               `✅ انتهت الاستراحة\n\n⏰ الوقت: ${localTime.time}${nightShiftNote}`,
               getEmployeeKeyboard(managerPermissions)
             )
@@ -861,7 +862,7 @@ serve(async (req) => {
         case 'request_leave':
           // Start leave request flow - ask for leave type
           await setSession('leave_type_choice', {})
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `📝 <b>طلب إجازة</b>\n\n` +
             `📊 رصيدك الحالي:\n` +
             `• إجازات طارئة: ${employee.emergency_leave_balance ?? companyDefaults.emergency_leave_days} يوم\n` +
@@ -880,7 +881,7 @@ serve(async (req) => {
         case 'leave_emergency': {
           // Ask for the day - today or another day using date picker buttons
           await setSession('leave_date_choice', { leave_type: 'emergency' })
-          await sendMessage(botToken, chatId, 
+          await sendAndLogMessage(
             `🚨 <b>إجازة طارئة</b>\n\n` +
             `📊 رصيدك المتاح: ${employee.emergency_leave_balance ?? companyDefaults.emergency_leave_days} يوم\n\n` +
             `اختر يوم الإجازة:`,
@@ -1853,7 +1854,7 @@ serve(async (req) => {
       await deleteSession() // Clear any pending session
       
       if (employee) {
-        await sendMessage(botToken, chatId, 
+        await sendAndLogMessage(
           `مرحباً ${employee.full_name}! 👋\n\nاختر من الأزرار أدناه:`,
           getEmployeeKeyboard(managerPermissions)
         )
