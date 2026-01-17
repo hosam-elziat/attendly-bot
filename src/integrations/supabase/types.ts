@@ -162,6 +162,109 @@ export type Database = {
           },
         ]
       }
+      backup_settings: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          email_address: string | null
+          email_enabled: boolean | null
+          frequency: string | null
+          id: string
+          is_active: boolean | null
+          last_backup_at: string | null
+          next_backup_at: string | null
+          retention_days: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          email_address?: string | null
+          email_enabled?: boolean | null
+          frequency?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_backup_at?: string | null
+          next_backup_at?: string | null
+          retention_days?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          email_address?: string | null
+          email_enabled?: boolean | null
+          frequency?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_backup_at?: string | null
+          next_backup_at?: string | null
+          retention_days?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backups: {
+        Row: {
+          backup_data: Json
+          backup_type: string
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          email_sent: boolean | null
+          email_sent_at: string | null
+          id: string
+          notes: string | null
+          size_bytes: number | null
+          status: string
+          tables_included: string[]
+        }
+        Insert: {
+          backup_data: Json
+          backup_type?: string
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email_sent?: boolean | null
+          email_sent_at?: string | null
+          id?: string
+          notes?: string | null
+          size_bytes?: number | null
+          status?: string
+          tables_included: string[]
+        }
+        Update: {
+          backup_data?: Json
+          backup_type?: string
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email_sent?: boolean | null
+          email_sent_at?: string | null
+          id?: string
+          notes?: string | null
+          size_bytes?: number | null
+          status?: string
+          tables_included?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backups_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_logs: {
         Row: {
           attendance_id: string
