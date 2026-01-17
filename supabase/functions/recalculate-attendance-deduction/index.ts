@@ -282,7 +282,7 @@ serve(async (req) => {
 
     // Send notification to employee
     if (botToken && employee.telegram_chat_id) {
-      await sendMessage(botToken, parseInt(employee.telegram_chat_id), notificationMessage)
+      await sendAndLogMessage(supabase, botToken, employee, notificationMessage)
       console.log('Notification sent to employee:', employee.full_name)
     }
 
@@ -308,7 +308,13 @@ serve(async (req) => {
   }
 })
 
-async function sendMessage(botToken: string, chatId: number, text: string) {
+async function sendAndLogMessage(
+  supabase: any,
+  botToken: string, 
+  employee: any,
+  text: string
+) {
+  const chatId = parseInt(employee.telegram_chat_id)
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`
   const response = await fetch(url, {
     method: 'POST',
@@ -320,7 +326,27 @@ async function sendMessage(botToken: string, chatId: number, text: string) {
     })
   })
 
-  if (!response.ok) {
+  let telegramMessageId = null
+  if (response.ok) {
+    const result = await response.json()
+    telegramMessageId = result.result?.message_id
+  } else {
     console.error('Failed to send message:', await response.text())
+  }
+
+  // Log the message
+  try {
+    await supabase.from('telegram_messages').insert({
+      company_id: employee.company_id,
+      employee_id: employee.id,
+      telegram_chat_id: employee.telegram_chat_id,
+      message_text: text.replace(/<[^>]*>/g, ''), // Strip HTML
+      direction: 'outgoing',
+      message_type: 'notification',
+      telegram_message_id: telegramMessageId,
+      metadata: { source: 'recalculate-attendance-deduction' }
+    })
+  } catch (logError) {
+    console.error('Failed to log message:', logError)
   }
 }

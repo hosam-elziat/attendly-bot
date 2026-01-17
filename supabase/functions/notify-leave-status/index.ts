@@ -103,24 +103,6 @@ serve(async (req) => {
     const leaveBalance = employee.leave_balance ?? company?.annual_leave_days ?? 0
     const emergencyBalance = employee.emergency_leave_balance ?? company?.emergency_leave_days ?? 0
 
-    const sendTelegramMessage = async (targetChatId: string, text: string) => {
-      const telegramResponse = await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: targetChatId,
-          text,
-          parse_mode: 'HTML'
-        })
-      })
-
-      const telegramResult = await telegramResponse.json()
-
-      if (!telegramResponse.ok) {
-        throw new Error(`Telegram API error: ${JSON.stringify(telegramResult)}`)
-      }
-    }
-
     let message = ''
     if (status === 'approved') {
       message = `✅ <b>تمت الموافقة على طلب إجازتك!</b>\n\n` +
@@ -147,7 +129,7 @@ serve(async (req) => {
 
     // 1) Notify employee
     try {
-      await sendTelegramMessage(employee.telegram_chat_id, message)
+      await sendAndLogMessage(supabase, bot.bot_token, employee, message)
       console.log('Employee leave-status notification sent successfully')
     } catch (err) {
       console.error('Failed to notify employee via Telegram:', err)
@@ -193,7 +175,16 @@ serve(async (req) => {
         for (const manager of managers) {
           if (manager.manager_telegram_chat_id) {
             try {
-              await sendTelegramMessage(String(manager.manager_telegram_chat_id), managerMsg)
+              // Get manager employee info for logging
+              const { data: managerEmployee } = await supabase
+                .from('employees')
+                .select('id, company_id, telegram_chat_id')
+                .eq('id', manager.manager_employee_id)
+                .single()
+              
+              if (managerEmployee) {
+                await sendAndLogMessage(supabase, bot.bot_token, managerEmployee, managerMsg)
+              }
               console.log(`Notified manager ${manager.manager_name} about ${employee.full_name}'s leave decision`)
             } catch (managerNotifyErr) {
               console.error('Failed to notify manager via Telegram:', managerNotifyErr)
@@ -221,3 +212,46 @@ serve(async (req) => {
     )
   }
 })
+
+async function sendAndLogMessage(
+  supabase: any,
+  botToken: string, 
+  employee: any,
+  text: string
+) {
+  const chatId = employee.telegram_chat_id
+  
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML'
+    })
+  })
+
+  let telegramMessageId = null
+  if (response.ok) {
+    const result = await response.json()
+    telegramMessageId = result.result?.message_id
+  } else {
+    throw new Error(`Telegram API error: ${await response.text()}`)
+  }
+
+  // Log the message
+  try {
+    await supabase.from('telegram_messages').insert({
+      company_id: employee.company_id,
+      employee_id: employee.id,
+      telegram_chat_id: chatId,
+      message_text: text.replace(/<[^>]*>/g, ''), // Strip HTML
+      direction: 'outgoing',
+      message_type: 'notification',
+      telegram_message_id: telegramMessageId,
+      metadata: { source: 'notify-leave-status' }
+    })
+  } catch (logError) {
+    console.error('Failed to log message:', logError)
+  }
+}
