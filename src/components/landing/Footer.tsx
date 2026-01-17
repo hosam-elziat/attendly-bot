@@ -6,10 +6,8 @@ const Footer = () => {
       <div className="container mx-auto px-6">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">HR</span>
-            </div>
-            <span className="font-semibold text-foreground">AttendEase</span>
+            <img src="/logo.png" alt="Auto Missions Bot" className="w-8 h-8 rounded-lg" />
+            <span className="font-semibold text-foreground">Auto Missions Bot</span>
           </div>
           
           <nav className="flex items-center gap-6 text-sm text-muted-foreground">
@@ -25,7 +23,7 @@ const Footer = () => {
           </nav>
           
           <p className="text-sm text-muted-foreground">
-            © 2025 AttendEase. All rights reserved.
+            © 2025 Auto Missions Bot. All rights reserved.
           </p>
         </div>
       </div>

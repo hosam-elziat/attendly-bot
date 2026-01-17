@@ -118,10 +118,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           {/* Logo */}
           <div className="p-6 border-b border-sidebar-border">
             <Link to="/dashboard" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">HR</span>
-              </div>
-              <span className="font-semibold text-sidebar-foreground text-lg">AttendEase</span>
+              <img src="/logo.png" alt="Auto Missions Bot" className="w-9 h-9 rounded-lg" />
+              <span className="font-semibold text-sidebar-foreground text-lg">Auto Missions Bot</span>
             </Link>
           </div>
 
