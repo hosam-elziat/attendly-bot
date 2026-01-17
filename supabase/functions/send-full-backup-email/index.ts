@@ -46,12 +46,11 @@ serve(async (req: Request) => {
         .single();
       backup = data;
     } else {
-      // Get latest full system backup that hasn't been emailed
+      // Get latest full system backup (regardless of email_sent status)
       const { data } = await supabase
         .from('backups')
         .select('*')
         .eq('backup_type', 'full_system')
-        .eq('email_sent', false)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -59,8 +58,8 @@ serve(async (req: Request) => {
     }
 
     if (!backup) {
-      return new Response(JSON.stringify({ success: true, message: 'No pending backups to send' }), { 
-        status: 200, 
+      return new Response(JSON.stringify({ success: false, error: 'لا توجد نسخ احتياطية للنظام. قم بإنشاء نسخة أولاً.' }), { 
+        status: 404, 
         headers: { "Content-Type": "application/json", ...corsHeaders } 
       });
     }
