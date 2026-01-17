@@ -35,7 +35,7 @@ import SuperAdminSubscriptions from "./pages/super-admin/SuperAdminSubscriptions
 import SuperAdminTeam from "./pages/super-admin/SuperAdminTeam";
 import SuperAdminPlans from "./pages/super-admin/SuperAdminPlans";
 import SuperAdminTelegramBots from "./pages/super-admin/SuperAdminTelegramBots";
-
+import SuperAdminBackups from "./pages/super-admin/SuperAdminBackups";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -111,6 +111,9 @@ const App = () => (
                   } />
                   <Route path="/super-admin/telegram-bots" element={
                     <SuperAdminProtectedRoute><SuperAdminTelegramBots /></SuperAdminProtectedRoute>
+                  } />
+                  <Route path="/super-admin/backups" element={
+                    <SuperAdminProtectedRoute><SuperAdminBackups /></SuperAdminProtectedRoute>
                   } />
                   
                   <Route path="*" element={<NotFound />} />

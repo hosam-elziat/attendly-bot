@@ -26,3 +26,15 @@ verify_jwt = false
 
 [functions.notify-employee]
 verify_jwt = false
+
+[functions.notify-leave-status]
+verify_jwt = false
+
+[functions.create-backup]
+verify_jwt = false
+
+[functions.send-backup-email]
+verify_jwt = false
+
+[functions.restore-backup]
+verify_jwt = false

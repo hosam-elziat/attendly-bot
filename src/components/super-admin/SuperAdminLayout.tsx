@@ -33,6 +33,7 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
     { icon: CreditCard, label: 'الباقات والأسعار', path: '/super-admin/plans' },
     { icon: UserCog, label: 'فريق العمل', path: '/super-admin/team' },
     { icon: LayoutDashboard, label: 'بوتات التيليجرام', path: '/super-admin/telegram-bots' },
+    { icon: LayoutDashboard, label: 'النسخ الاحتياطي', path: '/super-admin/backups' },
   ];
 
   const handleLogout = async () => {
