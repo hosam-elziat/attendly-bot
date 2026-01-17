@@ -104,19 +104,35 @@ serve(async (req) => {
       const today = new Date().toISOString().split('T')[0]
 
       if (pendingRequest.request_type === 'check_in') {
+        // Build insert data with location info from pending request
+        const insertData: Record<string, unknown> = {
+          employee_id: employee.id,
+          company_id: companyId,
+          date: today,
+          check_in_time: attendanceTime,
+          status: 'checked_in',
+          notes: action === 'modify' 
+            ? `تم تعديل الوقت بواسطة ${manager_name || 'المدير'}`
+            : pendingRequest.verified_location_name 
+              ? `تم التسجيل من موقع: ${pendingRequest.verified_location_name}`
+              : null
+        }
+
+        // Copy location data from pending request if available
+        if (pendingRequest.verified_location_id) {
+          insertData.check_in_location_id = pendingRequest.verified_location_id
+        }
+        if (pendingRequest.latitude !== null && pendingRequest.latitude !== undefined) {
+          insertData.check_in_latitude = pendingRequest.latitude
+        }
+        if (pendingRequest.longitude !== null && pendingRequest.longitude !== undefined) {
+          insertData.check_in_longitude = pendingRequest.longitude
+        }
+
         // Create attendance log
         const { data: newAttendance, error: attendanceError } = await supabase
           .from('attendance_logs')
-          .insert({
-            employee_id: employee.id,
-            company_id: companyId,
-            date: today,
-            check_in_time: attendanceTime,
-            status: 'checked_in',
-            notes: action === 'modify' 
-              ? `تم تعديل الوقت بواسطة ${manager_name || 'المدير'}`
-              : null
-          })
+          .insert(insertData)
           .select('id')
           .single()
 
