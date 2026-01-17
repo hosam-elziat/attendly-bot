@@ -69,6 +69,19 @@ serve(async (req) => {
       .eq('id', companyId)
       .single()
 
+    const companyTimezone = company?.timezone || 'Africa/Cairo'
+
+    // Helper function to format time in company timezone
+    const formatTimeInTimezone = (dateStr: string) => {
+      const date = new Date(dateStr)
+      return date.toLocaleTimeString('ar-EG', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: companyTimezone,
+        hour12: false
+      })
+    }
+
     // Get bot token for notifications
     const { data: bot } = await supabase
       .from('telegram_bots')
@@ -144,13 +157,13 @@ serve(async (req) => {
         .delete()
         .eq('id', existingDeduction.id)
       
-      notificationMessage = `✏️ تم تعديل موعد حضورك\n📅 التاريخ: ${attendanceLog.date}\n⏰ الوقت القديم: ${new Date(old_check_in_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}\n⏰ الوقت الجديد: ${new Date(new_check_in_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}\n`
+      notificationMessage = `✏️ تم تعديل موعد حضورك\n📅 التاريخ: ${attendanceLog.date}\n⏰ الوقت القديم: ${formatTimeInTimezone(old_check_in_time)}\n⏰ الوقت الجديد: ${formatTimeInTimezone(new_check_in_time)}\n`
       
       if (existingDeduction.deduction && existingDeduction.deduction > 0) {
         notificationMessage += `\n✅ تم إلغاء خصم ${existingDeduction.adjustment_days} يوم`
       }
     } else {
-      notificationMessage = `✏️ تم تعديل موعد حضورك\n📅 التاريخ: ${attendanceLog.date}\n⏰ الوقت الجديد: ${new Date(new_check_in_time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}\n`
+      notificationMessage = `✏️ تم تعديل موعد حضورك\n📅 التاريخ: ${attendanceLog.date}\n⏰ الوقت الجديد: ${formatTimeInTimezone(new_check_in_time)}\n`
     }
 
     // Calculate new deduction if still late
