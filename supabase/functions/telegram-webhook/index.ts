@@ -1604,15 +1604,41 @@ serve(async (req) => {
         const userLat = update.message.location.latitude
         const userLng = update.message.location.longitude
         
-        // Get company location settings
+        // Get employee's allowed locations (if assigned) or all company locations
+        const { data: employeeLocations } = await supabase
+          .from('employee_locations')
+          .select('location_id')
+          .eq('employee_id', employee.id)
+        
+        const employeeLocationIds = employeeLocations?.map(el => el.location_id) || []
+        
+        // Get company locations
+        let locationsQuery = supabase
+          .from('company_locations')
+          .select('*')
+          .eq('company_id', companyId)
+          .eq('is_active', true)
+        
+        // If employee has specific locations assigned, filter to those
+        if (employeeLocationIds.length > 0) {
+          locationsQuery = locationsQuery.in('id', employeeLocationIds)
+        }
+        
+        const { data: companyLocations } = await locationsQuery
+        
+        // Fallback to legacy company location if no locations defined
         const companyLat = company?.company_latitude
         const companyLng = company?.company_longitude
-        const radiusMeters = company?.location_radius_meters || 100
+        const defaultRadius = company?.location_radius_meters || 100
         
-        if (!companyLat || !companyLng) {
+        // Check if we have any locations to verify against
+        const hasLocations = companyLocations && companyLocations.length > 0
+        const hasLegacyLocation = companyLat && companyLng
+        
+        if (!hasLocations && !hasLegacyLocation) {
           await sendMessage(botToken, chatId, 
             '⚠️ <b>خطأ في الإعدادات</b>\n\n' +
-            'لم يتم تحديد موقع الشركة بعد.\n' +
+            'لم يتم تحديد مواقع للشركة بعد.\n' +
             'يرجى التواصل مع الإدارة.',
             getEmployeeKeyboard(managerPermissions)
           )
@@ -1620,17 +1646,44 @@ serve(async (req) => {
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
         
-        // Calculate distance using Haversine formula
-        const distance = calculateDistance(userLat, userLng, companyLat, companyLng)
+        // Check against all allowed locations
+        let matchedLocation: { id: string; name: string; distance: number } | null = null
+        let closestDistance = Infinity
+        let closestLocationName = ''
         
-        console.log('Location verification:', {
-          userLat, userLng,
-          companyLat, companyLng,
-          distance, radiusMeters
-        })
+        if (hasLocations) {
+          for (const loc of companyLocations!) {
+            const distance = calculateDistance(userLat, userLng, Number(loc.latitude), Number(loc.longitude))
+            
+            console.log('Location check:', {
+              locationName: loc.name,
+              userLat, userLng,
+              locLat: loc.latitude, locLng: loc.longitude,
+              distance, radius: loc.radius_meters
+            })
+            
+            if (distance < closestDistance) {
+              closestDistance = distance
+              closestLocationName = loc.name
+            }
+            
+            if (distance <= loc.radius_meters) {
+              matchedLocation = { id: loc.id, name: loc.name, distance }
+              break // Found a valid location
+            }
+          }
+        } else if (hasLegacyLocation) {
+          // Fallback to legacy single location
+          const distance = calculateDistance(userLat, userLng, companyLat, companyLng)
+          closestDistance = distance
+          closestLocationName = 'المقر الرئيسي'
+          
+          if (distance <= defaultRadius) {
+            matchedLocation = { id: '', name: 'المقر الرئيسي', distance }
+          }
+        }
         
-        // Check if user is within allowed radius
-        if (distance <= radiusMeters) {
+        if (matchedLocation) {
           // Location verified - process check-in
           const localTime = getLocalTime(companyTimezone)
           const nowUtc = new Date().toISOString()
@@ -1659,11 +1712,19 @@ serve(async (req) => {
             .eq('id', employee.id)
             .single()
           
-          // Process check-in directly
-          await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, locCompanyPolicies, locEmpDetails, managerPermissions)
+          // Process check-in directly with location info
+          await processDirectCheckIn(
+            supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, 
+            companyDefaults, locCompanyPolicies, locEmpDetails, managerPermissions,
+            { locationId: matchedLocation.id || null, locationName: matchedLocation.name, latitude: userLat, longitude: userLng }
+          )
           
           // Remove keyboard and clear session
-          await removeReplyKeyboard(botToken, chatId, `✅ تم التحقق من موقعك بنجاح!\n📍 المسافة: ${Math.round(distance)} متر`)
+          await removeReplyKeyboard(botToken, chatId, 
+            `✅ تم التحقق من موقعك بنجاح!\n` +
+            `📍 الموقع: <b>${matchedLocation.name}</b>\n` +
+            `📏 المسافة: ${Math.round(matchedLocation.distance)} متر`
+          )
           await deleteSession()
         } else {
           // Location outside allowed radius
@@ -1673,14 +1734,19 @@ serve(async (req) => {
             latitude: userLat,
             longitude: userLng,
             is_suspicious: true,
-            suspicion_reason: `خارج نطاق الشركة - المسافة: ${Math.round(distance)} متر`
+            suspicion_reason: `خارج نطاق المواقع المسموحة - أقرب موقع: ${closestLocationName} (${Math.round(closestDistance)} متر)`
           })
+          
+          const locationsList = hasLocations 
+            ? companyLocations!.map(l => `• ${l.name} (نطاق ${l.radius_meters}م)`).join('\n')
+            : `• المقر الرئيسي (نطاق ${defaultRadius}م)`
           
           await removeReplyKeyboard(botToken, chatId, 
             `❌ <b>فشل التحقق من الموقع</b>\n\n` +
-            `📍 موقعك على بعد <b>${Math.round(distance)} متر</b> من مقر الشركة.\n` +
-            `⚠️ يجب أن تكون ضمن <b>${radiusMeters} متر</b> للتسجيل.\n\n` +
-            `يرجى التأكد من تواجدك داخل مقر العمل والمحاولة مرة أخرى.`
+            `📍 أقرب موقع: <b>${closestLocationName}</b>\n` +
+            `📏 المسافة: <b>${Math.round(closestDistance)} متر</b>\n\n` +
+            `🏢 <b>المواقع المسموحة لك:</b>\n${locationsList}\n\n` +
+            `يرجى التأكد من تواجدك داخل نطاق أحد المواقع المسموحة.`
           )
           await deleteSession()
         }
@@ -3080,6 +3146,13 @@ function getArabicDayName(dayIndex: number): string {
 }
 
 // Helper function for direct check-in (Level 1)
+interface LocationInfo {
+  locationId: string | null;
+  locationName: string;
+  latitude: number;
+  longitude: number;
+}
+
 async function processDirectCheckIn(
   supabase: any,
   botToken: string,
@@ -3092,22 +3165,41 @@ async function processDirectCheckIn(
   companyDefaults: any,
   companyPolicies: any,
   empDetails: any,
-  managerPermissions: any
+  managerPermissions: any,
+  locationInfo?: LocationInfo
 ) {
   let notes = ''
   let lateMessage = ''
   
   const workStartTime = employee.work_start_time || companyDefaults.work_start_time
   
-  // Create attendance log
-  const { data: newAttendance, error: insertError } = await supabase.from('attendance_logs').insert({
+  // Create attendance log with location info if provided
+  const insertData: any = {
     employee_id: employee.id,
     company_id: companyId,
     date: today,
     check_in_time: nowUtc,
     status: 'checked_in',
     notes: null
-  }).select('id').single()
+  }
+  
+  // Add location tracking if available
+  if (locationInfo) {
+    if (locationInfo.locationId) {
+      insertData.check_in_location_id = locationInfo.locationId
+    }
+    insertData.check_in_latitude = locationInfo.latitude
+    insertData.check_in_longitude = locationInfo.longitude
+    
+    // Add location name to notes for reference
+    insertData.notes = `تم التسجيل من موقع: ${locationInfo.locationName}`
+  }
+  
+  const { data: newAttendance, error: insertError } = await supabase
+    .from('attendance_logs')
+    .insert(insertData)
+    .select('id')
+    .single()
 
   if (insertError) {
     console.error('Failed to create attendance:', insertError)

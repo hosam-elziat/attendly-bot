@@ -78,6 +78,9 @@ export type Database = {
       }
       attendance_logs: {
         Row: {
+          check_in_latitude: number | null
+          check_in_location_id: string | null
+          check_in_longitude: number | null
           check_in_time: string | null
           check_out_time: string | null
           company_id: string
@@ -90,6 +93,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          check_in_latitude?: number | null
+          check_in_location_id?: string | null
+          check_in_longitude?: number | null
           check_in_time?: string | null
           check_out_time?: string | null
           company_id: string
@@ -102,6 +108,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          check_in_latitude?: number | null
+          check_in_location_id?: string | null
+          check_in_longitude?: number | null
           check_in_time?: string | null
           check_out_time?: string | null
           company_id?: string
@@ -114,6 +123,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "attendance_logs_check_in_location_id_fkey"
+            columns: ["check_in_location_id"]
+            isOneToOne: false
+            referencedRelation: "company_locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attendance_logs_company_id_fkey"
             columns: ["company_id"]
@@ -1042,6 +1058,8 @@ export type Database = {
           status: string
           telegram_message_id: number | null
           updated_at: string
+          verified_location_id: string | null
+          verified_location_name: string | null
           vpn_detected: boolean | null
         }
         Insert: {
@@ -1070,6 +1088,8 @@ export type Database = {
           status?: string
           telegram_message_id?: number | null
           updated_at?: string
+          verified_location_id?: string | null
+          verified_location_name?: string | null
           vpn_detected?: boolean | null
         }
         Update: {
@@ -1098,6 +1118,8 @@ export type Database = {
           status?: string
           telegram_message_id?: number | null
           updated_at?: string
+          verified_location_id?: string | null
+          verified_location_name?: string | null
           vpn_detected?: boolean | null
         }
         Relationships: [
@@ -1113,6 +1135,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_attendance_verified_location_id_fkey"
+            columns: ["verified_location_id"]
+            isOneToOne: false
+            referencedRelation: "company_locations"
             referencedColumns: ["id"]
           },
         ]
