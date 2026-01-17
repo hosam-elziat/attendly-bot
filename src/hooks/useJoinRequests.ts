@@ -259,6 +259,123 @@ export function useCheckDeletedEmployee() {
   });
 }
 
+// Hook to check for inactive employee when processing join request
+export function useCheckInactiveEmployee() {
+  const { profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (telegram_chat_id: string) => {
+      if (!profile?.company_id) throw new Error('No company found');
+
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, full_name, email, phone, department, telegram_chat_id, is_active')
+        .eq('telegram_chat_id', telegram_chat_id)
+        .eq('company_id', profile.company_id)
+        .eq('is_active', false)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      return data || null;
+    },
+  });
+}
+
+// Hook to reactivate an inactive employee
+export function useReactivateEmployee() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ 
+      employeeId, 
+      joinRequestId,
+      telegram_chat_id 
+    }: { 
+      employeeId: string; 
+      joinRequestId: string;
+      telegram_chat_id: string;
+    }) => {
+      if (!profile?.company_id) throw new Error('No company found');
+
+      // Reactivate the employee
+      const { data: employee, error: updateError } = await supabase
+        .from('employees')
+        .update({ 
+          is_active: true, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', employeeId)
+        .select('full_name')
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Update join request status to approved
+      const { error: jrError } = await supabase
+        .from('join_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', joinRequestId);
+
+      if (jrError) throw jrError;
+
+      // Send Telegram notification
+      try {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('telegram_bot_username')
+          .eq('id', profile.company_id)
+          .single();
+
+        if (company?.telegram_bot_username) {
+          const { data: bot } = await supabase
+            .from('telegram_bots')
+            .select('bot_token')
+            .eq('bot_username', company.telegram_bot_username)
+            .single();
+
+          if (bot?.bot_token) {
+            await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: telegram_chat_id,
+                text: `🎉 مرحباً بعودتك ${employee?.full_name}!\n\nتم إعادة تفعيل حسابك بنجاح!\nيمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.\n\nأرسل /start للبدء.`,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
+                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
+                    ]
+                  ]
+                }
+              })
+            });
+          }
+        }
+      } catch (notifyError) {
+        console.error('Failed to send Telegram notification:', notifyError);
+      }
+
+      return { success: true, employeeName: employee?.full_name };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['join-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      toast.success(`تم إعادة تفعيل الموظف ${data.employeeName} بنجاح`);
+    },
+    onError: (error) => {
+      console.error('Error reactivating employee:', error);
+      toast.error('حدث خطأ أثناء إعادة تفعيل الموظف');
+    },
+  });
+}
+
 // Hook to restore a deleted employee
 export function useRestoreDeletedEmployee() {
   const queryClient = useQueryClient();

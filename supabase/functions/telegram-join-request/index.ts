@@ -49,15 +49,28 @@ serve(async (req) => {
         )
       }
 
-      // Check if employee already exists with this telegram_chat_id
+      // Check if employee already exists with this telegram_chat_id (active)
       const { data: existingEmployee } = await supabase
         .from('employees')
-        .select('id')
+        .select('id, is_active, full_name')
         .eq('telegram_chat_id', telegram_chat_id)
         .eq('company_id', bot.assigned_company_id)
         .single()
 
       if (existingEmployee) {
+        // Check if employee is inactive
+        if (existingEmployee.is_active === false) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'employee_inactive',
+              employee_id: existingEmployee.id,
+              employee_name: existingEmployee.full_name || 'Unknown',
+              message: 'This employee is currently inactive. Would you like to reactivate them?'
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+          )
+        }
         return new Response(
           JSON.stringify({ success: false, error: 'Employee already registered' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
