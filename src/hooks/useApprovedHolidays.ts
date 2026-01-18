@@ -68,9 +68,9 @@ export const useApproveHoliday = () => {
         days_count: daysCount,
       };
       
-      // Update holiday_date if a different start date was selected
+      // Set start_date if provided
       if (startDate) {
-        updateData.holiday_date = startDate;
+        updateData.start_date = startDate;
       }
 
       const { error } = await supabase

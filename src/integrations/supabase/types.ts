@@ -29,6 +29,7 @@ export type Database = {
           month: number
           notified_at: string | null
           notified_employees: boolean | null
+          start_date: string | null
           updated_at: string
           year: number
         }
@@ -46,6 +47,7 @@ export type Database = {
           month: number
           notified_at?: string | null
           notified_employees?: boolean | null
+          start_date?: string | null
           updated_at?: string
           year: number
         }
@@ -63,6 +65,7 @@ export type Database = {
           month?: number
           notified_at?: string | null
           notified_employees?: boolean | null
+          start_date?: string | null
           updated_at?: string
           year?: number
         }
