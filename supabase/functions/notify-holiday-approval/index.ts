@@ -72,13 +72,29 @@ serve(async (req) => {
     }
 
     const botToken = bot.bot_token;
-    const holidayDate = new Date(holiday.holiday_date);
+    // Use start_date if available, otherwise fall back to holiday_date
+    const actualStartDate = holiday.start_date || holiday.holiday_date;
+    const holidayDate = new Date(actualStartDate);
     const formattedDate = holidayDate.toLocaleDateString('ar-EG', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
+
+    // Calculate end date if more than 1 day
+    let dateRangeText = formattedDate;
+    if (holiday.days_count > 1) {
+      const endDate = new Date(holidayDate);
+      endDate.setDate(endDate.getDate() + holiday.days_count - 1);
+      const formattedEndDate = endDate.toLocaleDateString('ar-EG', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      dateRangeText = `من ${formattedDate} إلى ${formattedEndDate}`;
+    }
 
     const daysText = holiday.days_count === 1 ? 'يوم واحد' : `${holiday.days_count} أيام`;
 
@@ -94,13 +110,13 @@ serve(async (req) => {
           `مرحباً ${employee.full_name}،\n\n` +
           `نود إبلاغكم بأنه تم إلغاء الإجازة الرسمية:\n` +
           `🏷️ <b>${holiday.holiday_name_local || holiday.holiday_name}</b>\n\n` +
-          `📅 التاريخ: ${formattedDate}\n\n` +
+          `📅 التاريخ: ${dateRangeText}\n\n` +
           `يرجى العلم بأن هذا اليوم سيكون يوم عمل عادي.`
         : `🎉 <b>تهنئة بمناسبة إجازة رسمية!</b>\n\n` +
           `مرحباً ${employee.full_name}،\n\n` +
           `نتقدم إليكم بأطيب التهاني بمناسبة:\n` +
           `🏷️ <b>${holiday.holiday_name_local || holiday.holiday_name}</b>\n\n` +
-          `📅 التاريخ: ${formattedDate}\n` +
+          `📅 التاريخ: ${dateRangeText}\n` +
           `⏰ المدة: ${daysText}\n\n` +
           `كل عام وأنتم بخير! 🌟`;
 
