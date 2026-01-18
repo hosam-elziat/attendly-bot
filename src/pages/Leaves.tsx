@@ -30,12 +30,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CreateScheduledLeaveDialog from '@/components/attendance/CreateScheduledLeaveDialog';
-import { Calendar, Check, X, Loader2, Trash2, RotateCcw, CalendarPlus, Users, Briefcase, User } from 'lucide-react';
+import EditScheduledLeaveDialog from '@/components/attendance/EditScheduledLeaveDialog';
+import { Calendar, Check, X, Loader2, Trash2, RotateCcw, CalendarPlus, Users, Briefcase, User, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Leaves = () => {
   const { t, language } = useLanguage();
   const [scheduledLeaveDialogOpen, setScheduledLeaveDialogOpen] = useState(false);
+  const [editLeaveDialogOpen, setEditLeaveDialogOpen] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState<ScheduledLeave | null>(null);
   
   const { data: leaveRequests = [], isLoading } = useLeaveRequests();
   const { data: scheduledLeaves = [], isLoading: scheduledLoading } = useScheduledLeaves();
@@ -118,8 +121,13 @@ const Leaves = () => {
     }
   };
 
-  const handleDeleteScheduledLeave = async (id: string) => {
-    await deleteScheduledLeave.mutateAsync(id);
+  const handleDeleteScheduledLeave = async (leave: ScheduledLeave) => {
+    await deleteScheduledLeave.mutateAsync({ id: leave.id, leaveData: leave });
+  };
+
+  const handleEditScheduledLeave = (leave: ScheduledLeave) => {
+    setSelectedLeave(leave);
+    setEditLeaveDialogOpen(true);
   };
 
   return (
@@ -498,6 +506,14 @@ const Leaves = () => {
                               <p className="text-xs text-muted-foreground truncate mb-2">{leave.reason}</p>
                             )}
                             <div className="flex items-center gap-2 mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditScheduledLeave(leave)}
+                              >
+                                <Edit className="w-4 h-4 me-1" />
+                                {language === 'ar' ? 'تعديل' : 'Edit'}
+                              </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
@@ -522,7 +538,7 @@ const Leaves = () => {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
                                     <AlertDialogAction 
-                                      onClick={() => handleDeleteScheduledLeave(leave.id)}
+                                      onClick={() => handleDeleteScheduledLeave(leave)}
                                       className="bg-destructive hover:bg-destructive/90"
                                     >
                                       {language === 'ar' ? 'حذف' : 'Delete'}
@@ -568,38 +584,48 @@ const Leaves = () => {
                             <TableCell className="text-muted-foreground">{getTargetName(leave)}</TableCell>
                             <TableCell className="text-muted-foreground">{leave.created_by_name || '—'}</TableCell>
                             <TableCell className="text-end">
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                    disabled={deleteScheduledLeave.isPending}
-                                    title={language === 'ar' ? 'حذف' : 'Delete'}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>{language === 'ar' ? 'حذف الإجازة المجدولة' : 'Delete Scheduled Leave'}</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      {language === 'ar' 
-                                        ? 'هل أنت متأكد من حذف هذه الإجازة؟'
-                                        : 'Are you sure you want to delete this scheduled leave?'}
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                      onClick={() => handleDeleteScheduledLeave(leave.id)}
-                                      className="bg-destructive hover:bg-destructive/90"
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEditScheduledLeave(leave)}
+                                  title={language === 'ar' ? 'تعديل' : 'Edit'}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      disabled={deleteScheduledLeave.isPending}
+                                      title={language === 'ar' ? 'حذف' : 'Delete'}
                                     >
-                                      {language === 'ar' ? 'حذف' : 'Delete'}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>{language === 'ar' ? 'حذف الإجازة المجدولة' : 'Delete Scheduled Leave'}</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        {language === 'ar' 
+                                          ? 'هل أنت متأكد من حذف هذه الإجازة؟'
+                                          : 'Are you sure you want to delete this scheduled leave?'}
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+                                      <AlertDialogAction 
+                                        onClick={() => handleDeleteScheduledLeave(leave)}
+                                        className="bg-destructive hover:bg-destructive/90"
+                                      >
+                                        {language === 'ar' ? 'حذف' : 'Delete'}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -616,6 +642,12 @@ const Leaves = () => {
         <CreateScheduledLeaveDialog 
           open={scheduledLeaveDialogOpen} 
           onOpenChange={setScheduledLeaveDialogOpen} 
+        />
+
+        <EditScheduledLeaveDialog 
+          open={editLeaveDialogOpen} 
+          onOpenChange={setEditLeaveDialogOpen}
+          leave={selectedLeave}
         />
       </div>
     </DashboardLayout>
