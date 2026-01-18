@@ -22,6 +22,49 @@ async function verifyCompanyAccess(supabase: any, userId: string, companyId: str
   return profile.company_id === companyId;
 }
 
+// Rate limiting check
+async function checkRateLimit(
+  supabase: any, 
+  userId: string, 
+  endpoint: string,
+  maxRequests: number = 10,
+  windowMinutes: number = 60
+): Promise<{ allowed: boolean; remaining: number; resetAt: Date }> {
+  const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000);
+  
+  const { data: rateLimits, error } = await supabase
+    .from("rate_limits")
+    .select("request_count")
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint)
+    .gte("window_start", windowStart.toISOString());
+  
+  if (error) {
+    console.error("Rate limit check error:", error);
+    return { allowed: true, remaining: maxRequests, resetAt: new Date(Date.now() + windowMinutes * 60 * 1000) };
+  }
+  
+  const currentCount = rateLimits?.reduce((sum: number, r: any) => sum + r.request_count, 0) || 0;
+  const remaining = Math.max(0, maxRequests - currentCount - 1);
+  const resetAt = new Date(Date.now() + windowMinutes * 60 * 1000);
+  
+  if (currentCount >= maxRequests) {
+    console.log(`Rate limit exceeded for user ${userId} on ${endpoint}: ${currentCount}/${maxRequests}`);
+    return { allowed: false, remaining: 0, resetAt };
+  }
+  
+  await supabase
+    .from("rate_limits")
+    .insert({
+      user_id: userId,
+      endpoint: endpoint,
+      request_count: 1,
+      window_start: new Date().toISOString()
+    });
+  
+  return { allowed: true, remaining, resetAt };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -77,7 +120,27 @@ serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    // ===== END SECURITY =====
+
+    // ===== RATE LIMITING =====
+    const rateLimit = await checkRateLimit(supabase, user.id, "ai-daily-summary", 10, 60);
+    if (!rateLimit.allowed) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please wait before generating another summary.",
+          retryAfter: Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000)
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": rateLimit.resetAt.toISOString()
+          } 
+        }
+      );
+    }
+    // ===== END RATE LIMITING =====
 
     const today = new Date().toISOString().split("T")[0];
 
