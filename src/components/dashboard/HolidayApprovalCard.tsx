@@ -3,9 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Flag, Check, X, Calendar, Loader2 } from 'lucide-react';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Flag, Check, X, Calendar, Loader2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { usePublicHolidays, PublicHoliday } from '@/hooks/usePublicHolidays';
 import {
@@ -28,6 +31,7 @@ const HolidayApprovalCard = () => {
   const rejectHoliday = useRejectHoliday();
 
   const [daysInputs, setDaysInputs] = useState<Record<string, number>>({});
+  const [startDateInputs, setStartDateInputs] = useState<Record<string, Date>>({});
 
   // Sync public holidays to approved_holidays table
   useEffect(() => {
@@ -61,10 +65,25 @@ const HolidayApprovalCard = () => {
     setDaysInputs((prev) => ({ ...prev, [holidayDate]: days }));
   };
 
+  const handleStartDateChange = (holidayDate: string, date: Date | undefined) => {
+    if (date) {
+      setStartDateInputs((prev) => ({ ...prev, [holidayDate]: date }));
+    }
+  };
+
+  const getStartDate = (holiday: typeof mergedHolidays[0]) => {
+    return startDateInputs[holiday.date] || new Date(holiday.date);
+  };
+
   const handleApprove = (holiday: typeof mergedHolidays[0]) => {
     if (!holiday.id) return;
     const days = daysInputs[holiday.date] || holiday.daysCount || 1;
-    approveHoliday.mutate({ holidayId: holiday.id, daysCount: days });
+    const startDate = startDateInputs[holiday.date] || new Date(holiday.date);
+    approveHoliday.mutate({ 
+      holidayId: holiday.id, 
+      daysCount: days,
+      startDate: format(startDate, 'yyyy-MM-dd')
+    });
   };
 
   const handleReject = (holiday: typeof mergedHolidays[0]) => {
@@ -121,9 +140,43 @@ const HolidayApprovalCard = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {!holiday.isApproved && (
                   <>
+                    {/* Start Date Picker */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {language === 'ar' ? 'تاريخ البدء:' : 'Start:'}
+                      </span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "h-8 w-[120px] justify-start text-left font-normal",
+                              !startDateInputs[holiday.date] && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-1 h-3 w-3" />
+                            <span className="text-xs">
+                              {format(getStartDate(holiday), 'd/M/yyyy')}
+                            </span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent
+                            mode="single"
+                            selected={getStartDate(holiday)}
+                            onSelect={(date) => handleStartDateChange(holiday.date, date)}
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* Days Count Input */}
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {language === 'ar' ? 'عدد الأيام:' : 'Days:'}

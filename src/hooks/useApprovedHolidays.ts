@@ -60,15 +60,22 @@ export const useApproveHoliday = () => {
   const { profile } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ holidayId, daysCount }: { holidayId: string; daysCount: number }) => {
+    mutationFn: async ({ holidayId, daysCount, startDate }: { holidayId: string; daysCount: number; startDate?: string }) => {
+      const updateData: Record<string, any> = {
+        is_approved: true,
+        approved_at: new Date().toISOString(),
+        approved_by: profile?.user_id,
+        days_count: daysCount,
+      };
+      
+      // Update holiday_date if a different start date was selected
+      if (startDate) {
+        updateData.holiday_date = startDate;
+      }
+
       const { error } = await supabase
         .from('approved_holidays')
-        .update({
-          is_approved: true,
-          approved_at: new Date().toISOString(),
-          approved_by: profile?.user_id,
-          days_count: daysCount,
-        })
+        .update(updateData)
         .eq('id', holidayId);
 
       if (error) throw error;
