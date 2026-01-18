@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useLeaveRequests, useUpdateLeaveRequest } from '@/hooks/useLeaveRequests';
+import { useLeaveRequests, useUpdateLeaveRequest, useDeleteLeaveRequest, LeaveRequest } from '@/hooks/useLeaveRequests';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,13 +13,25 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Calendar, Check, X, Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Calendar, Check, X, Loader2, Trash2, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Leaves = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { data: leaveRequests = [], isLoading } = useLeaveRequests();
   const updateLeave = useUpdateLeaveRequest();
+  const deleteLeave = useDeleteLeaveRequest();
 
   const getTypeBadge = (type: string) => {
     switch (type) {
@@ -29,6 +41,10 @@ const Leaves = () => {
         return <Badge className="bg-warning hover:bg-warning/90">{t('leaves.sick')}</Badge>;
       case 'personal':
         return <Badge variant="secondary">{t('leaves.personal')}</Badge>;
+      case 'emergency':
+        return <Badge className="bg-destructive hover:bg-destructive/90">{language === 'ar' ? 'طارئة' : 'Emergency'}</Badge>;
+      case 'regular':
+        return <Badge className="bg-accent hover:bg-accent/90">{language === 'ar' ? 'اعتيادية' : 'Regular'}</Badge>;
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
@@ -47,12 +63,17 @@ const Leaves = () => {
     }
   };
 
-  const handleApprove = async (id: string) => {
-    await updateLeave.mutateAsync({ id, status: 'approved' });
+  const handleStatusChange = async (leave: LeaveRequest, newStatus: 'approved' | 'rejected') => {
+    await updateLeave.mutateAsync({ 
+      id: leave.id, 
+      status: newStatus, 
+      oldData: leave,
+      previousStatus: leave.status 
+    });
   };
 
-  const handleReject = async (id: string) => {
-    await updateLeave.mutateAsync({ id, status: 'rejected' });
+  const handleDelete = async (leave: LeaveRequest) => {
+    await deleteLeave.mutateAsync({ id: leave.id, leaveData: leave });
   };
 
   const pendingCount = leaveRequests.filter(l => l.status === 'pending').length;
@@ -166,30 +187,63 @@ const Leaves = () => {
                         {leave.reason && (
                           <p className="text-xs text-muted-foreground truncate mb-2">{leave.reason}</p>
                         )}
-                        {leave.status === 'pending' && (
-                          <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {leave.status !== 'approved' && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="flex-1 text-success hover:text-success hover:bg-success/10"
-                              onClick={() => handleApprove(leave.id)}
-                              disabled={updateLeave.isPending}
+                              onClick={() => handleStatusChange(leave, 'approved')}
+                              disabled={updateLeave.isPending || deleteLeave.isPending}
                             >
                               <Check className="w-4 h-4 me-1" />
                               {t('leaves.approved')}
                             </Button>
+                          )}
+                          {leave.status !== 'rejected' && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleReject(leave.id)}
-                              disabled={updateLeave.isPending}
+                              onClick={() => handleStatusChange(leave, 'rejected')}
+                              disabled={updateLeave.isPending || deleteLeave.isPending}
                             >
                               <X className="w-4 h-4 me-1" />
                               {t('leaves.rejected')}
                             </Button>
-                          </div>
-                        )}
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                disabled={updateLeave.isPending || deleteLeave.isPending}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>{language === 'ar' ? 'حذف طلب الإجازة' : 'Delete Leave Request'}</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {language === 'ar' 
+                                    ? 'هل أنت متأكد من حذف هذا الطلب؟ سيتم استعادة رصيد الإجازات إذا كانت الإجازة معتمدة.'
+                                    : 'Are you sure you want to delete this request? Leave balance will be restored if approved.'}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDelete(leave)}
+                                  className="bg-destructive hover:bg-destructive/90"
+                                >
+                                  {language === 'ar' ? 'حذف' : 'Delete'}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
@@ -238,28 +292,76 @@ const Leaves = () => {
                         </TableCell>
                         <TableCell>{getStatusBadge(leave.status)}</TableCell>
                         <TableCell className="text-end">
-                          {leave.status === 'pending' && (
-                            <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2">
+                            {leave.status !== 'approved' && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="text-success hover:text-success hover:bg-success/10"
-                                onClick={() => handleApprove(leave.id)}
-                                disabled={updateLeave.isPending}
+                                onClick={() => handleStatusChange(leave, 'approved')}
+                                disabled={updateLeave.isPending || deleteLeave.isPending}
+                                title={language === 'ar' ? 'موافقة' : 'Approve'}
                               >
                                 <Check className="w-4 h-4" />
                               </Button>
+                            )}
+                            {leave.status !== 'rejected' && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleReject(leave.id)}
-                                disabled={updateLeave.isPending}
+                                onClick={() => handleStatusChange(leave, 'rejected')}
+                                disabled={updateLeave.isPending || deleteLeave.isPending}
+                                title={language === 'ar' ? 'رفض' : 'Reject'}
                               >
                                 <X className="w-4 h-4" />
                               </Button>
-                            </div>
-                          )}
+                            )}
+                            {leave.status === 'approved' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-warning hover:text-warning hover:bg-warning/10"
+                                onClick={() => handleStatusChange(leave, 'rejected')}
+                                disabled={updateLeave.isPending || deleteLeave.isPending}
+                                title={language === 'ar' ? 'إلغاء الموافقة' : 'Revoke'}
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  disabled={updateLeave.isPending || deleteLeave.isPending}
+                                  title={language === 'ar' ? 'حذف' : 'Delete'}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>{language === 'ar' ? 'حذف طلب الإجازة' : 'Delete Leave Request'}</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {language === 'ar' 
+                                      ? 'هل أنت متأكد من حذف هذا الطلب؟ سيتم استعادة رصيد الإجازات إذا كانت الإجازة معتمدة.'
+                                      : 'Are you sure you want to delete this request? Leave balance will be restored if approved.'}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>{language === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => handleDelete(leave)}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                  >
+                                    {language === 'ar' ? 'حذف' : 'Delete'}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

@@ -2512,8 +2512,9 @@ async function notifyManagers(
     
     const actionText = action === 'check_in' ? 'سجّل حضوره' : 'سجّل انصرافه'
     const emoji = action === 'check_in' ? '✅' : '🔴'
+    const headerText = action === 'check_in' ? 'إشعار حضور' : 'إشعار انصراف'
     
-    let message = `${emoji} <b>إشعار حضور</b>\n\n` +
+    let message = `${emoji} <b>${headerText}</b>\n\n` +
       `👤 الموظف: ${employeeName}\n` +
       `📋 ${actionText}\n` +
       `📅 التاريخ: ${date}\n` +

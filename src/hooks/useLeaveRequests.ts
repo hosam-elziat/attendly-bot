@@ -9,7 +9,7 @@ export interface LeaveRequest {
   id: string;
   employee_id: string;
   company_id: string;
-  leave_type: 'vacation' | 'sick' | 'personal';
+  leave_type: 'vacation' | 'sick' | 'personal' | 'emergency' | 'regular';
   start_date: string;
   end_date: string;
   days: number;
@@ -21,6 +21,8 @@ export interface LeaveRequest {
   employees?: {
     full_name: string;
     email: string;
+    leave_balance?: number;
+    emergency_leave_balance?: number;
   };
 }
 
@@ -65,7 +67,12 @@ export const useUpdateLeaveRequest = () => {
   const logAction = useLogAction();
 
   return useMutation({
-    mutationFn: async ({ id, status, oldData }: { id: string; status: 'approved' | 'rejected'; oldData?: LeaveRequest }) => {
+    mutationFn: async ({ id, status, oldData, previousStatus }: { 
+      id: string; 
+      status: 'approved' | 'rejected'; 
+      oldData?: LeaveRequest;
+      previousStatus?: 'pending' | 'approved' | 'rejected';
+    }) => {
       // Validate input
       const validationResult = LeaveStatusUpdateSchema.safeParse({ id, status });
       
@@ -95,23 +102,27 @@ export const useUpdateLeaveRequest = () => {
 
       if (error) throw error;
 
-      // If approved, deduct from employee's leave balance
-      if (status === 'approved' && data.employee_id) {
-        if (data.leave_type === 'emergency') {
-          const currentBalance = (data.employees as any)?.emergency_leave_balance || 7;
-          const newBalance = Math.max(0, currentBalance - data.days);
-          await supabase
-            .from('employees')
-            .update({ emergency_leave_balance: newBalance })
-            .eq('id', data.employee_id);
-        } else {
-          const currentBalance = (data.employees as any)?.leave_balance || 21;
-          const newBalance = Math.max(0, currentBalance - data.days);
-          await supabase
-            .from('employees')
-            .update({ leave_balance: newBalance })
-            .eq('id', data.employee_id);
-        }
+      const isEmergency = data.leave_type === 'emergency';
+      const balanceField = isEmergency ? 'emergency_leave_balance' : 'leave_balance';
+      const currentBalance = isEmergency 
+        ? ((data.employees as any)?.emergency_leave_balance || 7)
+        : ((data.employees as any)?.leave_balance || 21);
+
+      // Handle balance changes based on status transitions
+      if (status === 'approved' && previousStatus !== 'approved') {
+        // Deduct from balance when approving (from pending or rejected)
+        const newBalance = Math.max(0, currentBalance - data.days);
+        await supabase
+          .from('employees')
+          .update({ [balanceField]: newBalance })
+          .eq('id', data.employee_id);
+      } else if (status === 'rejected' && previousStatus === 'approved') {
+        // Restore balance when changing from approved to rejected
+        const newBalance = currentBalance + data.days;
+        await supabase
+          .from('employees')
+          .update({ [balanceField]: newBalance })
+          .eq('id', data.employee_id);
       }
 
       // Send Telegram notification to employee
@@ -144,10 +155,70 @@ export const useUpdateLeaveRequest = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success(`Leave request ${variables.status}`);
     },
     onError: (error) => {
       toast.error('Failed to update leave request: ' + error.message);
+    },
+  });
+};
+
+export const useDeleteLeaveRequest = () => {
+  const queryClient = useQueryClient();
+  const logAction = useLogAction();
+
+  return useMutation({
+    mutationFn: async ({ id, leaveData }: { id: string; leaveData: LeaveRequest }) => {
+      // If the leave was approved, restore the balance first
+      if (leaveData.status === 'approved') {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('leave_balance, emergency_leave_balance')
+          .eq('id', leaveData.employee_id)
+          .single();
+
+        if (employee) {
+          const isEmergency = leaveData.leave_type === 'emergency';
+          const balanceField = isEmergency ? 'emergency_leave_balance' : 'leave_balance';
+          const currentBalance = isEmergency 
+            ? (employee.emergency_leave_balance || 7)
+            : (employee.leave_balance || 21);
+          
+          const newBalance = currentBalance + leaveData.days;
+          await supabase
+            .from('employees')
+            .update({ [balanceField]: newBalance })
+            .eq('id', leaveData.employee_id);
+        }
+      }
+
+      const { error } = await supabase
+        .from('leave_requests')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Log the action
+      await logAction.mutateAsync({
+        tableName: 'leave_requests',
+        recordId: id,
+        action: 'delete',
+        oldData: JSON.parse(JSON.stringify(leaveData)),
+        newData: null,
+        description: `حذف طلب إجازة ${leaveData.employees?.full_name}`,
+      });
+
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leave-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      toast.success('تم حذف طلب الإجازة');
+    },
+    onError: (error) => {
+      toast.error('فشل حذف طلب الإجازة: ' + error.message);
     },
   });
 };
