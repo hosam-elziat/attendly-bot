@@ -63,17 +63,20 @@ export const useAttendanceStats = () => {
         .eq('company_id', profile.company_id)
         .eq('is_active', true);
 
-      // Get today's attendance - count all who checked in today (including checked out)
+      // Get today's attendance - count all who checked in today (excluding absent)
       const { data: attendance } = await supabase
         .from('attendance_logs')
         .select('status')
         .eq('company_id', profile.company_id)
         .eq('date', today);
 
-      const totalCheckedInToday = attendance?.length || 0; // Total people who checked in today
-      const checkedIn = attendance?.filter(a => a.status === 'checked_in').length || 0;
-      const onBreak = attendance?.filter(a => a.status === 'on_break').length || 0;
-      const checkedOut = attendance?.filter(a => a.status === 'checked_out').length || 0;
+      // Filter out absent employees from the count
+      const nonAbsentAttendance = attendance?.filter(a => a.status !== 'absent') || [];
+      const totalCheckedInToday = nonAbsentAttendance.length; // Total people who checked in today (excluding absent)
+      const checkedIn = nonAbsentAttendance.filter(a => a.status === 'checked_in').length;
+      const onBreak = nonAbsentAttendance.filter(a => a.status === 'on_break').length;
+      const checkedOut = nonAbsentAttendance.filter(a => a.status === 'checked_out').length;
+      const markedAbsent = attendance?.filter(a => a.status === 'absent').length || 0;
       const present = checkedIn + onBreak;
       const absent = (totalEmployees || 0) - totalCheckedInToday;
 
