@@ -23,8 +23,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, Loader2, Users, User, Briefcase } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Calendar as CalendarIcon, Loader2, Users, User, Briefcase } from 'lucide-react';
 import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface CreateScheduledLeaveDialogProps {
   open: boolean;
@@ -43,8 +51,8 @@ export default function CreateScheduledLeaveDialog({
   
   const [loading, setLoading] = useState(false);
   const [leaveName, setLeaveName] = useState('');
-  const [leaveDate, setLeaveDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState('');
+  const [leaveDate, setLeaveDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [targetType, setTargetType] = useState<'company' | 'position' | 'employee'>('company');
   const [targetId, setTargetId] = useState<string>('');
   const [reason, setReason] = useState('');
@@ -55,10 +63,13 @@ export default function CreateScheduledLeaveDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!profile?.company_id || !leaveName || !leaveDate) {
+    if (!profile?.company_id || !leaveName) {
       toast.error(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
       return;
     }
+
+    const formattedLeaveDate = format(leaveDate, 'yyyy-MM-dd');
+    const formattedEndDate = endDate ? format(endDate, 'yyyy-MM-dd') : formattedLeaveDate;
 
     if ((targetType === 'position' || targetType === 'employee') && !targetId) {
       toast.error(language === 'ar' ? 'يرجى اختيار الهدف' : 'Please select a target');
@@ -73,8 +84,8 @@ export default function CreateScheduledLeaveDialog({
         .insert({
           company_id: profile.company_id,
           leave_name: leaveName,
-          leave_date: leaveDate,
-          end_date: endDate || leaveDate,
+          leave_date: formattedLeaveDate,
+          end_date: formattedEndDate,
           leave_type: targetType === 'company' ? 'company_wide' : targetType === 'position' ? 'position_based' : 'individual',
           target_type: targetType,
           target_id: targetType !== 'company' ? targetId : null,
@@ -102,8 +113,8 @@ export default function CreateScheduledLeaveDialog({
       
       // Reset form
       setLeaveName('');
-      setLeaveDate(format(new Date(), 'yyyy-MM-dd'));
-      setEndDate('');
+      setLeaveDate(new Date());
+      setEndDate(undefined);
       setTargetType('company');
       setTargetId('');
       setReason('');
@@ -121,7 +132,7 @@ export default function CreateScheduledLeaveDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
+            <CalendarIcon className="w-5 h-5" />
             {language === 'ar' ? 'إنشاء إجازة مجدولة' : 'Create Scheduled Leave'}
           </DialogTitle>
         </DialogHeader>
@@ -140,21 +151,62 @@ export default function CreateScheduledLeaveDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'تاريخ البداية *' : 'Start Date *'}</Label>
-              <Input
-                type="date"
-                value={leaveDate}
-                onChange={(e) => setLeaveDate(e.target.value)}
-                required
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !leaveDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="me-2 h-4 w-4" />
+                    {leaveDate ? format(leaveDate, 'PPP', { locale: language === 'ar' ? ar : undefined }) : (
+                      <span>{language === 'ar' ? 'اختر تاريخ' : 'Pick a date'}</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={leaveDate}
+                    onSelect={(date) => date && setLeaveDate(date)}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                    locale={language === 'ar' ? ar : undefined}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'تاريخ النهاية' : 'End Date'}</Label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={leaveDate}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="me-2 h-4 w-4" />
+                    {endDate ? format(endDate, 'PPP', { locale: language === 'ar' ? ar : undefined }) : (
+                      <span>{language === 'ar' ? 'اختياري' : 'Optional'}</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    disabled={(date) => date < leaveDate}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                    locale={language === 'ar' ? ar : undefined}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
