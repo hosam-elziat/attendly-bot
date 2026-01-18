@@ -11,7 +11,10 @@ import {
   UserCog,
   LogOut,
   Menu,
-  Shield
+  Shield,
+  Bot,
+  Database,
+  ImageIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,8 +35,9 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
     { icon: CreditCard, label: 'الاشتراكات', path: '/super-admin/subscriptions' },
     { icon: CreditCard, label: 'الباقات والأسعار', path: '/super-admin/plans' },
     { icon: UserCog, label: 'فريق العمل', path: '/super-admin/team' },
-    { icon: LayoutDashboard, label: 'بوتات التيليجرام', path: '/super-admin/telegram-bots' },
-    { icon: LayoutDashboard, label: 'النسخ الاحتياطي', path: '/super-admin/backups' },
+    { icon: Bot, label: 'بوتات التيليجرام', path: '/super-admin/telegram-bots' },
+    { icon: ImageIcon, label: 'طلبات تغيير الصور', path: '/super-admin/photo-requests' },
+    { icon: Database, label: 'النسخ الاحتياطي', path: '/super-admin/backups' },
   ];
 
   const handleLogout = async () => {

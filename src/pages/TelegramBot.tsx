@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompany } from '@/hooks/useCompany';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw, ImageIcon, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 const TelegramBot = () => {
   const { t } = useLanguage();
@@ -16,6 +20,13 @@ const TelegramBot = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [isSettingWebhook, setIsSettingWebhook] = useState(false);
+  const [isRequestingPhoto, setIsRequestingPhoto] = useState(false);
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [pendingPhotoRequest, setPendingPhotoRequest] = useState<any>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const { profile } = useAuth();
 
   const NAME_COOLDOWN_STORAGE_KEY = 'telegram_bot_name_cooldown_until';
 
@@ -56,6 +67,120 @@ const TelegramBot = () => {
   const isConnected = company?.telegram_bot_connected || false;
   const botUsername = company?.telegram_bot_username;
   const botLink = botUsername ? `https://t.me/${botUsername}` : null;
+
+  // Check for pending photo request
+  useEffect(() => {
+    const checkPendingRequest = async () => {
+      if (!company?.id) return;
+      
+      const { data } = await supabase
+        .from('bot_photo_requests')
+        .select('*')
+        .eq('company_id', company.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      setPendingPhotoRequest(data);
+    };
+    
+    checkPendingRequest();
+  }, [company?.id]);
+
+  const handlePhotoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('يرجى اختيار ملف صورة');
+      return;
+    }
+
+    // Validate file size (5 MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
+      return;
+    }
+
+    setSelectedPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleSubmitPhotoRequest = async () => {
+    if (!company?.id || !botUsername || !profile) {
+      toast.error('بيانات غير مكتملة');
+      return;
+    }
+
+    setIsRequestingPhoto(true);
+
+    try {
+      // Upload photo to storage if selected
+      let photoUrl: string | null = null;
+      
+      if (selectedPhotoFile) {
+        const fileExt = selectedPhotoFile.name.split('.').pop();
+        const fileName = `${company.id}-${Date.now()}.${fileExt}`;
+        const filePath = `bot-photos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, selectedPhotoFile);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          // Continue without photo URL - admin can request it later
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(filePath);
+          photoUrl = urlData.publicUrl;
+        }
+      }
+
+      // Create the request
+      const { error } = await supabase
+        .from('bot_photo_requests')
+        .insert({
+          company_id: company.id,
+          bot_username: botUsername,
+          requested_by: profile.user_id,
+          requested_by_name: profile.full_name,
+          photo_url: photoUrl,
+        });
+
+      if (error) {
+        console.error('Request error:', error);
+        toast.error('فشل في إرسال الطلب');
+        return;
+      }
+
+      toast.success('تم إرسال طلب تغيير الصورة بنجاح! سيتم مراجعته قريباً.');
+      setPhotoDialogOpen(false);
+      setSelectedPhotoFile(null);
+      setPhotoPreview(null);
+      
+      // Refresh pending request status
+      const { data: newRequest } = await supabase
+        .from('bot_photo_requests')
+        .select('*')
+        .eq('company_id', company.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      setPendingPhotoRequest(newRequest);
+
+    } catch (error: any) {
+      console.error('Request error:', error);
+      toast.error('حدث خطأ غير متوقع');
+    } finally {
+      setIsRequestingPhoto(false);
+    }
+  };
 
   const handleConnect = async () => {
     setIsConnecting(true);
@@ -334,13 +459,100 @@ const TelegramBot = () => {
                           </>
                         )}
                       </Button>
+                      {/* Photo Change Request Button */}
+                      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            disabled={!!pendingPhotoRequest}
+                          >
+                            {pendingPhotoRequest ? (
+                              <>
+                                <Loader2 className="w-4 h-4 me-2" />
+                                طلب قيد المراجعة
+                              </>
+                            ) : (
+                              <>
+                                <ImageIcon className="w-4 h-4 me-2" />
+                                طلب تغيير صورة البوت
+                              </>
+                            )}
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>طلب تغيير صورة البوت</DialogTitle>
+                            <DialogDescription>
+                              ارفع الصورة المطلوبة وسيقوم فريق الدعم بتحديثها لك
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label>اسم البوت</Label>
+                              <Input value={`@${botUsername}`} disabled />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>الصورة الجديدة (يُفضل 512×512 بكسل)</Label>
+                              <div 
+                                className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                                onClick={() => photoInputRef.current?.click()}
+                              >
+                                {photoPreview ? (
+                                  <div className="space-y-2">
+                                    <img 
+                                      src={photoPreview} 
+                                      alt="Preview" 
+                                      className="w-24 h-24 rounded-full mx-auto object-cover"
+                                    />
+                                    <p className="text-sm text-muted-foreground">{selectedPhotoFile?.name}</p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
+                                    <p className="text-sm text-muted-foreground">اضغط لاختيار صورة</p>
+                                  </div>
+                                )}
+                              </div>
+                              <input 
+                                type="file" 
+                                ref={photoInputRef}
+                                accept="image/jpeg,image/png,image/jpg"
+                                className="hidden"
+                                onChange={handlePhotoFileSelect}
+                              />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setPhotoDialogOpen(false)}>
+                              إلغاء
+                            </Button>
+                            <Button 
+                              onClick={handleSubmitPhotoRequest}
+                              disabled={isRequestingPhoto || !selectedPhotoFile}
+                            >
+                              {isRequestingPhoto ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                                  جاري الإرسال...
+                                </>
+                              ) : (
+                                'إرسال الطلب'
+                              )}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
                       اضغط "تفعيل البوت" إذا لم يستجب البوت للرسائل
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      💡 لتغيير صورة البوت: تواصل مع <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@BotFather</a> واستخدم الأمر <code className="bg-muted px-1 rounded">/setuserpic</code>
-                    </p>
+                    {pendingPhotoRequest && (
+                      <div className="mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
+                        <p className="text-sm text-warning-foreground">
+                          ⏳ لديك طلب تغيير صورة قيد المراجعة (تم الإرسال: {new Date(pendingPhotoRequest.created_at).toLocaleDateString('ar-EG')})
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Bot Link Section */}
