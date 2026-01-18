@@ -87,10 +87,7 @@ const AbsentEmployeesDialog = ({ open, onOpenChange }: AbsentEmployeesDialogProp
       const absent: AbsentEmployee[] = [];
 
       for (const emp of employees) {
-        // Skip if already checked in (and not absent)
-        if (checkedInIds.has(emp.id)) continue;
-
-        // Check if marked as absent
+        // Check if marked as absent FIRST (before checking if checked in)
         if (markedAbsentIds.has(emp.id)) {
           absent.push({
             ...emp,
@@ -98,6 +95,9 @@ const AbsentEmployeesDialog = ({ open, onOpenChange }: AbsentEmployeesDialogProp
           });
           continue;
         }
+
+        // Skip if already checked in (and not absent)
+        if (checkedInIds.has(emp.id)) continue;
 
         // Check if it's their weekend
         const weekendDays = emp.weekend_days || ['friday'];
