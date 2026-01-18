@@ -77,25 +77,39 @@ serve(async (req: Request) => {
       );
     }
 
-    // Check if it's time for backup based on frequency
+    // Check if it's time for backup based on scheduled time and frequency
     const frequencyHours = (settings as { backup_frequency_hours?: number }).backup_frequency_hours || 24;
+    const backupHour = (settings as { backup_hour?: number }).backup_hour ?? 5;
+    const backupMinute = (settings as { backup_minute?: number }).backup_minute ?? 0;
     const lastBackupAt = settings.last_auto_backup_at ? new Date(settings.last_auto_backup_at) : null;
     const now = new Date();
+    const nowUTC = new Date(now.toISOString());
+    
+    console.log(`Current UTC time: ${nowUTC.toISOString()}, Scheduled: ${backupHour}:${backupMinute}, Frequency: ${frequencyHours}h`);
 
+    // Check if we should run based on frequency from last backup
     if (lastBackupAt) {
-      const hoursSinceLastBackup = (now.getTime() - lastBackupAt.getTime()) / (1000 * 60 * 60);
-      if (hoursSinceLastBackup < frequencyHours) {
+      const hoursSinceLastBackup = (nowUTC.getTime() - lastBackupAt.getTime()) / (1000 * 60 * 60);
+      
+      // If frequency check passed, also check if we're at or past the scheduled time
+      if (hoursSinceLastBackup >= frequencyHours) {
+        console.log(`Frequency check passed: ${hoursSinceLastBackup.toFixed(1)} hours since last backup (>= ${frequencyHours}h)`);
+        // Continue with backup
+      } else {
         console.log(`Last backup was ${hoursSinceLastBackup.toFixed(1)} hours ago. Next backup in ${(frequencyHours - hoursSinceLastBackup).toFixed(1)} hours.`);
         return new Response(
           JSON.stringify({ 
             success: true, 
             message: 'Not time for backup yet',
             hours_since_last: hoursSinceLastBackup,
-            next_backup_in_hours: frequencyHours - hoursSinceLastBackup
+            next_backup_in_hours: frequencyHours - hoursSinceLastBackup,
+            scheduled_time: `${backupHour.toString().padStart(2, '0')}:${backupMinute.toString().padStart(2, '0')} UTC`
           }),
           { headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
+    } else {
+      console.log('No previous backup found, will create first backup now');
     }
 
     console.log("Starting automatic full system backup...");
