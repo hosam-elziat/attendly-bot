@@ -19,7 +19,7 @@ interface AbsentEmployee {
   email: string;
   department: string | null;
   weekend_days: string[] | null;
-  reason: 'no_checkin' | 'on_leave' | 'weekend' | 'pending_leave';
+  reason: 'no_checkin' | 'on_leave' | 'weekend' | 'pending_leave' | 'marked_absent';
   leaveType?: string;
   leaveReason?: string;
 }
@@ -45,14 +45,19 @@ const AbsentEmployeesDialog = ({ open, onOpenChange }: AbsentEmployeesDialogProp
 
       if (!employees) return [];
 
-      // Get today's attendance
+      // Get today's attendance with status
       const { data: attendance } = await supabase
         .from('attendance_logs')
-        .select('employee_id')
+        .select('employee_id, status')
         .eq('company_id', profile.company_id)
         .eq('date', todayStr);
 
-      const checkedInIds = new Set(attendance?.map(a => a.employee_id) || []);
+      const checkedInIds = new Set(
+        attendance?.filter(a => a.status !== 'absent').map(a => a.employee_id) || []
+      );
+      const markedAbsentIds = new Set(
+        attendance?.filter(a => a.status === 'absent').map(a => a.employee_id) || []
+      );
 
       // Get approved leaves for today
       const { data: approvedLeaves } = await supabase
@@ -82,8 +87,17 @@ const AbsentEmployeesDialog = ({ open, onOpenChange }: AbsentEmployeesDialogProp
       const absent: AbsentEmployee[] = [];
 
       for (const emp of employees) {
-        // Skip if already checked in
+        // Skip if already checked in (and not absent)
         if (checkedInIds.has(emp.id)) continue;
+
+        // Check if marked as absent
+        if (markedAbsentIds.has(emp.id)) {
+          absent.push({
+            ...emp,
+            reason: 'marked_absent',
+          });
+          continue;
+        }
 
         // Check if it's their weekend
         const weekendDays = emp.weekend_days || ['friday'];
@@ -154,6 +168,13 @@ const AbsentEmployeesDialog = ({ open, onOpenChange }: AbsentEmployeesDialogProp
           <Badge variant="outline" className="gap-1 border-warning text-warning">
             <Clock className="w-3 h-3" />
             {language === 'ar' ? 'طلب إجازة معلق' : 'Pending Leave'}
+          </Badge>
+        );
+      case 'marked_absent':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <Clock className="w-3 h-3" />
+            {language === 'ar' ? 'غائب' : 'Absent'}
           </Badge>
         );
       case 'no_checkin':

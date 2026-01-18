@@ -91,7 +91,9 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
 
       const tzOffset = getTimezoneOffset();
       const oldCheckInTime = record.check_in_time;
+      const oldCheckOutTime = record.check_out_time;
       let newCheckInTimeFormatted = '';
+      let newCheckOutTimeFormatted = '';
 
       // If marking as absent, clear times
       if (isNowAbsent) {
@@ -105,7 +107,8 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         }
 
         if (checkOutTime) {
-          updates.check_out_time = `${recordDate}T${checkOutTime}:00${tzOffset}`;
+          newCheckOutTimeFormatted = `${recordDate}T${checkOutTime}:00${tzOffset}`;
+          updates.check_out_time = newCheckOutTimeFormatted;
         }
       }
 
@@ -227,6 +230,31 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
           }
         } catch (recalcErr) {
           console.error('Failed to recalculate deductions:', recalcErr);
+        }
+      }
+      
+      // If check-out time was modified, remove overtime bonuses related to this attendance
+      if (!isNowAbsent && checkOutTime && oldCheckOutTime !== newCheckOutTimeFormatted) {
+        console.log('Check-out time changed, removing overtime adjustments...');
+        
+        // Delete any overtime-related bonuses for this attendance log
+        const { data: deletedAdjustments, error: deleteError } = await supabase
+          .from('salary_adjustments')
+          .delete()
+          .eq('attendance_log_id', record.id)
+          .eq('is_auto_generated', true)
+          .or('description.ilike.%وقت إضافي%,description.ilike.%overtime%')
+          .select();
+        
+        if (deleteError) {
+          console.error('Error removing overtime adjustments:', deleteError);
+        } else if (deletedAdjustments && deletedAdjustments.length > 0) {
+          console.log(`Removed ${deletedAdjustments.length} overtime adjustment(s)`);
+          toast.info(
+            language === 'ar' 
+              ? 'تم حذف الوقت الإضافي والمكافأة' 
+              : 'Overtime and bonus removed'
+          );
         }
       }
 
