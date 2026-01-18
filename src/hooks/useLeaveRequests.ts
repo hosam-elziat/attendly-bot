@@ -222,3 +222,23 @@ export const useDeleteLeaveRequest = () => {
     },
   });
 };
+
+// Hook to notify managers when emergency leave is created
+export const useNotifyEmergencyLeave = () => {
+  return useMutation({
+    mutationFn: async (leaveRequestId: string) => {
+      console.log('Notifying managers about emergency leave:', leaveRequestId);
+      const { error } = await supabase.functions.invoke('notify-emergency-leave', {
+        body: { leave_request_id: leaveRequestId }
+      });
+      
+      if (error) {
+        console.error('Failed to notify managers:', error);
+        throw error;
+      }
+    },
+    onError: (error) => {
+      console.error('Emergency leave notification failed:', error);
+    },
+  });
+};
