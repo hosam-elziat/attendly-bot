@@ -355,7 +355,8 @@ serve(async (req) => {
       }
 
       // === CHECK-OUT REMINDERS (based on company settings) ===
-      if (attendance && attendance.status !== 'checked_out' && !attendance.check_out_time) {
+      // Skip checkout reminders for employees marked as absent
+      if (attendance && attendance.status !== 'checked_out' && attendance.status !== 'absent' && !attendance.check_out_time) {
         for (let i = 0; i < checkoutReminderTimes.length; i++) {
           const reminderTime = checkoutReminderTimes[i]
           // Use exact minute matching to prevent duplicate reminders
