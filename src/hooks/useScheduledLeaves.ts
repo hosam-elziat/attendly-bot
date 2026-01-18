@@ -53,13 +53,27 @@ export const useDeleteScheduledLeave = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, leaveData }: { id: string; leaveData: ScheduledLeave }) => {
+      // Delete the leave first
       const { error } = await supabase
         .from('scheduled_leaves')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
+
+      // Send notification about deletion
+      try {
+        await supabase.functions.invoke('notify-scheduled-leave-update', {
+          body: { 
+            scheduled_leave_id: id,
+            action: 'delete',
+            old_data: leaveData
+          }
+        });
+      } catch (notifyError) {
+        console.error('Failed to send deletion notifications:', notifyError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scheduled-leaves'] });
