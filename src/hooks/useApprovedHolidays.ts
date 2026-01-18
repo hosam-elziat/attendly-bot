@@ -17,6 +17,7 @@ export interface ApprovedHoliday {
   notified_at: string | null;
   year: number;
   month: number;
+  start_date: string | null;
   created_at: string;
   updated_at: string;
 }

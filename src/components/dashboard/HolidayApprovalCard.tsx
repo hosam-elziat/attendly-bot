@@ -57,6 +57,7 @@ const HolidayApprovalCard = () => {
       approvedRecord: approved,
       isApproved: approved?.is_approved || false,
       daysCount: approved?.days_count || 1,
+      startDate: approved?.start_date || holiday.date,
       id: approved?.id,
     };
   }) || [];
@@ -134,9 +135,22 @@ const HolidayApprovalCard = () => {
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                   <Calendar className="w-3 h-3" />
-                  {format(new Date(holiday.date), 'EEEE, d MMMM yyyy', {
-                    locale: language === 'ar' ? ar : undefined,
-                  })}
+                  {holiday.isApproved ? (
+                    // Show the approved start date for approved holidays
+                    format(new Date(holiday.startDate), 'EEEE, d MMMM yyyy', {
+                      locale: language === 'ar' ? ar : undefined,
+                    })
+                  ) : (
+                    // Show original holiday date for non-approved
+                    format(new Date(holiday.date), 'EEEE, d MMMM yyyy', {
+                      locale: language === 'ar' ? ar : undefined,
+                    })
+                  )}
+                  {holiday.isApproved && holiday.daysCount > 1 && (
+                    <span className="text-primary font-medium">
+                      ({holiday.daysCount} {language === 'ar' ? 'أيام' : 'days'})
+                    </span>
+                  )}
                 </p>
               </div>
 
