@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,7 +6,7 @@ import { useCompany } from '@/hooks/useCompany';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw, ImageIcon } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, ExternalLink, Shield, Copy, Loader2, Link2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -16,11 +16,8 @@ const TelegramBot = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
   const [isSettingWebhook, setIsSettingWebhook] = useState(false);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const NAME_COOLDOWN_STORAGE_KEY = 'telegram_bot_name_cooldown_until';
-  const PHOTO_COOLDOWN_STORAGE_KEY = 'telegram_bot_photo_cooldown_until';
 
   const [nameCooldownUntil, setNameCooldownUntil] = useState<number | null>(() => {
     try {
@@ -32,42 +29,22 @@ const TelegramBot = () => {
     }
   });
 
-  const [photoCooldownUntil, setPhotoCooldownUntil] = useState<number | null>(() => {
-    try {
-      const raw = localStorage.getItem(PHOTO_COOLDOWN_STORAGE_KEY);
-      const n = raw ? Number(raw) : NaN;
-      return Number.isFinite(n) ? n : null;
-    } catch {
-      return null;
-    }
-  });
-
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
-    // Check if any cooldown is active
-    const hasActiveCooldown = 
-      (nameCooldownUntil && nameCooldownUntil > Date.now()) ||
-      (photoCooldownUntil && photoCooldownUntil > Date.now());
-    
-    if (!hasActiveCooldown) return;
+    if (!nameCooldownUntil) return;
+    if (nameCooldownUntil <= Date.now()) return;
 
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [nameCooldownUntil, photoCooldownUntil]);
+  }, [nameCooldownUntil]);
 
   const nameCooldownSecondsLeft =
     nameCooldownUntil && nameCooldownUntil > nowMs
       ? Math.ceil((nameCooldownUntil - nowMs) / 1000)
       : 0;
 
-  const photoCooldownSecondsLeft =
-    photoCooldownUntil && photoCooldownUntil > nowMs
-      ? Math.ceil((photoCooldownUntil - nowMs) / 1000)
-      : 0;
-
   const isNameCooldownActive = nameCooldownSecondsLeft > 0;
-  const isPhotoCooldownActive = photoCooldownSecondsLeft > 0;
 
   const formatCooldown = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -225,110 +202,6 @@ const TelegramBot = () => {
     }
   };
 
-  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Reset input to allow re-selecting the same file
-    if (fileInputRef.current) fileInputRef.current.value = '';
-
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-    if (!validTypes.includes(file.type)) {
-      toast.error('يرجى اختيار صورة بصيغة JPG أو PNG فقط');
-      return;
-    }
-
-    // Validate file size (5 MB max for Telegram)
-    const maxSizeBytes = 5 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
-      return;
-    }
-
-    // Check dimensions (recommended: square, min 160x160, max 512x512)
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    
-    img.onload = async () => {
-      URL.revokeObjectURL(objectUrl);
-      
-      // Telegram recommends square photos, but doesn't strictly require it
-      if (img.width < 160 || img.height < 160) {
-        toast.error('يجب أن تكون أبعاد الصورة على الأقل 160×160 بكسل');
-        return;
-      }
-
-      // Check cooldown
-      if (isPhotoCooldownActive) {
-        toast.info(`يمكنك تغيير الصورة بعد ${formatCooldown(photoCooldownSecondsLeft)}`);
-        return;
-      }
-
-      setIsUploadingPhoto(true);
-
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-
-        if (!sessionData.session) {
-          toast.error('يجب تسجيل الدخول أولاً');
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('action', 'update_photo');
-        formData.append('photo', file);
-
-        const { data, error } = await supabase.functions.invoke('update-telegram-bot', {
-          headers: {
-            Authorization: `Bearer ${sessionData.session.access_token}`,
-          },
-          body: formData,
-        });
-
-        if (error) {
-          console.error('Photo upload error:', error);
-          toast.error('فشل في رفع الصورة');
-          return;
-        }
-
-        // Handle rate limit
-        if (data?.retry_after_seconds) {
-          const seconds = Number(data.retry_after_seconds);
-          if (Number.isFinite(seconds) && seconds > 0) {
-            const until = Date.now() + seconds * 1000;
-            setPhotoCooldownUntil(until);
-            localStorage.setItem(PHOTO_COOLDOWN_STORAGE_KEY, String(until));
-          }
-        }
-
-        if (data?.error) {
-          toast.error(data.error);
-          return;
-        }
-
-        // Success → clear cooldown
-        setPhotoCooldownUntil(null);
-        localStorage.removeItem(PHOTO_COOLDOWN_STORAGE_KEY);
-
-        toast.success(data?.message || 'تم تحديث صورة البوت بنجاح! 🎉');
-
-      } catch (error: any) {
-        console.error('Photo upload error:', error);
-        toast.error('فشل في رفع الصورة: ' + error.message);
-      } finally {
-        setIsUploadingPhoto(false);
-      }
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      toast.error('الملف المحدد ليس صورة صالحة');
-    };
-
-    img.src = objectUrl;
-  };
-
   const copyBotLink = () => {
     if (botLink) {
       navigator.clipboard.writeText(botLink);
@@ -461,39 +334,12 @@ const TelegramBot = () => {
                           </>
                         )}
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingPhoto || isPhotoCooldownActive}
-                      >
-                        {isUploadingPhoto ? (
-                          <>
-                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                            جاري الرفع...
-                          </>
-                        ) : isPhotoCooldownActive ? (
-                          <>
-                            <ImageIcon className="w-4 h-4 me-2" />
-                            متاح بعد {formatCooldown(photoCooldownSecondsLeft)}
-                          </>
-                        ) : (
-                          <>
-                            <ImageIcon className="w-4 h-4 me-2" />
-                            تغيير صورة البوت
-                          </>
-                        )}
-                      </Button>
-                      {/* Hidden file input */}
-                      <input 
-                        type="file" 
-                        ref={fileInputRef}
-                        accept="image/jpeg,image/png,image/jpg"
-                        className="hidden"
-                        onChange={handlePhotoSelect}
-                      />
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      اضغط "تفعيل البوت" إذا لم يستجب البوت للرسائل • الصورة يُفضل أن تكون مربعة (512×512 بكسل)
+                      اضغط "تفعيل البوت" إذا لم يستجب البوت للرسائل
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      💡 لتغيير صورة البوت: تواصل مع <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@BotFather</a> واستخدم الأمر <code className="bg-muted px-1 rounded">/setuserpic</code>
                     </p>
                   </div>
 
