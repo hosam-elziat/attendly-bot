@@ -373,6 +373,59 @@ export type Database = {
           },
         ]
       }
+      bot_photo_requests: {
+        Row: {
+          admin_notes: string | null
+          bot_username: string
+          company_id: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          photo_url: string | null
+          requested_by: string
+          requested_by_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          bot_username: string
+          company_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          photo_url?: string | null
+          requested_by: string
+          requested_by_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          bot_username?: string
+          company_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          photo_url?: string | null
+          requested_by?: string
+          requested_by_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_photo_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_logs: {
         Row: {
           attendance_id: string
