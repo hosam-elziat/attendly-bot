@@ -83,6 +83,7 @@ serve(async (req) => {
         company_id,
         base_salary,
         currency,
+        position_id,
         companies!inner (
           id,
           telegram_bot_username,
@@ -165,6 +166,26 @@ serve(async (req) => {
 
       if (holidayData && holidayData.length > 0) {
         console.log(`Skipping ${emp.full_name} - approved holiday today`)
+        continue
+      }
+
+      // Check for scheduled leaves (company-wide, position-based, or individual)
+      const { data: scheduledLeaveData } = await supabase
+        .from('scheduled_leaves')
+        .select('id, target_type, target_id')
+        .eq('company_id', emp.company_id)
+        .lte('leave_date', today)
+        .or(`end_date.gte.${today},end_date.is.null`)
+
+      const hasScheduledLeave = scheduledLeaveData?.some(leave => {
+        if (leave.target_type === 'company') return true
+        if (leave.target_type === 'position' && leave.target_id === emp.position_id) return true
+        if (leave.target_type === 'employee' && leave.target_id === emp.id) return true
+        return false
+      })
+
+      if (hasScheduledLeave) {
+        console.log(`Skipping ${emp.full_name} - scheduled leave today`)
         continue
       }
 

@@ -1704,6 +1704,65 @@ export type Database = {
           },
         ]
       }
+      scheduled_leaves: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          end_date: string | null
+          id: string
+          leave_date: string
+          leave_name: string
+          leave_type: string
+          notified_at: string | null
+          reason: string | null
+          target_id: string | null
+          target_type: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          end_date?: string | null
+          id?: string
+          leave_date: string
+          leave_name: string
+          leave_type?: string
+          notified_at?: string | null
+          reason?: string | null
+          target_id?: string | null
+          target_type?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          end_date?: string | null
+          id?: string
+          leave_date?: string
+          leave_name?: string
+          leave_type?: string
+          notified_at?: string | null
+          reason?: string | null
+          target_id?: string | null
+          target_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_leaves_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           created_at: string

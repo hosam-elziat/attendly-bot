@@ -22,7 +22,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2, MapPin, Download } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2, MapPin, Download, CalendarPlus } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -34,6 +34,7 @@ import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import EditAttendanceDialog from '@/components/attendance/EditAttendanceDialog';
 import AddAttendanceDialog from '@/components/attendance/AddAttendanceDialog';
+import CreateScheduledLeaveDialog from '@/components/attendance/CreateScheduledLeaveDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,6 +57,7 @@ const Attendance = () => {
   const { data: stats } = useAttendanceStats();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [scheduledLeaveDialogOpen, setScheduledLeaveDialogOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -437,6 +439,15 @@ const Attendance = () => {
                     </Button>
                     
                     <Button 
+                      variant="outline"
+                      onClick={() => setScheduledLeaveDialogOpen(true)} 
+                      className="gap-2 h-10 touch-manipulation"
+                    >
+                      <CalendarPlus className="w-4 h-4" />
+                      <span className="hidden sm:inline">{language === 'ar' ? 'إجازة' : 'Leave'}</span>
+                    </Button>
+                    
+                    <Button 
                       onClick={() => setAddDialogOpen(true)} 
                       className="gap-2 h-10 touch-manipulation"
                     >
@@ -685,6 +696,11 @@ const Attendance = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CreateScheduledLeaveDialog
+        open={scheduledLeaveDialogOpen}
+        onOpenChange={setScheduledLeaveDialogOpen}
+      />
     </DashboardLayout>
   );
 };
