@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Check, X, ExternalLink, Loader2, ImageIcon, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Check, X, ExternalLink, Loader2, ImageIcon, Clock, CheckCircle, XCircle, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import SuperAdminLayout from '@/components/super-admin/SuperAdminLayout';
@@ -45,41 +45,22 @@ const SuperAdminPhotoRequests = () => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      // Fetch requests
-      const { data: requestsData, error: requestsError } = await supabase
-        .from('bot_photo_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch all data in parallel for better performance
+      const [
+        { data: requestsData, error: requestsError },
+        { data: companiesData },
+        { data: subscriptionsData },
+        { data: employeesData },
+        { data: profilesData }
+      ] = await Promise.all([
+        supabase.from('bot_photo_requests').select('*').order('created_at', { ascending: false }),
+        supabase.from('companies').select('id, name, owner_id'),
+        supabase.from('subscriptions').select('company_id, plan_name, status'),
+        supabase.from('employees').select('company_id').eq('is_active', true),
+        supabase.from('profiles').select('user_id, email')
+      ]);
 
       if (requestsError) throw requestsError;
-
-      // Fetch company details
-      const companyIds = [...new Set(requestsData?.map(r => r.company_id) || [])];
-      
-      const { data: companiesData } = await supabase
-        .from('companies')
-        .select('id, name, owner_id')
-        .in('id', companyIds);
-
-      // Fetch subscriptions
-      const { data: subscriptionsData } = await supabase
-        .from('subscriptions')
-        .select('company_id, plan_name, status')
-        .in('company_id', companyIds);
-
-      // Fetch employees count
-      const { data: employeesData } = await supabase
-        .from('employees')
-        .select('company_id')
-        .in('company_id', companyIds)
-        .eq('is_active', true);
-
-      // Fetch owner profiles
-      const ownerIds = [...new Set(companiesData?.map(c => c.owner_id) || [])];
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('user_id, email')
-        .in('user_id', ownerIds);
 
       const companyMap = new Map(companiesData?.map(c => [c.id, c]) || []);
       const subscriptionMap = new Map(subscriptionsData?.map(s => [s.company_id, s]) || []);
@@ -112,6 +93,25 @@ const SuperAdminPhotoRequests = () => {
       toast.error('فشل في تحميل الطلبات');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadPhoto = async (photoUrl: string, botUsername: string) => {
+    try {
+      const response = await fetch(photoUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${botUsername}-photo.${blob.type.split('/')[1] || 'jpg'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('تم تحميل الصورة');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('فشل في تحميل الصورة');
     }
   };
 
@@ -282,19 +282,39 @@ const SuperAdminPhotoRequests = () => {
                       </TableCell>
                       <TableCell>
                         {request.photo_url ? (
-                          <a 
-                            href={request.photo_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2"
-                          >
-                            <img 
-                              src={request.photo_url} 
-                              alt="Requested photo" 
-                              className="w-10 h-10 rounded-full object-cover border"
-                            />
-                            <ExternalLink className="w-3 h-3 text-primary" />
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a 
+                              href={request.photo_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                            >
+                              <img 
+                                src={request.photo_url} 
+                                alt="Requested photo" 
+                                className="w-10 h-10 rounded-full object-cover border hover:opacity-80 transition-opacity"
+                              />
+                            </a>
+                            <div className="flex flex-col gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => handleDownloadPhoto(request.photo_url!, request.bot_username)}
+                                title="تحميل الصورة"
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                              <a 
+                                href={request.photo_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:text-primary/80"
+                                title="فتح في نافذة جديدة"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            </div>
+                          </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">لا توجد صورة</span>
                         )}
