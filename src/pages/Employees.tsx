@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { format, parseISO } from 'date-fns';
+import { ar } from 'date-fns/locale';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees, useCreateEmployee, useUpdateEmployee, CreateEmployeeData, Employee } from '@/hooks/useEmployees';
@@ -15,6 +17,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { 
   Table, 
   TableBody, 
@@ -38,7 +44,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle, Download } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle, Download, CalendarIcon, UserCheck, UserX } from 'lucide-react';
 import EmployeeVerificationForm from '@/components/employees/EmployeeVerificationForm';
 import EmployeeLocationSelector from '@/components/employees/EmployeeLocationSelector';
 import { useEmployeeLocations, useUpdateEmployeeLocations } from '@/hooks/useCompanyLocations';
@@ -667,13 +673,34 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hire_date">{t('employeeDetails.hireDate')}</Label>
-          <Input 
-            id="hire_date" 
-            type="date"
-            value={formData.hire_date}
-            onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-          />
+          <Label>{t('employeeDetails.hireDate')}</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !formData.hire_date && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="me-2 h-4 w-4" />
+                {formData.hire_date ? (
+                  format(parseISO(formData.hire_date), 'PPP', { locale: ar })
+                ) : (
+                  <span>{language === 'ar' ? 'اختر التاريخ' : 'Pick a date'}</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={formData.hire_date ? parseISO(formData.hire_date) : undefined}
+                onSelect={(date) => setFormData({ ...formData, hire_date: date ? format(date, 'yyyy-MM-dd') : '' })}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -763,27 +790,32 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
         
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="work-start">{t('settings.workStart')}</Label>
-            <Input 
-              id="work-start" 
-              type="time" 
-              value={formData.work_start_time}
-              onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
-            />
+            <Label>{t('settings.workStart')}</Label>
+            <div className="relative">
+              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                type="time" 
+                value={formData.work_start_time}
+                onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
+                className="ps-10"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="work-end">{t('settings.workEnd')}</Label>
-            <Input 
-              id="work-end" 
-              type="time" 
-              value={formData.work_end_time}
-              onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
-            />
+            <Label>{t('settings.workEnd')}</Label>
+            <div className="relative">
+              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                type="time" 
+                value={formData.work_end_time}
+                onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
+                className="ps-10"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="break">{t('settings.breakDuration')}</Label>
+            <Label>{t('settings.breakDuration')}</Label>
             <NumberInput 
-              id="break" 
               value={formData.break_duration_minutes}
               onChange={(value) => setFormData({ ...formData, break_duration_minutes: value })}
             />
@@ -1035,18 +1067,48 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         </div>
         <div className="space-y-2">
           <Label>{t('employees.status')}</Label>
-          <Select 
-            value={formData.is_active ? 'active' : 'inactive'} 
-            onValueChange={(value) => setFormData({ ...formData, is_active: value === 'active' })}
+          <Card className={cn(
+            "p-4 transition-all duration-300 cursor-pointer border-2",
+            formData.is_active 
+              ? "bg-success/10 border-success/30 hover:border-success/50" 
+              : "bg-muted/50 border-muted-foreground/20 hover:border-muted-foreground/40"
+          )}
+          onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
           >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">{t('common.active')}</SelectItem>
-              <SelectItem value="inactive">{t('common.inactive')}</SelectItem>
-            </SelectContent>
-          </Select>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                  formData.is_active ? "bg-success/20" : "bg-muted-foreground/10"
+                )}>
+                  {formData.is_active ? (
+                    <UserCheck className="w-5 h-5 text-success" />
+                  ) : (
+                    <UserX className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <p className={cn(
+                    "font-medium",
+                    formData.is_active ? "text-success" : "text-muted-foreground"
+                  )}>
+                    {formData.is_active ? t('common.active') : t('common.inactive')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.is_active 
+                      ? (language === 'ar' ? 'الموظف يعمل حالياً' : 'Employee is currently working')
+                      : (language === 'ar' ? 'الموظف غير نشط' : 'Employee is inactive')
+                    }
+                  </p>
+                </div>
+              </div>
+              <Switch 
+                checked={formData.is_active}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </Card>
         </div>
       </div>
 
@@ -1060,13 +1122,34 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="edit-hire_date">{t('employeeDetails.hireDate')}</Label>
-          <Input 
-            id="edit-hire_date" 
-            type="date"
-            value={formData.hire_date}
-            onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-          />
+          <Label>{t('employeeDetails.hireDate')}</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !formData.hire_date && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="me-2 h-4 w-4" />
+                {formData.hire_date ? (
+                  format(parseISO(formData.hire_date), 'PPP', { locale: ar })
+                ) : (
+                  <span>{language === 'ar' ? 'اختر التاريخ' : 'Pick a date'}</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={formData.hire_date ? parseISO(formData.hire_date) : undefined}
+                onSelect={(date) => setFormData({ ...formData, hire_date: date ? format(date, 'yyyy-MM-dd') : '' })}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -1145,27 +1228,32 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="edit-work-start">{t('settings.workStart')}</Label>
-            <Input 
-              id="edit-work-start" 
-              type="time" 
-              value={formData.work_start_time}
-              onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
-            />
+            <Label>{t('settings.workStart')}</Label>
+            <div className="relative">
+              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                type="time" 
+                value={formData.work_start_time}
+                onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
+                className="ps-10"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-work-end">{t('settings.workEnd')}</Label>
-            <Input 
-              id="edit-work-end" 
-              type="time" 
-              value={formData.work_end_time}
-              onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
-            />
+            <Label>{t('settings.workEnd')}</Label>
+            <div className="relative">
+              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                type="time" 
+                value={formData.work_end_time}
+                onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
+                className="ps-10"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-break">{t('settings.breakDuration')}</Label>
+            <Label>{t('settings.breakDuration')}</Label>
             <NumberInput 
-              id="edit-break" 
               value={formData.break_duration_minutes}
               onChange={(value) => setFormData({ ...formData, break_duration_minutes: value })}
             />
