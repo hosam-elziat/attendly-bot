@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TimePicker } from '@/components/ui/time-picker';
 import { cn } from '@/lib/utils';
 import { 
   Table, 
@@ -791,27 +792,19 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label>{t('settings.workStart')}</Label>
-            <div className="relative">
-              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                type="time" 
-                value={formData.work_start_time}
-                onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
-                className="ps-10"
-              />
-            </div>
+            <TimePicker
+              value={formData.work_start_time}
+              onChange={(time) => setFormData({ ...formData, work_start_time: time })}
+              placeholder={language === 'ar' ? 'وقت البدء' : 'Start time'}
+            />
           </div>
           <div className="space-y-2">
             <Label>{t('settings.workEnd')}</Label>
-            <div className="relative">
-              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                type="time" 
-                value={formData.work_end_time}
-                onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
-                className="ps-10"
-              />
-            </div>
+            <TimePicker
+              value={formData.work_end_time}
+              onChange={(time) => setFormData({ ...formData, work_end_time: time })}
+              placeholder={language === 'ar' ? 'وقت الانتهاء' : 'End time'}
+            />
           </div>
           <div className="space-y-2">
             <Label>{t('settings.breakDuration')}</Label>
@@ -1229,27 +1222,19 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label>{t('settings.workStart')}</Label>
-            <div className="relative">
-              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                type="time" 
-                value={formData.work_start_time}
-                onChange={(e) => setFormData({ ...formData, work_start_time: e.target.value })}
-                className="ps-10"
-              />
-            </div>
+            <TimePicker
+              value={formData.work_start_time}
+              onChange={(time) => setFormData({ ...formData, work_start_time: time })}
+              placeholder={language === 'ar' ? 'وقت البدء' : 'Start time'}
+            />
           </div>
           <div className="space-y-2">
             <Label>{t('settings.workEnd')}</Label>
-            <div className="relative">
-              <Clock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                type="time" 
-                value={formData.work_end_time}
-                onChange={(e) => setFormData({ ...formData, work_end_time: e.target.value })}
-                className="ps-10"
-              />
-            </div>
+            <TimePicker
+              value={formData.work_end_time}
+              onChange={(time) => setFormData({ ...formData, work_end_time: time })}
+              placeholder={language === 'ar' ? 'وقت الانتهاء' : 'End time'}
+            />
           </div>
           <div className="space-y-2">
             <Label>{t('settings.breakDuration')}</Label>
