@@ -132,30 +132,38 @@ serve(async (req) => {
       console.log(`Employee ${emp.full_name}: timezone=${companyTimezone}, localTime=${currentTime}, localDate=${today}, day=${currentDayName}`)
 
       // Get approved leave requests for today for this employee
-      const { data: leaveData } = await supabase
+      const { data: leaveData, error: leaveError } = await supabase
         .from('leave_requests')
         .select('id')
         .eq('employee_id', emp.id)
         .eq('status', 'approved')
         .lte('start_date', today)
         .gte('end_date', today)
-        .single()
+        .limit(1)
 
-      if (leaveData) {
+      if (leaveError) {
+        console.log(`Error checking leave for ${emp.full_name}:`, leaveError.message)
+      }
+
+      if (leaveData && leaveData.length > 0) {
         console.log(`Skipping ${emp.full_name} - on approved leave`)
         continue
       }
 
       // Check if today is an approved holiday for this company
-      const { data: holidayData } = await supabase
+      const { data: holidayData, error: holidayError } = await supabase
         .from('approved_holidays')
         .select('id')
         .eq('company_id', emp.company_id)
         .eq('holiday_date', today)
         .eq('is_approved', true)
-        .single()
+        .limit(1)
 
-      if (holidayData) {
+      if (holidayError) {
+        console.log(`Error checking holiday for ${emp.full_name}:`, holidayError.message)
+      }
+
+      if (holidayData && holidayData.length > 0) {
         console.log(`Skipping ${emp.full_name} - approved holiday today`)
         continue
       }
