@@ -38,7 +38,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, Users, Clock, Eye, Shield, AlertTriangle, Download } from 'lucide-react';
 import EmployeeVerificationForm from '@/components/employees/EmployeeVerificationForm';
 import EmployeeLocationSelector from '@/components/employees/EmployeeLocationSelector';
 import { useEmployeeLocations, useUpdateEmployeeLocations } from '@/hooks/useCompanyLocations';
@@ -59,7 +59,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { CURRENCIES, ARAB_COUNTRIES } from './EmployeeDetails';
-
+import { exportEmployeesReport } from '@/lib/exportUtils';
+import { toast } from 'sonner';
 const WEEKDAYS = [
   { id: 'sunday', labelKey: 'common.sun' },
   { id: 'monday', labelKey: 'common.mon' },
@@ -262,6 +263,27 @@ const Employees = () => {
                     <SelectItem value="inactive">{t('common.inactive')}</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const exportData = filteredEmployees.map(emp => ({
+                      full_name: emp.full_name,
+                      email: emp.email,
+                      phone: emp.phone,
+                      department: emp.department,
+                      hire_date: emp.hire_date,
+                      base_salary: emp.base_salary,
+                      is_active: emp.is_active ?? true,
+                    }));
+                    exportEmployeesReport(exportData, direction === 'rtl');
+                    toast.success(direction === 'rtl' ? 'تم تصدير التقرير' : 'Report exported');
+                  }}
+                  className="gap-2"
+                  disabled={filteredEmployees.length === 0}
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">{direction === 'rtl' ? 'تصدير' : 'Export'}</span>
+                </Button>
               </div>
             </CardContent>
           </Card>
