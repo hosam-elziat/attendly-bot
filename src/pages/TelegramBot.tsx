@@ -123,19 +123,20 @@ const TelegramBot = () => {
       if (selectedPhotoFile) {
         const fileExt = selectedPhotoFile.name.split('.').pop();
         const fileName = `${company.id}-${Date.now()}.${fileExt}`;
-        const filePath = `bot-photos/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, selectedPhotoFile);
+          .from('bot-photos')
+          .upload(fileName, selectedPhotoFile);
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
-          // Continue without photo URL - admin can request it later
+          toast.error('فشل في رفع الصورة: ' + uploadError.message);
+          setIsRequestingPhoto(false);
+          return;
         } else {
           const { data: urlData } = supabase.storage
-            .from('avatars')
-            .getPublicUrl(filePath);
+            .from('bot-photos')
+            .getPublicUrl(fileName);
           photoUrl = urlData.publicUrl;
         }
       }

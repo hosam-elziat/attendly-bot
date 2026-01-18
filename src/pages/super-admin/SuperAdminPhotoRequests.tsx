@@ -25,6 +25,10 @@ interface PhotoRequest {
   completed_by: string | null;
   created_at: string;
   company_name?: string;
+  company_owner_email?: string;
+  subscription_plan?: string;
+  subscription_status?: string;
+  employees_count?: number;
 }
 
 const SuperAdminPhotoRequests = () => {
@@ -49,19 +53,58 @@ const SuperAdminPhotoRequests = () => {
 
       if (requestsError) throw requestsError;
 
-      // Fetch company names
+      // Fetch company details
       const companyIds = [...new Set(requestsData?.map(r => r.company_id) || [])];
+      
       const { data: companiesData } = await supabase
         .from('companies')
-        .select('id, name')
+        .select('id, name, owner_id')
         .in('id', companyIds);
 
-      const companyMap = new Map(companiesData?.map(c => [c.id, c.name]) || []);
+      // Fetch subscriptions
+      const { data: subscriptionsData } = await supabase
+        .from('subscriptions')
+        .select('company_id, plan_name, status')
+        .in('company_id', companyIds);
 
-      const enrichedRequests = requestsData?.map(r => ({
-        ...r,
-        company_name: companyMap.get(r.company_id) || 'غير معروف',
-      })) || [];
+      // Fetch employees count
+      const { data: employeesData } = await supabase
+        .from('employees')
+        .select('company_id')
+        .in('company_id', companyIds)
+        .eq('is_active', true);
+
+      // Fetch owner profiles
+      const ownerIds = [...new Set(companiesData?.map(c => c.owner_id) || [])];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('user_id, email')
+        .in('user_id', ownerIds);
+
+      const companyMap = new Map(companiesData?.map(c => [c.id, c]) || []);
+      const subscriptionMap = new Map(subscriptionsData?.map(s => [s.company_id, s]) || []);
+      const profileMap = new Map(profilesData?.map(p => [p.user_id, p]) || []);
+      
+      // Count employees per company
+      const employeesCountMap = new Map<string, number>();
+      employeesData?.forEach(e => {
+        employeesCountMap.set(e.company_id, (employeesCountMap.get(e.company_id) || 0) + 1);
+      });
+
+      const enrichedRequests = requestsData?.map(r => {
+        const company = companyMap.get(r.company_id);
+        const subscription = subscriptionMap.get(r.company_id);
+        const ownerProfile = company ? profileMap.get(company.owner_id) : null;
+        
+        return {
+          ...r,
+          company_name: company?.name || 'غير معروف',
+          company_owner_email: ownerProfile?.email,
+          subscription_plan: subscription?.plan_name || 'بدون اشتراك',
+          subscription_status: subscription?.status || 'غير معروف',
+          employees_count: employeesCountMap.get(r.company_id) || 0,
+        };
+      }) || [];
 
       setRequests(enrichedRequests);
     } catch (error) {
@@ -195,7 +238,8 @@ const SuperAdminPhotoRequests = () => {
                   <TableRow>
                     <TableHead>الشركة</TableHead>
                     <TableHead>البوت</TableHead>
-                    <TableHead>مقدم الطلب</TableHead>
+                    <TableHead>الاشتراك</TableHead>
+                    <TableHead>الموظفين</TableHead>
                     <TableHead>الصورة</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead>التاريخ</TableHead>
@@ -205,7 +249,13 @@ const SuperAdminPhotoRequests = () => {
                 <TableBody>
                   {filteredRequests.map((request) => (
                     <TableRow key={request.id}>
-                      <TableCell className="font-medium">{request.company_name}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{request.company_name}</p>
+                          <p className="text-xs text-muted-foreground">{request.company_owner_email}</p>
+                          <p className="text-xs text-muted-foreground">مقدم الطلب: {request.requested_by_name || 'غير معروف'}</p>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <a 
                           href={`https://t.me/${request.bot_username}`} 
@@ -217,7 +267,19 @@ const SuperAdminPhotoRequests = () => {
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </TableCell>
-                      <TableCell>{request.requested_by_name || 'غير معروف'}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{request.subscription_plan}</p>
+                          <Badge variant={request.subscription_status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                            {request.subscription_status === 'active' ? 'نشط' : 
+                             request.subscription_status === 'trial' ? 'تجريبي' : 
+                             request.subscription_status === 'cancelled' ? 'ملغي' : 'غير نشط'}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="font-medium">{request.employees_count}</span>
+                      </TableCell>
                       <TableCell>
                         {request.photo_url ? (
                           <a 
