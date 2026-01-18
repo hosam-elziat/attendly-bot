@@ -22,7 +22,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2, MapPin } from 'lucide-react';
+import { Clock, LogIn, LogOut, Coffee, Loader2, Edit, Plus, Calendar, Search, Trash2, MapPin, Download } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +37,7 @@ import AddAttendanceDialog from '@/components/attendance/AddAttendanceDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { exportAttendanceReport } from '@/lib/exportUtils';
 
 import {
   AlertDialog,
@@ -413,13 +414,36 @@ const Attendance = () => {
                     </Select>
                   </div>
                   
-                  <Button 
-                    onClick={() => setAddDialogOpen(true)} 
-                    className="gap-2 h-10 touch-manipulation"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span className="sm:inline">{language === 'ar' ? 'إضافة حضور' : 'Add'}</span>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        const exportData = filteredAttendance.map((record: any) => ({
+                          employee_name: record.employees?.full_name || '',
+                          date: record.date,
+                          check_in_time: record.check_in_time ? format(new Date(record.check_in_time), 'HH:mm') : '',
+                          check_out_time: record.check_out_time ? format(new Date(record.check_out_time), 'HH:mm') : '',
+                          status: record.status,
+                          notes: record.notes || '',
+                        }));
+                        exportAttendanceReport(exportData, language === 'ar');
+                        toast.success(language === 'ar' ? 'تم تصدير التقرير' : 'Report exported');
+                      }}
+                      className="gap-2 h-10"
+                      disabled={filteredAttendance.length === 0}
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="hidden sm:inline">{language === 'ar' ? 'تصدير' : 'Export'}</span>
+                    </Button>
+                    
+                    <Button 
+                      onClick={() => setAddDialogOpen(true)} 
+                      className="gap-2 h-10 touch-manipulation"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span className="sm:inline">{language === 'ar' ? 'إضافة حضور' : 'Add'}</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
