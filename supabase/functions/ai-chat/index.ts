@@ -260,6 +260,28 @@ const databaseTools = [
   }
 ];
 
+// Input validation helpers
+function sanitizeString(input: string | undefined, maxLength = 200): string {
+  if (!input) return '';
+  // Remove excessive wildcards and limit length
+  return input.replace(/%{3,}/g, '%%').slice(0, maxLength);
+}
+
+function validateDate(dateStr: string | undefined): boolean {
+  if (!dateStr || dateStr === 'current_date' || dateStr === 'today') return true;
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
+function validateUUID(uuid: string | undefined): boolean {
+  if (!uuid) return true;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
+}
+
+function validateStatus(status: string | undefined, allowedValues: string[]): boolean {
+  if (!status) return true;
+  return allowedValues.includes(status);
+}
+
 // Execute database functions
 async function executeFunction(
   supabase: any,
@@ -277,28 +299,45 @@ async function executeFunction(
   try {
     switch (functionName) {
       case "get_employees": {
+        // Validate inputs
+        const search = sanitizeString(args.search, 100);
+        const department = sanitizeString(args.department, 100);
+        
         let query = supabase
           .from("employees")
           .select("id, full_name, email, department, phone, is_active, hire_date, base_salary, salary_type, currency")
           .eq("company_id", companyId);
         
-        if (args.search) {
-          query = query.ilike("full_name", `%${args.search}%`);
+        if (search) {
+          query = query.ilike("full_name", `%${search}%`);
         }
-        if (args.department) {
-          query = query.ilike("department", `%${args.department}%`);
+        if (department) {
+          query = query.ilike("department", `%${department}%`);
         }
         if (typeof args.is_active === "boolean") {
           query = query.eq("is_active", args.is_active);
         }
         
-        const { data, error } = await query.limit(Number(args.limit) || 100);
+        const limit = Math.min(Number(args.limit) || 100, 500);
+        const { data, error } = await query.limit(limit);
         if (error) throw error;
         return JSON.stringify({ employees: data, count: data?.length || 0 });
       }
       
       case "get_attendance": {
+        // Validate dates
+        if (!validateDate(args.date) || !validateDate(args.from_date) || !validateDate(args.to_date)) {
+          return JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD." });
+        }
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
+        if (!validateStatus(args.status, ['checked_in', 'checked_out', 'on_break', 'absent'])) {
+          return JSON.stringify({ error: "Invalid status value." });
+        }
+        
         const targetDate = resolveDate(args.date);
+        const employeeName = sanitizeString(args.employee_name, 100);
         
         let query = supabase
           .from("attendance_logs")
@@ -312,26 +351,37 @@ async function executeFunction(
           query = query.eq("date", targetDate);
         } else if (args.from_date && args.to_date) {
           query = query.gte("date", resolveDate(args.from_date)).lte("date", resolveDate(args.to_date));
-        } else if (!args.employee_id && !args.employee_name) {
+        } else if (!args.employee_id && !employeeName) {
           query = query.eq("date", currentDate);
         }
         
         if (args.employee_id) {
           query = query.eq("employee_id", args.employee_id);
         }
-        if (args.employee_name) {
-          query = query.ilike("employees.full_name", `%${args.employee_name}%`);
+        if (employeeName) {
+          query = query.ilike("employees.full_name", `%${employeeName}%`);
         }
         if (args.status) {
           query = query.eq("status", args.status);
         }
         
-        const { data, error } = await query.order("date", { ascending: false }).limit(Number(args.limit) || 100);
+        const limit = Math.min(Number(args.limit) || 100, 500);
+        const { data, error } = await query.order("date", { ascending: false }).limit(limit);
         if (error) throw error;
         return JSON.stringify({ attendance: data, count: data?.length || 0, date: targetDate });
       }
       
       case "get_leave_requests": {
+        // Validate inputs
+        if (!validateStatus(args.status, ['pending', 'approved', 'rejected'])) {
+          return JSON.stringify({ error: "Invalid status. Use: pending, approved, rejected." });
+        }
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
+        
+        const employeeName = sanitizeString(args.employee_name, 100);
+        
         let query = supabase
           .from("leave_requests")
           .select(`
@@ -346,19 +396,24 @@ async function executeFunction(
         if (args.employee_id) {
           query = query.eq("employee_id", args.employee_id);
         }
-        if (args.employee_name) {
-          query = query.ilike("employees.full_name", `%${args.employee_name}%`);
+        if (employeeName) {
+          query = query.ilike("employees.full_name", `%${employeeName}%`);
         }
         if (args.from_date && args.to_date) {
           query = query.gte("start_date", resolveDate(args.from_date)).lte("end_date", resolveDate(args.to_date));
         }
         
-        const { data, error } = await query.order("created_at", { ascending: false }).limit(Number(args.limit) || 50);
+        const limit = Math.min(Number(args.limit) || 50, 200);
+        const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
         if (error) throw error;
         return JSON.stringify({ leave_requests: data, count: data?.length || 0 });
       }
       
       case "get_daily_summary": {
+        if (!validateDate(args.date)) {
+          return JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD." });
+        }
+        
         const targetDate = resolveDate(args.date) || currentDate;
         
         // Get employees count
@@ -427,6 +482,12 @@ async function executeFunction(
       }
       
       case "get_employee_details": {
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
+        
+        const employeeName = sanitizeString(args.employee_name, 100);
+        
         let employeeQuery = supabase
           .from("employees")
           .select("*")
@@ -434,8 +495,8 @@ async function executeFunction(
         
         if (args.employee_id) {
           employeeQuery = employeeQuery.eq("id", args.employee_id);
-        } else if (args.employee_name) {
-          employeeQuery = employeeQuery.ilike("full_name", `%${args.employee_name}%`);
+        } else if (employeeName) {
+          employeeQuery = employeeQuery.ilike("full_name", `%${employeeName}%`);
         }
         
         const { data: employees, error: empError } = await employeeQuery.limit(1);
@@ -477,103 +538,92 @@ async function executeFunction(
       }
       
       case "get_statistics": {
-        const period = args.period as string || "month";
-        let fromDate: string;
-        const toDate = currentDate;
+        const period = args.period || "today";
         
-        const now = new Date(currentDate);
-        switch (period) {
-          case "today":
-            fromDate = currentDate;
-            break;
-          case "week":
-            fromDate = new Date(now.setDate(now.getDate() - 7)).toISOString().split('T')[0];
-            break;
-          case "year":
-            fromDate = new Date(now.setFullYear(now.getFullYear() - 1)).toISOString().split('T')[0];
-            break;
-          default: // month
-            fromDate = new Date(now.setMonth(now.getMonth() - 1)).toISOString().split('T')[0];
-        }
-        
+        // Get total employees
         const { count: totalEmployees } = await supabase
           .from("employees")
           .select("*", { count: "exact", head: true })
           .eq("company_id", companyId)
           .eq("is_active", true);
         
-        const { data: attendance } = await supabase
+        // Get today's attendance
+        const { data: todayAttendance } = await supabase
           .from("attendance_logs")
-          .select("status, date")
+          .select("status")
           .eq("company_id", companyId)
-          .gte("date", fromDate)
-          .lte("date", toDate);
+          .eq("date", currentDate);
         
+        // Get pending leave requests
         const { count: pendingLeaves } = await supabase
           .from("leave_requests")
           .select("*", { count: "exact", head: true })
           .eq("company_id", companyId)
           .eq("status", "pending");
         
-        const { count: approvedLeaves } = await supabase
-          .from("leave_requests")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("status", "approved")
-          .gte("start_date", fromDate);
-        
-        const statusCounts = (attendance || []).reduce((acc: Record<string, number>, a: any) => {
-          acc[a.status] = (acc[a.status] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
+        const present = todayAttendance?.length || 0;
+        const checkedIn = todayAttendance?.filter((a: any) => a.status === "checked_in").length || 0;
         
         return JSON.stringify({
           period,
-          current_date: currentDate,
-          from_date: fromDate,
-          to_date: toDate,
-          total_employees: totalEmployees,
-          attendance_records: attendance?.length || 0,
-          status_breakdown: statusCounts,
-          pending_leave_requests: pendingLeaves,
-          approved_leaves_in_period: approvedLeaves
+          total_employees: totalEmployees || 0,
+          today: {
+            present,
+            absent: (totalEmployees || 0) - present,
+            checked_in: checkedIn,
+            attendance_rate: totalEmployees ? Math.round((present / totalEmployees) * 100) : 0
+          },
+          pending_leave_requests: pendingLeaves || 0
         });
       }
       
       case "update_leave_request": {
-        let leaveRequestId = args.leave_request_id;
+        if (!validateStatus(args.action, ['approve', 'reject'])) {
+          return JSON.stringify({ error: "Invalid action. Use: approve, reject." });
+        }
+        if (!validateUUID(args.leave_request_id)) {
+          return JSON.stringify({ error: "Invalid leave request ID format." });
+        }
         
-        // Find by employee name if no ID provided
-        if (!leaveRequestId && args.employee_name) {
-          const { data: leaves } = await supabase
-            .from("leave_requests")
-            .select(`id, employees!inner(full_name)`)
+        const employeeName = sanitizeString(args.employee_name, 100);
+        let leaveId = args.leave_request_id;
+        
+        // If employee name provided, find their pending request
+        if (!leaveId && employeeName) {
+          const { data: employees } = await supabase
+            .from("employees")
+            .select("id")
             .eq("company_id", companyId)
-            .eq("status", "pending")
-            .ilike("employees.full_name", `%${args.employee_name}%`)
+            .ilike("full_name", `%${employeeName}%`)
             .limit(1);
           
-          if (leaves?.length) {
-            leaveRequestId = leaves[0].id;
-          } else {
-            return JSON.stringify({ error: "No pending leave request found for this employee" });
+          if (employees?.length) {
+            const { data: pendingReq } = await supabase
+              .from("leave_requests")
+              .select("id")
+              .eq("employee_id", employees[0].id)
+              .eq("status", "pending")
+              .order("created_at", { ascending: false })
+              .limit(1);
+            
+            if (pendingReq?.length) {
+              leaveId = pendingReq[0].id;
+            }
           }
         }
         
-        if (!leaveRequestId) {
-          return JSON.stringify({ error: "Please specify leave request ID or employee name" });
+        if (!leaveId) {
+          return JSON.stringify({ error: "Leave request not found" });
         }
         
-        const newStatus = args.action === "approve" ? "approved" : "rejected";
-        
+        const status = args.action === "approve" ? "approved" : "rejected";
         const { data, error } = await supabase
           .from("leave_requests")
-          .update({
-            status: newStatus,
-            reviewed_at: new Date().toISOString(),
-            ...(args.notes && { reason: args.notes })
+          .update({ 
+            status,
+            reviewed_at: new Date().toISOString()
           })
-          .eq("id", leaveRequestId)
+          .eq("id", leaveId)
           .eq("company_id", companyId)
           .select(`*, employees(full_name)`)
           .single();
@@ -581,80 +631,106 @@ async function executeFunction(
         if (error) throw error;
         return JSON.stringify({ 
           success: true, 
-          message: `Leave request ${newStatus} for ${data.employees?.full_name}`, 
-          data 
+          message: `Leave request ${status}`,
+          leave_request: data 
         });
       }
       
       case "add_attendance": {
-        let employeeId = args.employee_id as string;
+        if (!validateDate(args.date)) {
+          return JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD." });
+        }
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
+        if (!validateStatus(args.status, ['checked_in', 'checked_out', 'on_break'])) {
+          return JSON.stringify({ error: "Invalid status. Use: checked_in, checked_out, on_break." });
+        }
         
-        if (!employeeId && args.employee_name) {
+        const employeeName = sanitizeString(args.employee_name, 100);
+        const targetDate = resolveDate(args.date) || currentDate;
+        let employeeId = args.employee_id;
+        
+        // Find employee by name if ID not provided
+        if (!employeeId && employeeName) {
           const { data: employees } = await supabase
             .from("employees")
             .select("id, full_name")
             .eq("company_id", companyId)
-            .ilike("full_name", `%${args.employee_name}%`)
+            .ilike("full_name", `%${employeeName}%`)
             .limit(1);
           
-          if (employees?.length) {
-            employeeId = employees[0].id;
-          } else {
-            return JSON.stringify({ error: `Employee "${args.employee_name}" not found` });
+          if (!employees?.length) {
+            return JSON.stringify({ error: `Employee "${employeeName}" not found` });
           }
+          employeeId = employees[0].id;
         }
         
         if (!employeeId) {
-          return JSON.stringify({ error: "Please specify employee name or ID" });
+          return JSON.stringify({ error: "Employee ID or name required" });
         }
         
-        const targetDate = resolveDate(args.date) || currentDate;
+        // Build time strings
+        const now = new Date();
+        const defaultTime = now.toISOString();
         
-        // Check if record exists
-        const { data: existing } = await supabase
-          .from("attendance_logs")
-          .select("id")
-          .eq("employee_id", employeeId)
-          .eq("date", targetDate)
-          .single();
-        
-        const attendanceData: Record<string, unknown> = {
+        const attendanceData: any = {
           employee_id: employeeId,
           company_id: companyId,
           date: targetDate,
           status: args.status,
-          ...(args.notes && { notes: args.notes })
+          updated_at: new Date().toISOString()
         };
         
-        if (args.check_in_time) {
-          attendanceData.check_in_time = `${targetDate}T${args.check_in_time}:00`;
+        if (args.check_in_time || args.status === "checked_in") {
+          attendanceData.check_in_time = args.check_in_time 
+            ? `${targetDate}T${args.check_in_time}:00` 
+            : defaultTime;
         }
-        if (args.check_out_time) {
-          attendanceData.check_out_time = `${targetDate}T${args.check_out_time}:00`;
+        if (args.check_out_time || args.status === "checked_out") {
+          attendanceData.check_out_time = args.check_out_time 
+            ? `${targetDate}T${args.check_out_time}:00` 
+            : defaultTime;
+        }
+        if (args.notes) {
+          attendanceData.notes = sanitizeString(args.notes, 500);
         }
         
-        let result;
-        if (existing) {
-          result = await supabase
-            .from("attendance_logs")
-            .update(attendanceData)
-            .eq("id", existing.id)
-            .select()
-            .single();
-        } else {
-          result = await supabase
+        // Upsert attendance
+        const { data, error } = await supabase
+          .from("attendance_logs")
+          .upsert(attendanceData, { 
+            onConflict: "employee_id,date",
+            ignoreDuplicates: false 
+          })
+          .select(`*, employees(full_name)`)
+          .single();
+        
+        if (error) {
+          // Try insert if upsert fails
+          const { data: insertData, error: insertError } = await supabase
             .from("attendance_logs")
             .insert(attendanceData)
-            .select()
+            .select(`*, employees(full_name)`)
             .single();
+          
+          if (insertError) throw insertError;
+          return JSON.stringify({ success: true, attendance: insertData });
         }
         
-        if (result.error) throw result.error;
-        return JSON.stringify({ success: true, message: "Attendance recorded", data: result.data });
+        return JSON.stringify({ success: true, attendance: data });
       }
       
       case "bulk_attendance": {
+        if (!validateDate(args.date)) {
+          return JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD." });
+        }
+        if (!validateStatus(args.status, ['checked_in', 'checked_out', 'on_break'])) {
+          return JSON.stringify({ error: "Invalid status. Use: checked_in, checked_out, on_break." });
+        }
+        
         const targetDate = resolveDate(args.date) || currentDate;
+        const department = sanitizeString(args.department, 100);
         
         // Get employees to update
         let employeeQuery = supabase
@@ -663,12 +739,17 @@ async function executeFunction(
           .eq("company_id", companyId)
           .eq("is_active", true);
         
-        if (args.department) {
-          employeeQuery = employeeQuery.ilike("department", `%${args.department}%`);
-        }
-        
         if (args.employee_ids?.length) {
+          // Validate all IDs
+          for (const id of args.employee_ids) {
+            if (!validateUUID(id)) {
+              return JSON.stringify({ error: "Invalid employee ID in list." });
+            }
+          }
           employeeQuery = employeeQuery.in("id", args.employee_ids);
+        }
+        if (department) {
+          employeeQuery = employeeQuery.ilike("department", `%${department}%`);
         }
         
         const { data: employees, error: empError } = await employeeQuery;
@@ -677,85 +758,93 @@ async function executeFunction(
           return JSON.stringify({ error: "No employees found" });
         }
         
-        const results = { success: 0, failed: 0, employees: [] as string[] };
+        const now = new Date();
+        const defaultTime = now.toISOString();
+        const notes = sanitizeString(args.notes, 500);
         
-        for (const emp of employees) {
-          // Check if record exists
-          const { data: existing } = await supabase
-            .from("attendance_logs")
-            .select("id")
-            .eq("employee_id", emp.id)
-            .eq("date", targetDate)
-            .single();
-          
-          const attendanceData: Record<string, unknown> = {
+        // Prepare attendance records
+        const attendanceRecords = employees.map((emp: any) => {
+          const record: any = {
             employee_id: emp.id,
             company_id: companyId,
             date: targetDate,
             status: args.status,
-            ...(args.notes && { notes: args.notes })
+            updated_at: new Date().toISOString()
           };
           
-          if (args.check_in_time) {
-            attendanceData.check_in_time = `${targetDate}T${args.check_in_time}:00`;
+          if (args.check_in_time || args.status === "checked_in") {
+            record.check_in_time = args.check_in_time 
+              ? `${targetDate}T${args.check_in_time}:00` 
+              : defaultTime;
           }
-          if (args.check_out_time) {
-            attendanceData.check_out_time = `${targetDate}T${args.check_out_time}:00`;
+          if (args.check_out_time || args.status === "checked_out") {
+            record.check_out_time = args.check_out_time 
+              ? `${targetDate}T${args.check_out_time}:00` 
+              : defaultTime;
           }
-          
-          let result;
-          if (existing) {
-            result = await supabase
-              .from("attendance_logs")
-              .update(attendanceData)
-              .eq("id", existing.id);
-          } else {
-            result = await supabase
-              .from("attendance_logs")
-              .insert(attendanceData);
+          if (notes) {
+            record.notes = notes;
           }
           
-          if (result.error) {
-            results.failed++;
-          } else {
-            results.success++;
-            results.employees.push(emp.full_name);
-          }
-        }
+          return record;
+        });
+        
+        // Delete existing records for today first
+        await supabase
+          .from("attendance_logs")
+          .delete()
+          .eq("company_id", companyId)
+          .eq("date", targetDate)
+          .in("employee_id", employees.map((e: any) => e.id));
+        
+        // Insert new records
+        const { data, error } = await supabase
+          .from("attendance_logs")
+          .insert(attendanceRecords)
+          .select();
+        
+        if (error) throw error;
         
         return JSON.stringify({ 
-          message: `Marked ${results.success} employees as ${args.status} on ${targetDate}`,
+          success: true, 
+          message: `Marked ${employees.length} employees as ${args.status}`,
+          count: employees.length,
           date: targetDate,
-          successCount: results.success,
-          failedCount: results.failed,
-          employees: results.employees
+          employees: employees.map((e: any) => e.full_name)
         });
       }
       
       case "add_salary_adjustment": {
-        let employeeId = args.employee_id as string;
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
         
-        if (!employeeId && args.employee_name) {
+        const employeeName = sanitizeString(args.employee_name, 100);
+        const month = resolveDate(args.month) || currentDate.slice(0, 7) + "-01";
+        let employeeId = args.employee_id;
+        
+        // Find employee by name if needed
+        if (!employeeId && employeeName) {
           const { data: employees } = await supabase
             .from("employees")
             .select("id, full_name")
             .eq("company_id", companyId)
-            .ilike("full_name", `%${args.employee_name}%`)
+            .ilike("full_name", `%${employeeName}%`)
             .limit(1);
           
-          if (employees?.length) {
-            employeeId = employees[0].id;
-          } else {
-            return JSON.stringify({ error: `Employee "${args.employee_name}" not found` });
+          if (!employees?.length) {
+            return JSON.stringify({ error: `Employee "${employeeName}" not found` });
           }
+          employeeId = employees[0].id;
         }
         
         if (!employeeId) {
-          return JSON.stringify({ error: "Please specify employee name or ID" });
+          return JSON.stringify({ error: "Employee ID or name required" });
         }
         
-        // Default to first day of current month
-        const month = args.month || `${currentDate.substring(0, 7)}-01`;
+        const bonus = Math.max(0, Number(args.bonus) || 0);
+        const deduction = Math.max(0, Number(args.deduction) || 0);
+        const description = sanitizeString(args.description, 500);
         
         const { data, error } = await supabase
           .from("salary_adjustments")
@@ -763,38 +852,43 @@ async function executeFunction(
             employee_id: employeeId,
             company_id: companyId,
             month,
-            bonus: args.bonus || 0,
-            deduction: args.deduction || 0,
-            description: args.description || null
+            bonus,
+            deduction,
+            description: description || (bonus > 0 ? "Bonus" : "Deduction")
           })
-          .select()
+          .select(`*, employees(full_name)`)
           .single();
         
         if (error) throw error;
         
-        const type = args.bonus ? "bonus" : "deduction";
-        const amount = args.bonus || args.deduction;
         return JSON.stringify({ 
           success: true, 
-          message: `Added ${type} of ${amount} to employee`, 
-          data 
+          message: bonus > 0 ? `Added ${bonus} bonus` : `Added ${deduction} deduction`,
+          adjustment: data 
         });
       }
       
       case "bulk_salary_adjustment": {
-        // Get employees to update
+        const department = sanitizeString(args.department, 100);
+        const month = resolveDate(args.month) || currentDate.slice(0, 7) + "-01";
+        
+        // Get employees
         let employeeQuery = supabase
           .from("employees")
           .select("id, full_name")
           .eq("company_id", companyId)
           .eq("is_active", true);
         
-        if (args.department) {
-          employeeQuery = employeeQuery.ilike("department", `%${args.department}%`);
-        }
-        
         if (args.employee_ids?.length) {
+          for (const id of args.employee_ids) {
+            if (!validateUUID(id)) {
+              return JSON.stringify({ error: "Invalid employee ID in list." });
+            }
+          }
           employeeQuery = employeeQuery.in("id", args.employee_ids);
+        }
+        if (department) {
+          employeeQuery = employeeQuery.ilike("department", `%${department}%`);
         }
         
         const { data: employees, error: empError } = await employeeQuery;
@@ -803,86 +897,122 @@ async function executeFunction(
           return JSON.stringify({ error: "No employees found" });
         }
         
-        const month = args.month || `${currentDate.substring(0, 7)}-01`;
-        const results = { success: 0, failed: 0, employees: [] as string[] };
+        const bonus = Math.max(0, Number(args.bonus) || 0);
+        const deduction = Math.max(0, Number(args.deduction) || 0);
+        const description = sanitizeString(args.description, 500);
         
-        for (const emp of employees) {
-          const { error } = await supabase
-            .from("salary_adjustments")
-            .insert({
-              employee_id: emp.id,
-              company_id: companyId,
-              month,
-              bonus: args.bonus || 0,
-              deduction: args.deduction || 0,
-              description: args.description || null
-            });
-          
-          if (error) {
-            results.failed++;
-          } else {
-            results.success++;
-            results.employees.push(emp.full_name);
-          }
-        }
+        const adjustments = employees.map((emp: any) => ({
+          employee_id: emp.id,
+          company_id: companyId,
+          month,
+          bonus,
+          deduction,
+          description: description || (bonus > 0 ? "Bulk Bonus" : "Bulk Deduction")
+        }));
         
-        const type = args.bonus ? "bonus" : "deduction";
-        const amount = args.bonus || args.deduction;
+        const { data, error } = await supabase
+          .from("salary_adjustments")
+          .insert(adjustments)
+          .select();
+        
+        if (error) throw error;
+        
         return JSON.stringify({ 
-          message: `Added ${type} of ${amount} to ${results.success} employees`,
-          successCount: results.success,
-          failedCount: results.failed,
-          employees: results.employees
+          success: true, 
+          message: `Added adjustment to ${employees.length} employees`,
+          count: employees.length,
+          bonus,
+          deduction
         });
       }
       
       case "get_salary_info": {
-        let query = supabase
-          .from("employees")
-          .select(`
-            id, full_name, base_salary, salary_type, currency,
-            salary_adjustments(id, month, bonus, deduction, description)
-          `)
-          .eq("company_id", companyId);
-        
-        if (args.employee_id) {
-          query = query.eq("id", args.employee_id);
-        } else if (args.employee_name) {
-          query = query.ilike("full_name", `%${args.employee_name}%`);
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
         }
         
-        const { data, error } = await query.limit(args.employee_name || args.employee_id ? 1 : 50);
-        if (error) throw error;
+        const employeeName = sanitizeString(args.employee_name, 100);
+        let employeeFilter: any = {};
         
-        return JSON.stringify({ salary_info: data });
-      }
-      
-      case "add_leave_request": {
-        let employeeId = args.employee_id as string;
-        
-        if (!employeeId && args.employee_name) {
+        if (args.employee_id) {
+          employeeFilter = { employee_id: args.employee_id };
+        } else if (employeeName) {
           const { data: employees } = await supabase
             .from("employees")
-            .select("id, full_name")
+            .select("id")
             .eq("company_id", companyId)
-            .ilike("full_name", `%${args.employee_name}%`)
+            .ilike("full_name", `%${employeeName}%`)
             .limit(1);
           
           if (employees?.length) {
-            employeeId = employees[0].id;
-          } else {
-            return JSON.stringify({ error: `Employee "${args.employee_name}" not found` });
+            employeeFilter = { employee_id: employees[0].id };
           }
         }
         
+        let query = supabase
+          .from("salary_adjustments")
+          .select(`
+            *,
+            employees(full_name, base_salary, currency)
+          `)
+          .eq("company_id", companyId);
+        
+        if (employeeFilter.employee_id) {
+          query = query.eq("employee_id", employeeFilter.employee_id);
+        }
+        if (args.month) {
+          query = query.eq("month", resolveDate(args.month));
+        }
+        
+        const { data, error } = await query.order("month", { ascending: false }).limit(50);
+        if (error) throw error;
+        
+        return JSON.stringify({ salary_adjustments: data, count: data?.length || 0 });
+      }
+      
+      case "add_leave_request": {
+        if (!validateDate(args.start_date) || !validateDate(args.end_date)) {
+          return JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD." });
+        }
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
+        if (!validateStatus(args.leave_type, ['vacation', 'sick', 'personal', 'emergency', 'regular'])) {
+          return JSON.stringify({ error: "Invalid leave type. Use: vacation, sick, personal, emergency." });
+        }
+        
+        const employeeName = sanitizeString(args.employee_name, 100);
+        let employeeId = args.employee_id;
+        
+        // Find employee by name if needed
+        if (!employeeId && employeeName) {
+          const { data: employees } = await supabase
+            .from("employees")
+            .select("id")
+            .eq("company_id", companyId)
+            .ilike("full_name", `%${employeeName}%`)
+            .limit(1);
+          
+          if (!employees?.length) {
+            return JSON.stringify({ error: `Employee "${employeeName}" not found` });
+          }
+          employeeId = employees[0].id;
+        }
+        
         if (!employeeId) {
-          return JSON.stringify({ error: "Please specify employee name or ID" });
+          return JSON.stringify({ error: "Employee ID or name required" });
         }
         
         // Calculate days
         const start = new Date(args.start_date);
         const end = new Date(args.end_date);
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (days <= 0 || days > 365) {
+          return JSON.stringify({ error: "Invalid date range. Check start and end dates." });
+        }
+        
+        const reason = sanitizeString(args.reason, 500);
         
         const { data, error } = await supabase
           .from("leave_requests")
@@ -893,61 +1023,104 @@ async function executeFunction(
             start_date: args.start_date,
             end_date: args.end_date,
             days,
-            reason: args.reason || null,
+            reason: reason || null,
             status: "pending"
           })
           .select(`*, employees(full_name)`)
           .single();
         
         if (error) throw error;
+        
         return JSON.stringify({ 
           success: true, 
-          message: `Created leave request for ${data.employees?.full_name}`, 
-          data 
+          message: `Leave request created for ${days} days`,
+          leave_request: data 
         });
       }
       
       case "update_employee": {
-        let employeeId = args.employee_id as string;
+        if (!validateUUID(args.employee_id)) {
+          return JSON.stringify({ error: "Invalid employee ID format." });
+        }
         
-        if (!employeeId && args.employee_name) {
+        const employeeName = sanitizeString(args.employee_name, 100);
+        let employeeId = args.employee_id;
+        
+        // Find employee by name if needed
+        if (!employeeId && employeeName) {
           const { data: employees } = await supabase
             .from("employees")
-            .select("id, full_name")
+            .select("id")
             .eq("company_id", companyId)
-            .ilike("full_name", `%${args.employee_name}%`)
+            .ilike("full_name", `%${employeeName}%`)
             .limit(1);
           
-          if (employees?.length) {
-            employeeId = employees[0].id;
-          } else {
-            return JSON.stringify({ error: `Employee "${args.employee_name}" not found` });
+          if (!employees?.length) {
+            return JSON.stringify({ error: `Employee "${employeeName}" not found` });
           }
+          employeeId = employees[0].id;
         }
         
         if (!employeeId) {
-          return JSON.stringify({ error: "Please specify employee name or ID" });
+          return JSON.stringify({ error: "Employee ID or name required" });
         }
+        
+        // Sanitize updates
+        const updates: any = {};
+        if (args.updates.full_name) updates.full_name = sanitizeString(args.updates.full_name, 100);
+        if (args.updates.email) updates.email = sanitizeString(args.updates.email, 254);
+        if (args.updates.department) updates.department = sanitizeString(args.updates.department, 100);
+        if (args.updates.phone) updates.phone = sanitizeString(args.updates.phone, 20);
+        if (typeof args.updates.base_salary === "number") updates.base_salary = Math.max(0, args.updates.base_salary);
+        if (typeof args.updates.is_active === "boolean") updates.is_active = args.updates.is_active;
+        
+        if (Object.keys(updates).length === 0) {
+          return JSON.stringify({ error: "No valid updates provided" });
+        }
+        
+        updates.updated_at = new Date().toISOString();
         
         const { data, error } = await supabase
           .from("employees")
-          .update(args.updates)
+          .update(updates)
           .eq("id", employeeId)
           .eq("company_id", companyId)
           .select()
           .single();
         
         if (error) throw error;
-        return JSON.stringify({ success: true, message: "Employee updated", data });
+        
+        return JSON.stringify({ 
+          success: true, 
+          message: "Employee updated",
+          employee: data 
+        });
       }
       
       default:
-        return JSON.stringify({ error: "Unknown function" });
+        return JSON.stringify({ error: `Unknown function: ${functionName}` });
     }
   } catch (error) {
     console.error(`Error executing ${functionName}:`, error);
-    return JSON.stringify({ error: error instanceof Error ? error.message : "Function execution failed" });
+    return JSON.stringify({ error: error instanceof Error ? error.message : "Database error" });
   }
+}
+
+// Verify user has access to company
+async function verifyCompanyAccess(supabase: any, userId: string, companyId: string): Promise<boolean> {
+  // Check if user belongs to the company via profiles
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("user_id", userId)
+    .single();
+  
+  if (profileError || !profile) {
+    console.error("Profile lookup failed:", profileError);
+    return false;
+  }
+  
+  return profile.company_id === companyId;
 }
 
 serve(async (req) => {
@@ -969,8 +1142,47 @@ serve(async (req) => {
       throw new Error("Supabase configuration missing");
     }
     if (!companyId) {
-      throw new Error("Company ID is required");
+      return new Response(
+        JSON.stringify({ error: "Company ID is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    // ===== SECURITY: Verify JWT and user access =====
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Missing authentication token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    
+    // Create authenticated client to verify user
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    // Verify the JWT and get user
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify user has access to the requested company
+    const hasAccess = await verifyCompanyAccess(supabaseAuth, user.id, companyId);
+    if (!hasAccess) {
+      console.error(`User ${user.id} attempted to access company ${companyId} without permission`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - You don't have access to this company" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ===== END SECURITY =====
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     

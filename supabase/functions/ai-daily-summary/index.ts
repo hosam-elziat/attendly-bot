@@ -6,6 +6,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Verify user has access to company
+async function verifyCompanyAccess(supabase: any, userId: string, companyId: string): Promise<boolean> {
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("user_id", userId)
+    .single();
+  
+  if (profileError || !profile) {
+    console.error("Profile lookup failed:", profileError);
+    return false;
+  }
+  
+  return profile.company_id === companyId;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -29,6 +45,39 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ===== SECURITY: Verify JWT and user access =====
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Missing authentication token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    
+    // Verify the JWT and get user
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify user has access to the requested company
+    const hasAccess = await verifyCompanyAccess(supabase, user.id, companyId);
+    if (!hasAccess) {
+      console.error(`User ${user.id} attempted to access company ${companyId} without permission`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - You don't have access to this company" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ===== END SECURITY =====
 
     const today = new Date().toISOString().split("T")[0];
 
