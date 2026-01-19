@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { BlobWriter, ZipWriter } from "https://deno.land/x/zipjs@v2.7.45/index.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,6 +50,8 @@ const COMPANY_FIELDS = [
   'created_at', 'updated_at'
 ];
 
+const BACKUP_RETENTION_DAYS = 3;
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -61,6 +64,9 @@ serve(async (req: Request) => {
     );
 
     console.log("Checking automatic full system backup...");
+
+    // First, delete old backups (older than 3 days)
+    await deleteOldBackups(supabase);
 
     // Check if auto backup is enabled and settings exist
     const { data: settings } = await supabase
@@ -91,10 +97,8 @@ serve(async (req: Request) => {
     if (lastBackupAt) {
       const hoursSinceLastBackup = (nowUTC.getTime() - lastBackupAt.getTime()) / (1000 * 60 * 60);
       
-      // If frequency check passed, also check if we're at or past the scheduled time
       if (hoursSinceLastBackup >= frequencyHours) {
         console.log(`Frequency check passed: ${hoursSinceLastBackup.toFixed(1)} hours since last backup (>= ${frequencyHours}h)`);
-        // Continue with backup
       } else {
         console.log(`Last backup was ${hoursSinceLastBackup.toFixed(1)} hours ago. Next backup in ${(frequencyHours - hoursSinceLastBackup).toFixed(1)} hours.`);
         return new Response(
@@ -132,6 +136,7 @@ serve(async (req: Request) => {
     console.log(`Found ${companies?.length || 0} companies to backup`);
 
     const companiesBackup: Record<string, Record<string, unknown>> = {};
+    const individualCompanyBackups: { companyId: string; companyName: string; data: Record<string, unknown> }[] = [];
     let totalRecords = 0;
 
     // Backup each company's data
@@ -162,10 +167,26 @@ serve(async (req: Request) => {
       }
 
       companiesBackup[company.id] = companyData;
+      
+      // Store individual company backup for ZIP
+      individualCompanyBackups.push({
+        companyId: company.id,
+        companyName: company.name,
+        data: {
+          backup_info: {
+            backup_type: 'company',
+            company_id: company.id,
+            company_name: company.name,
+            created_at: new Date().toISOString(),
+            is_automatic: true
+          },
+          ...companyData
+        }
+      });
     }
 
     // Backup global data
-    const globalData: Record<string, any> = {};
+    const globalData: Record<string, unknown> = {};
     const globalTables = ['subscription_plans', 'telegram_bots', 'saas_team', 'discount_codes'];
 
     for (const table of globalTables) {
@@ -176,6 +197,7 @@ serve(async (req: Request) => {
       }
     }
 
+    // Create combined full backup
     const fullBackup = {
       backup_info: {
         backup_type: 'full_system',
@@ -191,6 +213,11 @@ serve(async (req: Request) => {
     const backupJson = JSON.stringify(fullBackup);
     const sizeBytes = new TextEncoder().encode(backupJson).length;
 
+    // Create ZIP file with all backups
+    const dateStr = new Date().toISOString().split('T')[0];
+    const zipBlob = await createBackupZip(fullBackup, individualCompanyBackups, dateStr);
+    const zipBase64 = await blobToBase64(zipBlob);
+
     // Save the backup
     const { data: backupRecord, error: insertError } = await supabase
       .from('backups')
@@ -200,7 +227,7 @@ serve(async (req: Request) => {
         tables_included: [...BACKUP_TABLES, 'subscriptions', ...globalTables],
         size_bytes: sizeBytes,
         status: 'completed',
-        notes: 'نسخة احتياطية تلقائية للنظام بالكامل'
+        notes: 'نسخة احتياطية تلقائية للنظام بالكامل (ZIP)'
       })
       .select()
       .single();
@@ -221,7 +248,7 @@ serve(async (req: Request) => {
 
     // Send email if enabled
     if (settings.auto_email_enabled) {
-      console.log("Auto email is enabled, sending backup email...");
+      console.log("Auto email is enabled, sending backup email with ZIP...");
 
       const resendApiKey = Deno.env.get("RESEND_API_KEY");
       if (resendApiKey) {
@@ -241,8 +268,7 @@ serve(async (req: Request) => {
         }
 
         if (recipientEmails.length > 0) {
-          const backupBase64 = btoa(unescape(encodeURIComponent(backupJson)));
-          const fileName = `auto_full_backup_${new Date().toISOString().split('T')[0]}.json`;
+          const zipFileName = `attendly_backup_${dateStr}.zip`;
 
           await resend.emails.send({
             from: "Attendly <onboarding@resend.dev>",
@@ -262,9 +288,25 @@ serve(async (req: Request) => {
                     <p style="margin: 5px 0;"><strong>النوع:</strong> تلقائي ⏰</p>
                   </div>
 
+                  <div style="background: #ede9fe; border-radius: 8px; padding: 15px; margin-bottom: 20px; border-right: 4px solid #8b5cf6;">
+                    <p style="margin: 0; color: #5b21b6;">
+                      📦 الملف المرفق يحتوي على:
+                    </p>
+                    <ul style="margin: 10px 0; padding-right: 20px; color: #5b21b6;">
+                      <li>ملف مجمع لكل البيانات (full_backup.json)</li>
+                      <li>ملف منفصل لكل شركة (companies/)</li>
+                    </ul>
+                  </div>
+
                   <div style="background: #dcfce7; border-radius: 8px; padding: 15px; margin-bottom: 20px; border-right: 4px solid #22c55e;">
                     <p style="margin: 0; color: #166534;">
                       ✅ تم إنشاء النسخة الاحتياطية بنجاح وإرسالها لجميع المستلمين المفعّلين.
+                    </p>
+                  </div>
+
+                  <div style="background: #fef3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; border-right: 4px solid #f59e0b;">
+                    <p style="margin: 0; color: #92400e;">
+                      ⚠️ ملاحظة: يتم حذف النسخ الاحتياطية القديمة تلقائياً بعد 3 أيام.
                     </p>
                   </div>
 
@@ -274,10 +316,10 @@ serve(async (req: Request) => {
                 </div>
               </div>
             `,
-            attachments: [{ filename: fileName, content: backupBase64 }]
+            attachments: [{ filename: zipFileName, content: zipBase64 }]
           });
 
-          console.log(`Email sent to ${recipientEmails.length} recipients`);
+          console.log(`Email sent to ${recipientEmails.length} recipients with ZIP attachment`);
 
           // Mark backup as email sent
           await supabase
@@ -296,7 +338,8 @@ serve(async (req: Request) => {
         backup_id: backupRecord.id,
         companies_count: companies?.length || 0,
         total_records: totalRecords,
-        size_bytes: sizeBytes
+        size_bytes: sizeBytes,
+        zip_created: true
       }),
       { headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
@@ -308,3 +351,84 @@ serve(async (req: Request) => {
     );
   }
 });
+
+// Function to create ZIP file with all backups
+async function createBackupZip(
+  fullBackup: Record<string, unknown>,
+  companyBackups: { companyId: string; companyName: string; data: Record<string, unknown> }[],
+  dateStr: string
+): Promise<Blob> {
+  const blobWriter = new BlobWriter("application/zip");
+  const zipWriter = new ZipWriter(blobWriter);
+
+  // Add the combined full backup file
+  const fullBackupJson = JSON.stringify(fullBackup, null, 2);
+  const fullBackupBlob = new Blob([fullBackupJson], { type: "application/json" });
+  await zipWriter.add(`full_backup_${dateStr}.json`, fullBackupBlob.stream());
+
+  // Add individual company backup files
+  for (const company of companyBackups) {
+    const sanitizedName = company.companyName.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+    const companyJson = JSON.stringify(company.data, null, 2);
+    const companyBlob = new Blob([companyJson], { type: "application/json" });
+    await zipWriter.add(`companies/${sanitizedName}_${company.companyId.slice(0, 8)}.json`, companyBlob.stream());
+  }
+
+  await zipWriter.close();
+  return blobWriter.getData();
+}
+
+// Function to convert Blob to Base64
+async function blobToBase64(blob: Blob): Promise<string> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let binary = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+    binary += String.fromCharCode(uint8Array[i]);
+  }
+  return btoa(binary);
+}
+
+// Function to delete old backups (older than 3 days)
+// deno-lint-ignore no-explicit-any
+async function deleteOldBackups(supabase: any): Promise<void> {
+  try {
+    const cutoffDate = new Date(Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const cutoffDateStr = cutoffDate.toISOString();
+
+    console.log(`Deleting backups older than ${cutoffDateStr} (${BACKUP_RETENTION_DAYS} days)...`);
+
+    // Get old backups
+    const { data: oldBackups, error: fetchError } = await supabase
+      .from('backups')
+      .select('id, created_at, backup_type')
+      .lt('created_at', cutoffDateStr);
+
+    if (fetchError) {
+      console.error('Error fetching old backups:', fetchError);
+      return;
+    }
+
+    if (!oldBackups || oldBackups.length === 0) {
+      console.log('No old backups to delete');
+      return;
+    }
+
+    console.log(`Found ${oldBackups.length} old backups to delete`);
+
+    // Delete old backups
+    const { error: deleteError } = await supabase
+      .from('backups')
+      .delete()
+      .lt('created_at', cutoffDateStr);
+
+    if (deleteError) {
+      console.error('Error deleting old backups:', deleteError);
+      return;
+    }
+
+    console.log(`Successfully deleted ${oldBackups.length} old backups`);
+  } catch (error) {
+    console.error('Error in deleteOldBackups:', error);
+  }
+}
