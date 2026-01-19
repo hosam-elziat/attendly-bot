@@ -218,7 +218,33 @@ serve(async (req: Request) => {
     const zipBlob = await createBackupZip(fullBackup, individualCompanyBackups, dateStr);
     const zipBase64 = await blobToBase64(zipBlob);
 
-    // Save the backup
+    // Save individual company backups to database
+    const companyBackupRecords = [];
+    for (const companyBackup of individualCompanyBackups) {
+      const companyBackupJson = JSON.stringify(companyBackup.data);
+      const companySizeBytes = new TextEncoder().encode(companyBackupJson).length;
+      
+      const { data: companyRecord, error: companyInsertError } = await supabase
+        .from('backups')
+        .insert({
+          company_id: companyBackup.companyId,
+          backup_type: 'automatic',
+          backup_data: companyBackup.data,
+          tables_included: BACKUP_TABLES,
+          size_bytes: companySizeBytes,
+          status: 'completed',
+          notes: 'نسخة احتياطية تلقائية للشركة'
+        })
+        .select()
+        .single();
+      
+      if (!companyInsertError && companyRecord) {
+        companyBackupRecords.push(companyRecord);
+        console.log(`Company backup created for: ${companyBackup.companyName}`);
+      }
+    }
+
+    // Save the full system backup
     const { data: backupRecord, error: insertError } = await supabase
       .from('backups')
       .insert({
@@ -234,7 +260,7 @@ serve(async (req: Request) => {
 
     if (insertError) throw insertError;
 
-    console.log(`Backup created with ID: ${backupRecord.id}`);
+    console.log(`Full system backup created with ID: ${backupRecord.id}`);
 
     // Update settings with next backup time
     const nextBackupAt = new Date(Date.now() + frequencyHours * 60 * 60 * 1000);

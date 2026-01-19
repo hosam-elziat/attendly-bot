@@ -52,7 +52,8 @@ import {
   AlertTriangle,
   FileJson,
   Settings,
-  Building2
+  Building2,
+  Search
 } from 'lucide-react';
 import { useBackups, useBackupStats, useCreateBackup, useSendBackupEmail, useRestoreBackup, useDeleteBackup, useCreateFullBackup, useRestoreFullBackup, useSendFullBackupEmail, Backup } from '@/hooks/useBackups';
 import { useQuery } from '@tanstack/react-query';
@@ -66,6 +67,7 @@ import BackupSettingsDialog from '@/components/backups/BackupSettingsDialog';
 const SuperAdminBackups = () => {
   const { user } = useSuperAdmin();
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [fileRestoreDialogOpen, setFileRestoreDialogOpen] = useState(false);
   const [fullRestoreDialogOpen, setFullRestoreDialogOpen] = useState(false);
@@ -90,6 +92,27 @@ const SuperAdminBackups = () => {
   const createFullBackup = useCreateFullBackup();
   const restoreFullBackup = useRestoreFullBackup();
   const sendFullBackupEmail = useSendFullBackupEmail();
+
+  // Filter backups based on search query
+  const filteredBackups = backups?.filter((backup) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const companyName = backup.companies?.name?.toLowerCase() || '';
+    const backupType = backup.backup_type?.toLowerCase() || '';
+    const notes = backup.notes?.toLowerCase() || '';
+    const dateStr = backup.created_at ? format(new Date(backup.created_at), 'dd MMM yyyy', { locale: ar }).toLowerCase() : '';
+    
+    return (
+      companyName.includes(query) ||
+      backupType.includes(query) ||
+      notes.includes(query) ||
+      dateStr.includes(query) ||
+      (backup.backup_type === 'full_system' && 'نسخة كاملة'.includes(query)) ||
+      (backup.backup_type === 'automatic' && 'تلقائي'.includes(query)) ||
+      (backup.backup_type === 'manual' && 'يدوي'.includes(query))
+    );
+  });
 
   const { data: companies, refetch: refetchCompanies } = useQuery({
     queryKey: ['companies-list'],
@@ -490,30 +513,42 @@ const SuperAdminBackups = () => {
         {/* Backups Table */}
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <CardTitle className="text-white">سجل النسخ الاحتياطية</CardTitle>
-              <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-                <SelectTrigger className="w-[200px] bg-slate-800 border-slate-700 text-white">
-                  <SelectValue placeholder="جميع الشركات" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all">جميع الشركات</SelectItem>
-                  {companies?.map((company) => (
-                    <SelectItem key={company.id} value={company.id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <CardTitle className="text-white">سجل النسخ الاحتياطية</CardTitle>
+                <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                  <SelectTrigger className="w-[200px] bg-slate-800 border-slate-700 text-white">
+                    <SelectValue placeholder="جميع الشركات" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="all">جميع الشركات</SelectItem>
+                    {companies?.map((company) => (
+                      <SelectItem key={company.id} value={company.id}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  placeholder="بحث في النسخ الاحتياطية... (اسم الشركة، التاريخ، النوع)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pr-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="text-center py-8 text-slate-400">جاري التحميل...</div>
-            ) : backups?.length === 0 ? (
+            ) : filteredBackups?.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
                 <Database className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد نسخ احتياطية</p>
+                <p>{searchQuery ? 'لا توجد نتائج للبحث' : 'لا توجد نسخ احتياطية'}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -530,7 +565,7 @@ const SuperAdminBackups = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {backups?.map((backup) => (
+                    {filteredBackups?.map((backup) => (
                       <TableRow key={backup.id} className={`border-slate-800 hover:bg-slate-800/50 ${backup.backup_type === 'full_system' ? 'bg-purple-900/20' : ''}`}>
                         <TableCell className="text-white font-medium">
                           {backup.backup_type === 'full_system' 
