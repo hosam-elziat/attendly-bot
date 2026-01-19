@@ -23,13 +23,14 @@ interface EditDeductionDialogProps {
   onSuccess: () => void;
 }
 
+type InputMode = 'manual' | 'days';
+
 const DAY_OPTIONS = [
   { value: '0.25', label: 'ربع يوم', labelEn: 'Quarter Day' },
   { value: '0.5', label: 'نصف يوم', labelEn: 'Half Day' },
   { value: '1', label: 'يوم واحد', labelEn: '1 Day' },
   { value: '2', label: 'يومين', labelEn: '2 Days' },
   { value: '3', label: '3 أيام', labelEn: '3 Days' },
-  { value: 'custom', label: 'مبلغ محدد', labelEn: 'Custom Amount' },
 ];
 
 const EditDeductionDialog = ({ 
@@ -45,18 +46,19 @@ const EditDeductionDialog = ({
   const { profile } = useAuth();
   const logAction = useLogAction();
   const [submitting, setSubmitting] = useState(false);
-  const [customAmount, setCustomAmount] = useState('');
-  const [selectedDays, setSelectedDays] = useState('custom');
+  const [manualAmount, setManualAmount] = useState('');
+  const [inputMode, setInputMode] = useState<InputMode>('manual');
+  const [selectedDays, setSelectedDays] = useState('1');
   const [description, setDescription] = useState('');
   const [activeTab, setActiveTab] = useState('bonus');
 
   // Calculate daily rate (monthly salary / 30)
   const dailyRate = baseSalary / 30;
 
-  // Calculate amount based on selected days
+  // Calculate amount based on input mode
   const calculateAmount = (): number => {
-    if (selectedDays === 'custom') {
-      return parseFloat(customAmount) || 0;
+    if (inputMode === 'manual') {
+      return parseFloat(manualAmount) || 0;
     }
     const days = parseFloat(selectedDays);
     return days * dailyRate;
@@ -66,7 +68,7 @@ const EditDeductionDialog = ({
     if (!profile?.company_id) return;
 
     const amount = calculateAmount();
-    const days = selectedDays !== 'custom' ? parseFloat(selectedDays) : null;
+    const days = inputMode === 'days' ? parseFloat(selectedDays) : null;
     
     if (amount <= 0) {
       toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
@@ -144,8 +146,9 @@ const EditDeductionDialog = ({
       );
       
       onOpenChange(false);
-      setCustomAmount('');
-      setSelectedDays('custom');
+      setManualAmount('');
+      setInputMode('manual');
+      setSelectedDays('1');
       setDescription('');
       onSuccess();
     } catch (error) {
@@ -192,33 +195,29 @@ const EditDeductionDialog = ({
             </TabsList>
 
             <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>
-                  {language === 'ar' 
-                    ? (activeTab === 'bonus' ? 'نوع المكافأة' : 'نوع الخصم')
-                    : (activeTab === 'bonus' ? 'Bonus Type' : 'Deduction Type')
-                  }
-                </Label>
-                <Select value={selectedDays} onValueChange={setSelectedDays}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAY_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {language === 'ar' ? option.label : option.labelEn}
-                        {option.value !== 'custom' && baseSalary > 0 && (
-                          <span className="text-muted-foreground ms-2">
-                            ({(parseFloat(option.value) * dailyRate).toFixed(2)})
-                          </span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Input Mode Toggle */}
+              <div className="flex gap-2 p-1 bg-muted rounded-lg">
+                <Button
+                  type="button"
+                  variant={inputMode === 'manual' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setInputMode('manual')}
+                >
+                  {language === 'ar' ? 'مبلغ يدوي' : 'Manual Amount'}
+                </Button>
+                <Button
+                  type="button"
+                  variant={inputMode === 'days' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setInputMode('days')}
+                >
+                  {language === 'ar' ? 'حسب الأيام' : 'By Days'}
+                </Button>
               </div>
 
-              {selectedDays === 'custom' && (
+              {inputMode === 'manual' ? (
                 <div className="space-y-2">
                   <Label>
                     {language === 'ar' 
@@ -230,11 +229,37 @@ const EditDeductionDialog = ({
                     type="number"
                     min="0"
                     step="0.01"
-                    value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
+                    value={manualAmount}
+                    onChange={(e) => setManualAmount(e.target.value)}
                     placeholder="0.00"
-                    className={activeTab === 'bonus' ? 'text-success' : 'text-destructive'}
+                    className={`text-lg font-medium ${activeTab === 'bonus' ? 'text-success' : 'text-destructive'}`}
                   />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>
+                    {language === 'ar' 
+                      ? (activeTab === 'bonus' ? 'عدد الأيام' : 'عدد الأيام')
+                      : (activeTab === 'bonus' ? 'Number of Days' : 'Number of Days')
+                    }
+                  </Label>
+                  <Select value={selectedDays} onValueChange={setSelectedDays}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAY_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {language === 'ar' ? option.label : option.labelEn}
+                          {baseSalary > 0 && (
+                            <span className="text-muted-foreground ms-2">
+                              ({(parseFloat(option.value) * dailyRate).toFixed(2)})
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
