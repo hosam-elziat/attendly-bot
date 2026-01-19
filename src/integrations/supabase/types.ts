@@ -481,10 +481,15 @@ export type Database = {
           daily_late_allowance_minutes: number | null
           default_currency: string | null
           default_weekend_days: string[] | null
+          deleted_at: string | null
+          deleted_by: string | null
           emergency_leave_days: number | null
           id: string
+          is_deleted: boolean | null
+          is_suspended: boolean | null
           join_request_reviewer_id: string | null
           join_request_reviewer_type: string | null
+          last_activity_at: string | null
           late_15_to_30_deduction: number | null
           late_over_30_deduction: number | null
           late_under_15_deduction: number | null
@@ -495,6 +500,10 @@ export type Database = {
           name: string
           overtime_multiplier: number | null
           owner_id: string
+          phone: string | null
+          suspended_at: string | null
+          suspended_by: string | null
+          suspended_reason: string | null
           telegram_bot_connected: boolean | null
           telegram_bot_username: string | null
           timezone: string | null
@@ -521,10 +530,15 @@ export type Database = {
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
           default_weekend_days?: string[] | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           emergency_leave_days?: number | null
           id?: string
+          is_deleted?: boolean | null
+          is_suspended?: boolean | null
           join_request_reviewer_id?: string | null
           join_request_reviewer_type?: string | null
+          last_activity_at?: string | null
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
           late_under_15_deduction?: number | null
@@ -535,6 +549,10 @@ export type Database = {
           name: string
           overtime_multiplier?: number | null
           owner_id: string
+          phone?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspended_reason?: string | null
           telegram_bot_connected?: boolean | null
           telegram_bot_username?: string | null
           timezone?: string | null
@@ -561,10 +579,15 @@ export type Database = {
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
           default_weekend_days?: string[] | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           emergency_leave_days?: number | null
           id?: string
+          is_deleted?: boolean | null
+          is_suspended?: boolean | null
           join_request_reviewer_id?: string | null
           join_request_reviewer_type?: string | null
+          last_activity_at?: string | null
           late_15_to_30_deduction?: number | null
           late_over_30_deduction?: number | null
           late_under_15_deduction?: number | null
@@ -575,6 +598,10 @@ export type Database = {
           name?: string
           overtime_multiplier?: number | null
           owner_id?: string
+          phone?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspended_reason?: string | null
           telegram_bot_connected?: boolean | null
           telegram_bot_username?: string | null
           timezone?: string | null
@@ -1893,6 +1920,116 @@ export type Database = {
           },
         ]
       }
+      super_admin_activity_logs: {
+        Row: {
+          action: string
+          action_type: string
+          admin_email: string | null
+          admin_id: string
+          admin_name: string | null
+          company_id: string | null
+          company_name: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          ip_address: string | null
+          target_id: string | null
+          target_name: string | null
+          target_type: string
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          action_type: string
+          admin_email?: string | null
+          admin_id: string
+          admin_name?: string | null
+          company_id?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_name?: string | null
+          target_type: string
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          action_type?: string
+          admin_email?: string | null
+          admin_id?: string
+          admin_name?: string | null
+          company_id?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_name?: string | null
+          target_type?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      system_alerts: {
+        Row: {
+          alert_type: string
+          company_id: string | null
+          company_name: string | null
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          is_resolved: boolean | null
+          message: string
+          metadata: Json | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          alert_type: string
+          company_id?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          is_resolved?: boolean | null
+          message: string
+          metadata?: Json | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          title: string
+        }
+        Update: {
+          alert_type?: string
+          company_id?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          is_resolved?: boolean | null
+          message?: string
+          metadata?: Json | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telegram_bots: {
         Row: {
           assigned_at: string | null
@@ -2022,6 +2159,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_sessions: {
+        Row: {
+          created_at: string | null
+          device_info: Json | null
+          email: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean | null
+          last_activity_at: string | null
+          logged_in_at: string | null
+          logged_out_at: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_info?: Json | null
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_activity_at?: string | null
+          logged_in_at?: string | null
+          logged_out_at?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_info?: Json | null
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_activity_at?: string | null
+          logged_in_at?: string | null
+          logged_out_at?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
