@@ -78,6 +78,29 @@ const AddAttendanceDialog = ({ open, onOpenChange, onSuccess }: AddAttendanceDia
         return;
       }
 
+      // Check for open attendance from previous day (night shift)
+      const yesterday = new Date(selectedDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      const { data: openYesterday } = await supabase
+        .from('attendance_logs')
+        .select('id, date, check_in_time')
+        .eq('employee_id', selectedEmployee)
+        .eq('date', yesterdayStr)
+        .in('status', ['checked_in', 'on_break'])
+        .maybeSingle();
+
+      if (openYesterday) {
+        toast.error(
+          language === 'ar' 
+            ? `يوجد سجل حضور مفتوح من ${openYesterday.date} (وردية ليلية). يجب تسجيل الانصراف أولاً.` 
+            : `Open attendance exists from ${openYesterday.date} (night shift). Must check out first.`
+        );
+        setSubmitting(false);
+        return;
+      }
+
       const insertData: any = {
         employee_id: selectedEmployee,
         company_id: profile.company_id,
