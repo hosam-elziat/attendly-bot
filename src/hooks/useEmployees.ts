@@ -98,6 +98,48 @@ export const useCreateEmployee = () => {
 
       const validatedData = validationResult.data;
 
+      // Check for duplicate email in same company
+      if (validatedData.email) {
+        const { data: existingEmail } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .eq('email', validatedData.email)
+          .maybeSingle();
+
+        if (existingEmail) {
+          throw new Error('موظف بنفس البريد الإلكتروني موجود بالفعل في هذه الشركة');
+        }
+      }
+
+      // Check for duplicate phone in same company
+      if (employeeData.phone) {
+        const { data: existingPhone } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .eq('phone', employeeData.phone)
+          .maybeSingle();
+
+        if (existingPhone) {
+          throw new Error('موظف بنفس رقم الهاتف موجود بالفعل في هذه الشركة');
+        }
+      }
+
+      // Check for duplicate national_id in same company
+      if (employeeData.national_id) {
+        const { data: existingNationalId } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .eq('national_id', employeeData.national_id)
+          .maybeSingle();
+
+        if (existingNationalId) {
+          throw new Error('موظف بنفس الرقم القومي موجود بالفعل في هذه الشركة');
+        }
+      }
+
       // Format time fields
       const formattedData = {
         full_name: validatedData.full_name,
@@ -156,6 +198,8 @@ export const useUpdateEmployee = () => {
   const queryClient = useQueryClient();
   const logAction = useLogAction();
 
+  const { profile } = useAuth();
+  
   return useMutation({
     mutationFn: async ({ id, oldData, ...data }: Partial<Employee> & { id: string; oldData?: Employee }) => {
       // Validate partial data
@@ -165,6 +209,51 @@ export const useUpdateEmployee = () => {
       if (!validationResult.success) {
         const firstError = validationResult.error.errors[0];
         throw new Error(firstError.message);
+      }
+
+      // Check for duplicate email when updating
+      if (data.email && profile?.company_id) {
+        const { data: existingEmail } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .eq('email', data.email)
+          .neq('id', id)
+          .maybeSingle();
+
+        if (existingEmail) {
+          throw new Error('موظف بنفس البريد الإلكتروني موجود بالفعل في هذه الشركة');
+        }
+      }
+
+      // Check for duplicate phone when updating
+      if (data.phone && profile?.company_id) {
+        const { data: existingPhone } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .eq('phone', data.phone)
+          .neq('id', id)
+          .maybeSingle();
+
+        if (existingPhone) {
+          throw new Error('موظف بنفس رقم الهاتف موجود بالفعل في هذه الشركة');
+        }
+      }
+
+      // Check for duplicate national_id when updating
+      if (data.national_id && profile?.company_id) {
+        const { data: existingNationalId } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .eq('national_id', data.national_id)
+          .neq('id', id)
+          .maybeSingle();
+
+        if (existingNationalId) {
+          throw new Error('موظف بنفس الرقم القومي موجود بالفعل في هذه الشركة');
+        }
       }
 
       const { data: result, error } = await supabase
