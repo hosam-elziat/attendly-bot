@@ -61,8 +61,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     let companyId: string | null = profileRow?.company_id ?? (roleRow?.company_id ?? null);
 
-    // If user is authenticated but has no workspace data yet, bootstrap a company/profile/role.
+    // If user is authenticated but has no workspace data yet, check if they already own a company
     if (!companyId && !profileRow && !roleRow) {
+      // First check if user already owns a company (to prevent duplicates)
+      const { data: existingCompany } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('owner_id', userId)
+        .maybeSingle();
+
+      if (existingCompany) {
+        // User already has a company, just create profile and role
+        const { data: createdProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: userId,
+            company_id: existingCompany.id,
+            full_name: getUserFullName(authUser),
+            email: authUser.email ?? '',
+          })
+          .select('*')
+          .single();
+
+        if (profileError) throw profileError;
+
+        const { data: createdRole, error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: userId,
+            company_id: existingCompany.id,
+            role: 'owner',
+          })
+          .select('role, company_id')
+          .single();
+
+        if (roleError) throw roleError;
+
+        profileRow = createdProfile as UserProfile;
+        companyId = existingCompany.id;
+        setUserRole(createdRole as UserRole);
+        setProfile(profileRow);
+        return;
+      }
+
+      // No existing company, create new one
       const newCompanyId = crypto.randomUUID();
       const defaultCompanyName = `${getUserFullName(authUser)} Company`;
 

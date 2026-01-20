@@ -55,7 +55,7 @@ serve(async (req) => {
         .select('id, is_active, full_name')
         .eq('telegram_chat_id', telegram_chat_id)
         .eq('company_id', bot.assigned_company_id)
-        .single()
+        .maybeSingle()
 
       if (existingEmployee) {
         // Check if employee is inactive
@@ -75,6 +75,57 @@ serve(async (req) => {
           JSON.stringify({ success: false, error: 'Employee already registered' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         )
+      }
+
+      // Check if employee with same phone already exists
+      if (phone) {
+        const { data: existingPhone } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', bot.assigned_company_id)
+          .eq('phone', phone)
+          .maybeSingle()
+
+        if (existingPhone) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'موظف بنفس رقم الهاتف موجود بالفعل' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          )
+        }
+      }
+
+      // Check if employee with same email already exists
+      if (email) {
+        const { data: existingEmail } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', bot.assigned_company_id)
+          .eq('email', email)
+          .maybeSingle()
+
+        if (existingEmail) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'موظف بنفس البريد الإلكتروني موجود بالفعل' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          )
+        }
+      }
+
+      // Check if employee with same national_id already exists
+      if (national_id) {
+        const { data: existingNationalId } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('company_id', bot.assigned_company_id)
+          .eq('national_id', national_id)
+          .maybeSingle()
+
+        if (existingNationalId) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'موظف بنفس الرقم القومي موجود بالفعل' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          )
+        }
       }
 
       // Check if employee was previously deleted (exists in deleted_records)
