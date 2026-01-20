@@ -21,7 +21,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck, Bell, BellRing, UserX } from 'lucide-react';
+import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck, Bell, BellRing, UserX, LogOut } from 'lucide-react';
 import AttendanceVerificationSettings from '@/components/settings/AttendanceVerificationSettings';
 import CompanyLocationsManager from '@/components/settings/CompanyLocationsManager';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,6 +71,11 @@ const Settings = () => {
   const [checkinReminderInterval, setCheckinReminderInterval] = useState(10);
   const [checkoutReminderCount, setCheckoutReminderCount] = useState(2);
   const [checkoutReminderInterval, setCheckoutReminderInterval] = useState(10);
+  
+  // Early departure settings
+  const [earlyDepartureThreshold, setEarlyDepartureThreshold] = useState(30);
+  const [earlyDepartureDeduction, setEarlyDepartureDeduction] = useState(0.5);
+  const [earlyDepartureGrace, setEarlyDepartureGrace] = useState(5);
 
   // Join request reviewer states
   const [joinRequestReviewerType, setJoinRequestReviewerType] = useState<string | null>(null);
@@ -117,6 +122,11 @@ const Settings = () => {
       setCheckinReminderInterval((company as any).checkin_reminder_interval_minutes || 10);
       setCheckoutReminderCount((company as any).checkout_reminder_count || 2);
       setCheckoutReminderInterval((company as any).checkout_reminder_interval_minutes || 10);
+      
+      // Early departure settings
+      setEarlyDepartureThreshold((company as any).early_departure_threshold_minutes || 30);
+      setEarlyDepartureDeduction((company as any).early_departure_deduction || 0.5);
+      setEarlyDepartureGrace((company as any).early_departure_grace_minutes || 5);
       
       // Default weekend days
       setWeekendDays((company as any).default_weekend_days || ['friday']);
@@ -296,6 +306,9 @@ const Settings = () => {
           checkin_reminder_interval_minutes: checkinReminderInterval,
           checkout_reminder_count: checkoutReminderCount,
           checkout_reminder_interval_minutes: checkoutReminderInterval,
+          early_departure_threshold_minutes: earlyDepartureThreshold,
+          early_departure_deduction: earlyDepartureDeduction,
+          early_departure_grace_minutes: earlyDepartureGrace,
         } as any)
         .eq('id', company.id);
 
@@ -872,7 +885,56 @@ const Settings = () => {
                 </div>
               </div>
 
-              {/* Overtime & Country Settings */}
+              {/* Early Departure Settings */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground flex items-center gap-2">
+                  <LogOut className="w-4 h-4" />
+                  قوانين الانصراف المبكر
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-2 p-3 border rounded-lg bg-amber-500/10 border-amber-500/30">
+                    <Label htmlFor="early-departure-threshold">الحد الأدنى للانصراف المبكر (دقيقة)</Label>
+                    <NumberInput 
+                      id="early-departure-threshold" 
+                      min={5}
+                      max={120}
+                      value={earlyDepartureThreshold}
+                      onChange={setEarlyDepartureThreshold}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      إذا انصرف الموظف قبل الموعد بـ {earlyDepartureThreshold} دقيقة أو أكثر، يتم الخصم
+                    </p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-destructive/10 border-destructive/30">
+                    <Label htmlFor="early-departure-deduction">قيمة خصم الانصراف المبكر (بالأيام)</Label>
+                    <NumberInput 
+                      id="early-departure-deduction" 
+                      step={0.25}
+                      min={0}
+                      max={2}
+                      value={earlyDepartureDeduction}
+                      onChange={setEarlyDepartureDeduction}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      خصم {earlyDepartureDeduction === 0.25 ? 'ربع' : earlyDepartureDeduction === 0.5 ? 'نصف' : earlyDepartureDeduction} يوم
+                    </p>
+                  </div>
+                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                    <Label htmlFor="early-departure-grace">فترة السماح (دقيقة)</Label>
+                    <NumberInput 
+                      id="early-departure-grace" 
+                      min={0}
+                      max={30}
+                      value={earlyDepartureGrace}
+                      onChange={setEarlyDepartureGrace}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      يُخصم من رصيد التأخيرات إذا كان الانصراف المبكر أقل من {earlyDepartureGrace} دقيقة
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <h3 className="font-medium text-foreground flex items-center gap-2">
                   <Timer className="w-4 h-4" />
