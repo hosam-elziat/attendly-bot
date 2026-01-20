@@ -114,6 +114,12 @@ interface SessionData {
   join_request_salary?: number;
   // Attendance approval session data
   pending_id?: string;
+  // Early departure checkout session data
+  attendance_id?: string;
+  early_minutes?: number;
+  deduction_days?: number;
+  deduction_amount?: number;
+  attendance_date?: string;
 }
 
 serve(async (req) => {
@@ -755,14 +761,14 @@ serve(async (req) => {
           }
           
           // Check if attendance is from yesterday (night shift)
-          const isNightShift = sessionData.attendance_date !== today
+          const isNightShift = (sessionData.attendance_date || today) !== today
           
           // Process checkout with early departure deduction
-          await processCheckout(supabase, botToken, chatId, employee, currentAttendance, sessionData.attendance_date, companyId, companyTimezone, companyDefaults, companyPolicies, empDetails, managerPermissions, isNightShift, {
-            earlyMinutes: sessionData.early_minutes,
-            deductionDays: sessionData.deduction_days,
-            deductionAmount: sessionData.deduction_amount,
-            workEndTime: sessionData.work_end_time,
+          await processCheckout(supabase, botToken, chatId, employee, currentAttendance, sessionData.attendance_date || today, companyId, companyTimezone, companyDefaults, companyPolicies, empDetails, managerPermissions, isNightShift, {
+            earlyMinutes: sessionData.early_minutes || 0,
+            deductionDays: sessionData.deduction_days || 0,
+            deductionAmount: sessionData.deduction_amount || 0,
+            workEndTime: sessionData.work_end_time || '',
           })
           break
         }
@@ -2428,7 +2434,9 @@ async function notifyManagers(
   action: 'check_in' | 'check_out',
   time: string,
   date: string,
-  locationName?: string
+  locationName?: string,
+  overtimeInfo?: { minutes: number; amount?: number; currency?: string },
+  earlyDepartureInfo?: { minutes: number; deductionDays: number; amount?: number; currency?: string }
 ) {
   try {
     // Get managers using the database function
@@ -2458,6 +2466,28 @@ async function notifyManagers(
     // Add location info if available (Level 3 verification)
     if (locationName) {
       message += `\n📍 الموقع: ${locationName}`
+    }
+    
+    // Add overtime info for checkout
+    if (overtimeInfo && overtimeInfo.minutes > 0) {
+      const hours = Math.floor(overtimeInfo.minutes / 60)
+      const mins = overtimeInfo.minutes % 60
+      message += `\n\n⏰ <b>وقت إضافي:</b> ${hours > 0 ? `${hours} ساعة و ` : ''}${mins} دقيقة`
+      if (overtimeInfo.amount && overtimeInfo.amount > 0) {
+        message += `\n💰 قيمته: ${overtimeInfo.amount.toFixed(2)} ${overtimeInfo.currency || 'SAR'}`
+      }
+    }
+    
+    // Add early departure info for checkout
+    if (earlyDepartureInfo && earlyDepartureInfo.minutes > 0) {
+      const deductionText = earlyDepartureInfo.deductionDays === 0.25 ? 'ربع يوم' : 
+                            earlyDepartureInfo.deductionDays === 0.5 ? 'نصف يوم' : 
+                            `${earlyDepartureInfo.deductionDays} يوم`
+      message += `\n\n⚠️ <b>انصراف مبكر:</b> ${earlyDepartureInfo.minutes} دقيقة`
+      message += `\n📛 خصم: ${deductionText}`
+      if (earlyDepartureInfo.amount && earlyDepartureInfo.amount > 0) {
+        message += ` (${earlyDepartureInfo.amount.toFixed(2)} ${earlyDepartureInfo.currency || 'SAR'})`
+      }
     }
     
     // Send notification to each manager
@@ -3869,4 +3899,187 @@ async function sendMessageAndLogToEmployee(
     keyboard ? { keyboard } : {},
     telegramMessageId
   )
+}
+
+// Process checkout with optional early departure deduction
+async function processCheckout(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  employee: any,
+  attendance: any,
+  attendanceDate: string,
+  companyId: string,
+  companyTimezone: string,
+  companyDefaults: any,
+  companyPolicies: any,
+  empDetails: any,
+  managerPermissions: any,
+  isNightShift: boolean,
+  earlyDepartureData?: {
+    earlyMinutes: number;
+    deductionDays: number;
+    deductionAmount: number;
+    workEndTime: string;
+  }
+) {
+  const localTime = getLocalTime(companyTimezone)
+  const nowUtc = new Date().toISOString()
+  const checkOutTime = localTime.time
+  const nightShiftNote = isNightShift ? `\n🌙 <i>وردية ليلية - حضور من ${attendanceDate}</i>` : ''
+  
+  let overtimeMessage = ''
+  let earlyDepartureMessage = ''
+  let overtimeInfo: { minutes: number; amount?: number; currency?: string } | undefined
+  let earlyDepartureInfo: { minutes: number; deductionDays: number; amount?: number; currency?: string } | undefined
+  
+  const workEndTime = employee.work_end_time || companyDefaults.work_end_time
+  
+  // Calculate time difference
+  if (workEndTime && !isNightShift) {
+    const [endH, endM] = workEndTime.split(':').map(Number)
+    const [checkH, checkM] = checkOutTime.split(':').map(Number)
+    const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
+    
+    if (timeDiff > 0 && attendance.check_in_time) {
+      // Overtime
+      const overtimeMinutes = timeDiff
+      const overtimeHours = Math.floor(overtimeMinutes / 60)
+      const overtimeMins = overtimeMinutes % 60
+      
+      // Calculate overtime pay if multiplier exists
+      if (companyPolicies?.overtime_multiplier && empDetails?.base_salary) {
+        const hourlyRate = empDetails.base_salary / 30 / 8
+        const overtimePay = (overtimeMinutes / 60) * hourlyRate * companyPolicies.overtime_multiplier
+        const monthKey = attendanceDate.substring(0, 7) + '-01'
+        
+        if (overtimePay > 0) {
+          const { error: bonusError } = await supabase.from('salary_adjustments').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            month: monthKey,
+            bonus: Math.round(overtimePay * 100) / 100,
+            deduction: 0,
+            adjustment_days: null,
+            description: `مكافأة وقت إضافي يوم ${attendanceDate} - ${overtimeMinutes} دقيقة (${(overtimeMinutes / 60).toFixed(2)} ساعة) × ${companyPolicies.overtime_multiplier}`,
+            added_by_name: 'النظام التلقائي',
+            attendance_log_id: attendance.id,
+            is_auto_generated: true
+          })
+          
+          if (bonusError) {
+            console.error('Failed to create overtime bonus adjustment:', bonusError)
+          }
+        }
+        
+        overtimeMessage = `\n\n⏰ <b>وقت إضافي:</b> ${overtimeHours > 0 ? `${overtimeHours} ساعة و ` : ''}${overtimeMins} دقيقة\n` +
+          `💰 قيمة الوقت الإضافي: ${overtimePay.toFixed(2)} ${empDetails.currency || 'SAR'}\n` +
+          `🎁 تم إضافة المكافأة لحسابك\n` +
+          `📊 معامل الوقت الإضافي: ${companyPolicies.overtime_multiplier}x`
+        
+        overtimeInfo = { minutes: overtimeMinutes, amount: overtimePay, currency: empDetails.currency || 'SAR' }
+      } else {
+        overtimeMessage = `\n\n⏰ <b>وقت إضافي:</b> ${overtimeHours > 0 ? `${overtimeHours} ساعة و ` : ''}${overtimeMins} دقيقة`
+        overtimeInfo = { minutes: overtimeMinutes }
+      }
+    } else if (timeDiff < 0) {
+      // Early departure
+      const earlyMinutes = Math.abs(timeDiff)
+      const earlyDepartureGrace = companyPolicies?.early_departure_grace_minutes ?? 5
+      
+      if (earlyMinutes <= earlyDepartureGrace) {
+        // Within grace period - deduct from late balance
+        let currentLateBalance = empDetails?.monthly_late_balance_minutes ?? companyPolicies?.monthly_late_allowance_minutes ?? 15
+        
+        if (currentLateBalance >= earlyMinutes) {
+          const newBalance = currentLateBalance - earlyMinutes
+          await supabase
+            .from('employees')
+            .update({ monthly_late_balance_minutes: newBalance })
+            .eq('id', employee.id)
+          
+          earlyDepartureMessage = `\n\n⏰ <b>انصراف مبكر:</b> ${earlyMinutes} دقيقة\n` +
+            `✅ تم خصم ${earlyMinutes} دقيقة من رصيد التأخيرات\n` +
+            `📊 رصيدك المتبقي: ${newBalance} دقيقة`
+        } else {
+          // Not enough balance - this case is handled by earlyDepartureData
+          earlyDepartureMessage = `\n\n⏰ <b>انصراف مبكر:</b> ${earlyMinutes} دقيقة\n` +
+            `⚠️ رصيد التأخيرات غير كافٍ`
+        }
+      }
+      // Note: Early departure beyond grace is handled by earlyDepartureData if confirmed
+    }
+  }
+  
+  // Apply early departure deduction if confirmed
+  if (earlyDepartureData) {
+    const monthKey = attendanceDate.substring(0, 7) + '-01'
+    
+    const { error: adjustmentError } = await supabase.from('salary_adjustments').insert({
+      employee_id: employee.id,
+      company_id: companyId,
+      month: monthKey,
+      deduction: earlyDepartureData.deductionAmount,
+      bonus: 0,
+      adjustment_days: earlyDepartureData.deductionDays,
+      description: `خصم انصراف مبكر يوم ${attendanceDate}: ${earlyDepartureData.earlyMinutes} دقيقة قبل موعد الانصراف (${earlyDepartureData.workEndTime})`,
+      added_by_name: 'النظام التلقائي',
+      attendance_log_id: attendance.id,
+      is_auto_generated: true
+    })
+    
+    if (adjustmentError) {
+      console.error('Failed to create early departure adjustment:', adjustmentError)
+    }
+    
+    const deductionText = earlyDepartureData.deductionDays === 0.25 ? 'ربع يوم' : 
+                          earlyDepartureData.deductionDays === 0.5 ? 'نصف يوم' : 
+                          `${earlyDepartureData.deductionDays} يوم`
+    
+    earlyDepartureMessage = `\n\n⏰ <b>انصراف مبكر:</b> ${earlyDepartureData.earlyMinutes} دقيقة\n` +
+      `📛 تم تطبيق خصم ${deductionText}` + 
+      (earlyDepartureData.deductionAmount > 0 ? ` (${earlyDepartureData.deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '') +
+      `\n📝 موعد الانصراف: ${earlyDepartureData.workEndTime}`
+    
+    earlyDepartureInfo = {
+      minutes: earlyDepartureData.earlyMinutes,
+      deductionDays: earlyDepartureData.deductionDays,
+      amount: earlyDepartureData.deductionAmount,
+      currency: empDetails?.currency || 'SAR'
+    }
+  }
+  
+  // Calculate total work hours
+  let workHoursMessage = ''
+  if (attendance.check_in_time) {
+    const checkInDate = new Date(attendance.check_in_time)
+    const checkOutDate = new Date(nowUtc)
+    const totalMinutes = Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 60000)
+    const hours = Math.floor(totalMinutes / 60)
+    const mins = totalMinutes % 60
+    workHoursMessage = `\n🕐 إجمالي ساعات العمل: ${hours} ساعة و ${mins} دقيقة`
+  }
+  
+  // Update attendance record
+  await supabase
+    .from('attendance_logs')
+    .update({ 
+      check_out_time: nowUtc, 
+      status: 'checked_out' 
+    })
+    .eq('id', attendance.id)
+
+  await sendMessage(botToken, chatId, 
+    `✅ تم تسجيل انصرافك بنجاح!\n\n` +
+    `📅 التاريخ: ${attendanceDate}\n` +
+    `⏰ وقت الانصراف: ${checkOutTime}` +
+    nightShiftNote +
+    workHoursMessage +
+    overtimeMessage +
+    earlyDepartureMessage,
+    getEmployeeKeyboard(managerPermissions)
+  )
+  
+  // Notify managers about check-out with overtime/early departure info
+  await notifyManagers(supabase, botToken, employee.id, employee.full_name, companyId, 'check_out', checkOutTime, attendanceDate, undefined, overtimeInfo, earlyDepartureInfo)
 }
