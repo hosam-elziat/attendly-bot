@@ -3558,6 +3558,60 @@ async function createPendingAttendance(
   approverId: string | null,
   timezone: string = 'Africa/Cairo'
 ) {
+  // Get today's date in company timezone
+  const localTime = getLocalTime(timezone)
+  const todayDate = localTime.date
+  
+  // Check for existing pending request for today
+  const { data: existingPending } = await supabase
+    .from('pending_attendance')
+    .select('id, requested_time, created_at')
+    .eq('employee_id', employee.id)
+    .eq('request_type', requestType)
+    .eq('status', 'pending')
+    .gte('created_at', `${todayDate}T00:00:00`)
+    .lte('created_at', `${todayDate}T23:59:59`)
+    .maybeSingle()
+  
+  if (existingPending) {
+    const pendingTime = existingPending.requested_time 
+      ? new Date(existingPending.requested_time).toLocaleTimeString('ar-EG', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })
+      : '-'
+    const requestTypeName = requestType === 'check_in' ? 'حضور' : 'انصراف'
+    await sendMessage(botToken, chatId, 
+      `⚠️ لديك طلب ${requestTypeName} معلق بالفعل!\n\n` +
+      `📅 التاريخ: ${todayDate}\n` +
+      `⏰ وقت الطلب: ${pendingTime}\n\n` +
+      `🔄 بانتظار موافقة المدير...\n` +
+      `يرجى الانتظار حتى تتم معالجة طلبك السابق.`
+    )
+    return
+  }
+  
+  // Also check if already checked in today in attendance_logs
+  if (requestType === 'check_in') {
+    const { data: existingAttendance } = await supabase
+      .from('attendance_logs')
+      .select('id, check_in_time, status')
+      .eq('employee_id', employee.id)
+      .eq('date', todayDate)
+      .neq('status', 'absent')
+      .maybeSingle()
+    
+    if (existingAttendance && existingAttendance.status !== 'checked_out') {
+      const checkInTimeDisplay = existingAttendance.check_in_time 
+        ? new Date(existingAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })
+        : '-'
+      await sendMessage(botToken, chatId, 
+        `⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n` +
+        `📅 التاريخ: ${todayDate}\n` +
+        `⏰ وقت الحضور: ${checkInTimeDisplay}\n` +
+        `📊 الحالة: ${existingAttendance.status === 'checked_in' ? 'حاضر' : existingAttendance.status === 'on_break' ? 'في استراحة' : existingAttendance.status}`
+      )
+      return
+    }
+  }
+  
   // Create pending attendance record
   const { data: pendingRecord, error: pendingError } = await supabase
     .from('pending_attendance')
@@ -3580,14 +3634,14 @@ async function createPendingAttendance(
   }
 
   // Get local time for display - this is the actual current time in the company's timezone
-  const localTime = getLocalTime(timezone)
-  const displayTime = localTime.time.substring(0, 5) // HH:MM format
+  const displayLocalTime = getLocalTime(timezone)
+  const displayTime = displayLocalTime.time.substring(0, 5) // HH:MM format
 
   // Notify employee
   const requestTypeName = requestType === 'check_in' ? 'الحضور' : 'الانصراف'
   await sendMessage(botToken, chatId, 
     `⏳ <b>تم إرسال طلب ${requestTypeName}</b>\n\n` +
-    `📅 التاريخ: ${localTime.date}\n` +
+    `📅 التاريخ: ${displayLocalTime.date}\n` +
     `⏰ الوقت: ${displayTime}\n\n` +
     `🔄 بانتظار موافقة المدير...\n` +
     `سيتم إخطارك عند الموافقة أو الرفض.`
