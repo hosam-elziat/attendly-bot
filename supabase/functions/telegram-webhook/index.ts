@@ -615,10 +615,8 @@ serve(async (req) => {
           const hasOpenYesterdayAttendance = attendanceDate === yesterday && attendance && 
             (attendance.status === 'checked_in' || attendance.status === 'on_break')
           
-          // Check if today's attendance exists and is still open (not checked_out and not absent)
-          const hasTodayOpenAttendance = todayAttendance && 
-            todayAttendance.status !== 'checked_out' && 
-            todayAttendance.status !== 'absent'
+          // Check if today's attendance exists (any status except absent means already worked today)
+          const hasTodayAttendance = todayAttendance && todayAttendance.status !== 'absent'
           
           if (hasOpenYesterdayAttendance) {
             // Night shift still active - must check out first
@@ -629,18 +627,29 @@ serve(async (req) => {
               '🔴 يجب تسجيل الانصراف أولاً قبل تسجيل حضور جديد.',
               getEmployeeKeyboard(managerPermissions)
             )
-          } else if (hasTodayOpenAttendance) {
-            // Today's attendance exists and is still open (checked_in or on_break)
+          } else if (hasTodayAttendance) {
+            // Today's attendance exists (checked_in, on_break, or checked_out)
             const checkInTimeDisplay = todayAttendance.check_in_time 
               ? new Date(todayAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
               : '-'
-            await sendAndLogMessage(
-              '⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n' +
+            const checkOutTimeDisplay = todayAttendance.check_out_time 
+              ? new Date(todayAttendance.check_out_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
+              : null
+            const statusText = todayAttendance.status === 'checked_in' ? 'حاضر' 
+              : todayAttendance.status === 'on_break' ? 'في استراحة' 
+              : todayAttendance.status === 'checked_out' ? 'انصرف' 
+              : todayAttendance.status
+            
+            let message = `⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n` +
               `📅 التاريخ: ${today}\n` +
-              `⏰ وقت الحضور: ${checkInTimeDisplay}\n` +
-              `📊 الحالة: ${todayAttendance.status === 'checked_in' ? 'حاضر' : todayAttendance.status === 'on_break' ? 'في استراحة' : todayAttendance.status}`,
-              getEmployeeKeyboard(managerPermissions)
-            )
+              `⏰ وقت الحضور: ${checkInTimeDisplay}\n`
+            
+            if (checkOutTimeDisplay) {
+              message += `⏰ وقت الانصراف: ${checkOutTimeDisplay}\n`
+            }
+            message += `📊 الحالة: ${statusText}`
+            
+            await sendAndLogMessage(message, getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
             const nowUtc = new Date().toISOString()
