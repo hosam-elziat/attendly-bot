@@ -483,6 +483,9 @@ export type Database = {
           default_weekend_days: string[] | null
           deleted_at: string | null
           deleted_by: string | null
+          early_departure_deduction: number | null
+          early_departure_grace_minutes: number | null
+          early_departure_threshold_minutes: number | null
           emergency_leave_days: number | null
           id: string
           is_deleted: boolean | null
@@ -532,6 +535,9 @@ export type Database = {
           default_weekend_days?: string[] | null
           deleted_at?: string | null
           deleted_by?: string | null
+          early_departure_deduction?: number | null
+          early_departure_grace_minutes?: number | null
+          early_departure_threshold_minutes?: number | null
           emergency_leave_days?: number | null
           id?: string
           is_deleted?: boolean | null
@@ -581,6 +587,9 @@ export type Database = {
           default_weekend_days?: string[] | null
           deleted_at?: string | null
           deleted_by?: string | null
+          early_departure_deduction?: number | null
+          early_departure_grace_minutes?: number | null
+          early_departure_threshold_minutes?: number | null
           emergency_leave_days?: number | null
           id?: string
           is_deleted?: boolean | null
