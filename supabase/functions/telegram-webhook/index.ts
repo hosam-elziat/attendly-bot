@@ -603,8 +603,23 @@ serve(async (req) => {
 
       switch (callbackData) {
         case 'check_in':
-          // For check_in, only check today's attendance (not yesterday's open shift)
-          if (todayAttendance) {
+          // First check if there's an open attendance from yesterday (night shift still active)
+          // This prevents double check-in when night shift hasn't ended
+          if (attendance && attendance.status !== 'checked_out' && !attendance.check_out_time) {
+            const isFromYesterday = attendanceDate === yesterday
+            if (isFromYesterday) {
+              await sendAndLogMessage(
+                '⚠️ لديك وردية ليلية مفتوحة من الأمس!\n\n' +
+                `📅 تاريخ الحضور: ${attendanceDate}\n` +
+                `⏰ وقت الحضور: ${attendance.check_in_time ? new Date(attendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' }) : '-'}\n\n` +
+                '🔴 يجب تسجيل الانصراف أولاً قبل تسجيل حضور جديد.',
+                getEmployeeKeyboard(managerPermissions)
+              )
+            } else {
+              await sendAndLogMessage('⚠️ لقد سجلت حضورك اليوم بالفعل!', getEmployeeKeyboard(managerPermissions))
+            }
+          } else if (todayAttendance && todayAttendance.status !== 'checked_out') {
+            // Today's attendance exists and not checked out
             await sendAndLogMessage('⚠️ لقد سجلت حضورك اليوم بالفعل!', getEmployeeKeyboard(managerPermissions))
           } else {
             const localTime = getLocalTime(companyTimezone)
