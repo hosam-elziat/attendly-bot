@@ -76,8 +76,8 @@ export function TimePicker({ value, onChange, placeholder = "اختر الوقت
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-4 pointer-events-auto" align="start">
-        {/* Time Display */}
-        <div className="flex items-center justify-center gap-1 mb-4">
+        {/* Time Display - force LTR for proper time display */}
+        <div className="flex items-center justify-center gap-1 mb-4" dir="ltr">
           <button
             type="button"
             onClick={() => setMode('hours')}
