@@ -577,10 +577,10 @@ serve(async (req) => {
         .eq('id', companyId)
         .single()
 
-      // Get employee details with late balance and freelancer status
+      // Get employee details with late balance, freelancer status and hourly rate
       const { data: empDetails } = await supabase
         .from('employees')
-        .select('monthly_late_balance_minutes, base_salary, currency, is_freelancer')
+        .select('monthly_late_balance_minutes, base_salary, currency, is_freelancer, hourly_rate')
         .eq('id', employee.id)
         .single()
 
@@ -4132,13 +4132,46 @@ async function processCheckout(
   
   // Calculate total work hours
   let workHoursMessage = ''
+  let freelancerEarningsMessage = ''
+  let totalMinutesWorked = 0
+  
   if (attendance.check_in_time) {
     const checkInDate = new Date(attendance.check_in_time)
     const checkOutDate = new Date(nowUtc)
-    const totalMinutes = Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 60000)
-    const hours = Math.floor(totalMinutes / 60)
-    const mins = totalMinutes % 60
+    totalMinutesWorked = Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 60000)
+    const hours = Math.floor(totalMinutesWorked / 60)
+    const mins = totalMinutesWorked % 60
     workHoursMessage = `\n🕐 إجمالي ساعات العمل: ${hours} ساعة و ${mins} دقيقة`
+    
+    // For freelancers: calculate earnings based on hourly rate and add as salary adjustment
+    if (isFreelancer && empDetails?.hourly_rate && totalMinutesWorked > 0) {
+      const hoursWorked = totalMinutesWorked / 60
+      const earnings = hoursWorked * empDetails.hourly_rate
+      const roundedEarnings = Math.round(earnings * 100) / 100
+      const monthKey = attendanceDate.substring(0, 7) + '-01'
+      
+      // Insert salary adjustment as bonus for freelancer work
+      const { error: freelancerBonusError } = await supabase.from('salary_adjustments').insert({
+        employee_id: employee.id,
+        company_id: companyId,
+        month: monthKey,
+        bonus: roundedEarnings,
+        deduction: 0,
+        adjustment_days: null,
+        description: `أجر عمل يوم ${attendanceDate} - ${hours} ساعة و ${mins} دقيقة × ${empDetails.hourly_rate} ${empDetails.currency || 'EGP'}/ساعة`,
+        added_by_name: 'النظام التلقائي',
+        attendance_log_id: attendance.id,
+        is_auto_generated: true
+      })
+      
+      if (freelancerBonusError) {
+        console.error('Failed to create freelancer earnings adjustment:', freelancerBonusError)
+      } else {
+        freelancerEarningsMessage = `\n\n💰 <b>مستحقاتك اليوم:</b> ${roundedEarnings.toFixed(2)} ${empDetails.currency || 'EGP'}\n` +
+          `📊 سعر الساعة: ${empDetails.hourly_rate} ${empDetails.currency || 'EGP'}\n` +
+          `✅ تم إضافة المبلغ لحسابك`
+      }
+    }
   }
   
   // Update attendance record
@@ -4156,6 +4189,7 @@ async function processCheckout(
     `⏰ وقت الانصراف: ${checkOutTime}` +
     nightShiftNote +
     workHoursMessage +
+    freelancerEarningsMessage +
     overtimeMessage +
     earlyDepartureMessage,
     getEmployeeKeyboard(managerPermissions)
