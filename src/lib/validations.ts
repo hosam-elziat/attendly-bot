@@ -84,6 +84,10 @@ export const EmployeeSchema = z.object({
   ),
   allowed_wifi_ips: z.array(z.string()).nullable().optional(),
   
+  // Freelancer settings
+  is_freelancer: z.boolean().optional(),
+  hourly_rate: z.number().min(0, 'Hourly rate cannot be negative').nullable().optional(),
+  
   // Leave balance settings
   leave_balance: z.number().min(0).nullable().optional(),
   emergency_leave_balance: z.number().min(0).nullable().optional(),
