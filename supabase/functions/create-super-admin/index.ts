@@ -14,8 +14,17 @@ serve(async (req) => {
   try {
     const { email, password, full_name, secret_key } = await req.json();
 
-    // Simple secret key protection
-    if (secret_key !== "CREATE_SUPER_ADMIN_2024") {
+    // Validate secret key from environment variable
+    const SUPER_ADMIN_SECRET = Deno.env.get("SUPER_ADMIN_CREATION_SECRET");
+    if (!SUPER_ADMIN_SECRET) {
+      console.error("SUPER_ADMIN_CREATION_SECRET not configured");
+      return new Response(
+        JSON.stringify({ error: "Server configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (secret_key !== SUPER_ADMIN_SECRET) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
