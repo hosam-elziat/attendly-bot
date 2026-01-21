@@ -33,6 +33,8 @@ export const useEmployeeSalaryStats = (
     work_end_time: string | null;
     weekend_days: string[] | null;
     break_duration_minutes: number | null;
+    is_freelancer?: boolean;
+    hourly_rate?: number | null;
   }
 ) => {
   const { profile } = useAuth();
@@ -113,6 +115,8 @@ export const useEmployeeSalaryStats = (
       };
     }
 
+    const isFreelancer = employee.is_freelancer === true;
+    const hourlyRate = Number(employee.hourly_rate) || 0;
     const baseSalary = Number(employee.base_salary) || 0;
     const salaryType = employee.salary_type || 'monthly';
     const weekendDays = employee.weekend_days || ['friday', 'saturday'];
@@ -139,18 +143,21 @@ export const useEmployeeSalaryStats = (
         const checkIn = parseISO(log.check_in_time);
         const checkOut = parseISO(log.check_out_time);
         const workedMinutes = differenceInMinutes(checkOut, checkIn) - breakMinutes;
-        totalWorkedMinutes += workedMinutes;
+        totalWorkedMinutes += Math.max(0, workedMinutes);
 
-        // Check late arrival
-        const expectedStart = new Date(checkIn);
-        expectedStart.setHours(startHour, startMin, 0, 0);
-        if (checkIn > expectedStart) {
-          totalLateMinutes += differenceInMinutes(checkIn, expectedStart);
-        }
+        // For freelancers, skip late/overtime calculations - they're paid purely by hours
+        if (!isFreelancer) {
+          // Check late arrival
+          const expectedStart = new Date(checkIn);
+          expectedStart.setHours(startHour, startMin, 0, 0);
+          if (checkIn > expectedStart) {
+            totalLateMinutes += differenceInMinutes(checkIn, expectedStart);
+          }
 
-        // Check overtime
-        if (workedMinutes > expectedDailyMinutes) {
-          totalOvertimeMinutes += workedMinutes - expectedDailyMinutes;
+          // Check overtime
+          if (workedMinutes > expectedDailyMinutes) {
+            totalOvertimeMinutes += workedMinutes - expectedDailyMinutes;
+          }
         }
       } else if (log.check_in_time) {
         workDays++;
@@ -159,7 +166,11 @@ export const useEmployeeSalaryStats = (
 
     // Calculate earned salary
     let earnedSalary = 0;
-    if (salaryType === 'monthly') {
+    if (isFreelancer) {
+      // Freelancer: paid by actual hours worked
+      const totalHoursWorked = totalWorkedMinutes / 60;
+      earnedSalary = totalHoursWorked * hourlyRate;
+    } else if (salaryType === 'monthly') {
       // Monthly: proportional to days worked
       const dailyRate = baseSalary / 30;
       earnedSalary = dailyRate * workDays;
@@ -167,22 +178,28 @@ export const useEmployeeSalaryStats = (
       earnedSalary = baseSalary * workDays;
     }
 
-    // Calculate overtime amount
-    const hourlyRate = salaryType === 'monthly' 
-      ? baseSalary / 30 / (expectedDailyMinutes / 60)
-      : baseSalary / (expectedDailyMinutes / 60);
-    const overtimeHours = totalOvertimeMinutes / 60;
-    const overtimeAmount = overtimeHours * hourlyRate * overtimeMultiplier;
-
-    // Calculate late deductions based on company settings
-    let lateDeductionAmount = 0;
-    if (company) {
-      const hourlyDeduction = hourlyRate;
-      // Simplified: deduct based on late minutes
-      lateDeductionAmount = (totalLateMinutes / 60) * hourlyDeduction * 0.5;
+    // Calculate overtime amount (not for freelancers - they're already paid for all hours)
+    let overtimeAmount = 0;
+    let overtimeHours = 0;
+    if (!isFreelancer) {
+      const regularHourlyRate = salaryType === 'monthly' 
+        ? baseSalary / 30 / (expectedDailyMinutes / 60)
+        : baseSalary / (expectedDailyMinutes / 60);
+      overtimeHours = totalOvertimeMinutes / 60;
+      overtimeAmount = overtimeHours * regularHourlyRate * overtimeMultiplier;
     }
 
-    // Sum adjustments
+    // Calculate late deductions (not for freelancers)
+    let lateDeductionAmount = 0;
+    if (!isFreelancer && company) {
+      const regularHourlyRate = salaryType === 'monthly' 
+        ? baseSalary / 30 / (expectedDailyMinutes / 60)
+        : baseSalary / (expectedDailyMinutes / 60);
+      // Simplified: deduct based on late minutes
+      lateDeductionAmount = (totalLateMinutes / 60) * regularHourlyRate * 0.5;
+    }
+
+    // Sum adjustments (bonuses/deductions from manager apply to everyone including freelancers)
     const totalBonuses = adjustments.reduce((sum, adj) => sum + Number(adj.bonus || 0), 0);
     const totalAdjDeductions = adjustments.reduce((sum, adj) => sum + Number(adj.deduction || 0), 0);
 

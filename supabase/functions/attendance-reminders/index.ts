@@ -84,6 +84,7 @@ serve(async (req) => {
         base_salary,
         currency,
         position_id,
+        is_freelancer,
         companies!inner (
           id,
           telegram_bot_username,
@@ -121,6 +122,12 @@ serve(async (req) => {
     for (const emp of employees || []) {
       // Skip if no telegram chat id
       if (!emp.telegram_chat_id) {
+        continue
+      }
+
+      // Skip freelancers - they are exempt from all attendance policies
+      if ((emp as any).is_freelancer) {
+        console.log(`Skipping ${emp.full_name} - freelancer (exempt from policies)`)
         continue
       }
 
