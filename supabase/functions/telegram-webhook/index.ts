@@ -577,10 +577,10 @@ serve(async (req) => {
         .eq('id', companyId)
         .single()
 
-      // Get employee details with late balance
+      // Get employee details with late balance and freelancer status
       const { data: empDetails } = await supabase
         .from('employees')
-        .select('monthly_late_balance_minutes, base_salary, currency')
+        .select('monthly_late_balance_minutes, base_salary, currency, is_freelancer')
         .eq('id', employee.id)
         .single()
 
@@ -701,7 +701,10 @@ serve(async (req) => {
             const workEndTime = employee.work_end_time || companyDefaults.work_end_time
             let earlyMinutes = 0
             
-            if (workEndTime && !isNightShift) {
+            // Freelancers are exempt from all time-based policies
+            const isFreelancer = empDetails?.is_freelancer === true
+            
+            if (workEndTime && !isNightShift && !isFreelancer) {
               const [endH, endM] = workEndTime.split(':').map(Number)
               const [checkH, checkM] = checkOutTime.split(':').map(Number)
               const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
@@ -716,8 +719,8 @@ serve(async (req) => {
             const earlyDepartureThreshold = companyPolicies?.early_departure_threshold_minutes ?? 30
             const earlyDepartureDeduction = companyPolicies?.early_departure_deduction ?? 0.5
             
-            // Check if early departure requires confirmation
-            if (earlyMinutes > earlyDepartureGrace && !isNightShift) {
+            // Check if early departure requires confirmation (skip for freelancers)
+            if (earlyMinutes > earlyDepartureGrace && !isNightShift && !isFreelancer) {
               // Need to ask for confirmation
               const deductionDays = earlyDepartureDeduction
               const baseSalary = empDetails?.base_salary ?? 0
@@ -753,7 +756,7 @@ serve(async (req) => {
                 }
               )
             } else {
-              // Normal checkout (on time, overtime, or within grace period)
+              // Normal checkout (on time, overtime, or within grace period, or freelancer)
               await processCheckout(supabase, botToken, chatId, employee, attendance, attendanceDate, companyId, companyTimezone, companyDefaults, companyPolicies, empDetails, managerPermissions, isNightShift)
             }
           }
@@ -4010,8 +4013,11 @@ async function processCheckout(
   
   const workEndTime = employee.work_end_time || companyDefaults.work_end_time
   
-  // Calculate time difference
-  if (workEndTime && !isNightShift) {
+  // Freelancers are exempt from all time-based policies (overtime, late, early departure)
+  const isFreelancer = empDetails?.is_freelancer === true
+  
+  // Calculate time difference (skip all policy calculations for freelancers)
+  if (workEndTime && !isNightShift && !isFreelancer) {
     const [endH, endM] = workEndTime.split(':').map(Number)
     const [checkH, checkM] = checkOutTime.split(':').map(Number)
     const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
