@@ -31,6 +31,8 @@ export interface Employee {
   leave_balance: number | null;
   emergency_leave_balance: number | null;
   position_id: string | null;
+  is_freelancer: boolean;
+  hourly_rate: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,8 @@ export interface CreateEmployeeData {
   notes?: string;
   telegram_chat_id?: string;
   position_id?: string;
+  is_freelancer?: boolean;
+  hourly_rate?: number;
 }
 
 export const useEmployees = () => {
@@ -164,6 +168,8 @@ export const useCreateEmployee = () => {
         notes: employeeData.notes || null,
         telegram_chat_id: employeeData.telegram_chat_id || null,
         position_id: employeeData.position_id || null,
+        is_freelancer: employeeData.is_freelancer || false,
+        hourly_rate: employeeData.is_freelancer ? (employeeData.hourly_rate || null) : null,
       };
 
       const { data, error } = await supabase

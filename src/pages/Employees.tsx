@@ -339,7 +339,12 @@ const Employees = () => {
                               <p className="text-xs text-muted-foreground truncate">{positions.find(p => p.id === employee.position_id)?.title || '—'}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {(employee as any).is_freelancer && (
+                              <Badge variant="outline" className="text-[10px] border-warning text-warning">
+                                {direction === 'rtl' ? 'فريلانسر' : 'Freelancer'}
+                              </Badge>
+                            )}
                             <Badge 
                               variant={employee.is_active ? 'default' : 'secondary'}
                               className={`text-[10px] ${employee.is_active ? 'bg-success hover:bg-success/90' : ''}`}
@@ -428,15 +433,25 @@ const Employees = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {Number(employee.base_salary).toLocaleString()} {getCurrencySymbol(employee.currency)} / {employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}
+                          {(employee as any).is_freelancer 
+                            ? `${Number((employee as any).hourly_rate || 0).toLocaleString()} ${getCurrencySymbol(employee.currency)} / ${direction === 'rtl' ? 'ساعة' : 'hr'}`
+                            : `${Number(employee.base_salary).toLocaleString()} ${getCurrencySymbol(employee.currency)} / ${employee.salary_type === 'monthly' ? t('employees.monthly') : t('employees.daily')}`
+                          }
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant={employee.is_active ? 'default' : 'secondary'}
-                            className={employee.is_active ? 'bg-success hover:bg-success/90' : ''}
-                          >
-                            {employee.is_active ? t('common.active') : t('common.inactive')}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            {(employee as any).is_freelancer && (
+                              <Badge variant="outline" className="border-warning text-warning">
+                                {direction === 'rtl' ? 'فريلانسر' : 'Freelancer'}
+                              </Badge>
+                            )}
+                            <Badge 
+                              variant={employee.is_active ? 'default' : 'secondary'}
+                              className={employee.is_active ? 'bg-success hover:bg-success/90' : ''}
+                            >
+                              {employee.is_active ? t('common.active') : t('common.inactive')}
+                            </Badge>
+                          </div>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
@@ -548,6 +563,8 @@ interface EmployeeFormData extends CreateEmployeeData {
   notes?: string;
   telegram_chat_id?: string;
   position_id?: string;
+  is_freelancer?: boolean;
+  hourly_rate?: number;
   // Verification settings
   attendance_verification_level?: number | null;
   attendance_approver_type?: string | null;
@@ -584,6 +601,8 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
     notes: '',
     telegram_chat_id: '',
     position_id: '',
+    is_freelancer: false,
+    hourly_rate: 0,
   });
   
   const handleWeekendToggle = (day: string) => {
@@ -739,55 +758,142 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
       {/* Salary Info */}
       <div className="border-t pt-4">
         <Label className="text-base font-medium">{t('employees.salaryInfo')}</Label>
+        
+        {/* Freelancer Toggle */}
+        <div className="mt-3 mb-4">
+          <Card 
+            className={cn(
+              "p-4 transition-all duration-300 cursor-pointer border-2",
+              formData.is_freelancer 
+                ? "bg-warning/10 border-warning/30 hover:border-warning/50" 
+                : "bg-muted/30 border-muted-foreground/20 hover:border-muted-foreground/40"
+            )}
+            onClick={() => setFormData({ ...formData, is_freelancer: !formData.is_freelancer })}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                  formData.is_freelancer ? "bg-warning/20" : "bg-muted-foreground/10"
+                )}>
+                  <Clock className={cn("w-5 h-5", formData.is_freelancer ? "text-warning" : "text-muted-foreground")} />
+                </div>
+                <div>
+                  <p className={cn("font-medium", formData.is_freelancer ? "text-warning" : "text-muted-foreground")}>
+                    {language === 'ar' ? 'عمالة غير منتظمة (Freelancer)' : 'Freelancer (Hourly)'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar' 
+                      ? 'يُحسب الراتب بالساعة - لا تطبق قوانين الشركة' 
+                      : 'Paid hourly - Company policies do not apply'}
+                  </p>
+                </div>
+              </div>
+              <Switch 
+                checked={formData.is_freelancer || false}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_freelancer: checked })}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </Card>
+          
+          {formData.is_freelancer && (
+            <div className="mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+              <p className="text-sm text-warning-foreground">
+                <strong>{language === 'ar' ? '⚠️ ملاحظة:' : '⚠️ Note:'}</strong>{' '}
+                {language === 'ar' 
+                  ? 'الموظف الفريلانسر لا يطبق عليه: خصومات التأخير، الغياب التلقائي، تنبيهات الحضور، أو أي سياسات أخرى للشركة. يتم حساب راتبه فقط بناءً على ساعات العمل الفعلية.'
+                  : 'Freelancer employees are exempt from: late deductions, auto-absence, attendance reminders, or any other company policies. Salary is calculated solely based on actual hours worked.'}
+              </p>
+            </div>
+          )}
+        </div>
+        
         <div className="grid gap-4 sm:grid-cols-3 mt-3">
-          <div className="space-y-2">
-            <Label>{t('employees.salaryType')}</Label>
-            <Select 
-              value={formData.salary_type} 
-              onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">{t('employees.monthly')}</SelectItem>
-                <SelectItem value="daily">{t('employees.daily')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="salary">{t('employees.salaryAmount')}</Label>
-            <NumberInput 
-              id="salary" 
-              value={formData.base_salary || 0}
-              onChange={(value) => setFormData({ ...formData, base_salary: value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>{t('employees.currency')}</Label>
-            <Select 
-              value={formData.currency} 
-              onValueChange={(value) => setFormData({ ...formData, currency: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((curr) => (
-                  <SelectItem key={curr.code} value={curr.code}>
-                    {curr.symbol} - {curr.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {formData.is_freelancer ? (
+            <>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>{language === 'ar' ? 'سعر الساعة' : 'Hourly Rate'}</Label>
+                <NumberInput 
+                  value={formData.hourly_rate || 0}
+                  onChange={(value) => setFormData({ ...formData, hourly_rate: value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('employees.currency')}</Label>
+                <Select 
+                  value={formData.currency} 
+                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((curr) => (
+                      <SelectItem key={curr.code} value={curr.code}>
+                        {curr.symbol} - {curr.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label>{t('employees.salaryType')}</Label>
+                <Select 
+                  value={formData.salary_type} 
+                  onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">{t('employees.monthly')}</SelectItem>
+                    <SelectItem value="daily">{t('employees.daily')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="salary">{t('employees.salaryAmount')}</Label>
+                <NumberInput 
+                  id="salary" 
+                  value={formData.base_salary || 0}
+                  onChange={(value) => setFormData({ ...formData, base_salary: value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('employees.currency')}</Label>
+                <Select 
+                  value={formData.currency} 
+                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((curr) => (
+                      <SelectItem key={curr.code} value={curr.code}>
+                        {curr.symbol} - {curr.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Work Schedule */}
+      {/* Work Schedule - only show for non-freelancers or with note */}
       <div className="border-t pt-4">
         <Label className="text-base font-medium">{t('employees.workSchedule')}</Label>
-        <p className="text-sm text-muted-foreground mb-3">{t('employees.workScheduleDesc')}</p>
+        <p className="text-sm text-muted-foreground mb-3">
+          {formData.is_freelancer 
+            ? (language === 'ar' ? 'اختياري - للتذكير فقط (لن يتم تطبيق خصومات)' : 'Optional - For reminders only (no deductions applied)')
+            : t('employees.workScheduleDesc')}
+        </p>
         
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
@@ -897,6 +1003,8 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     notes: employee.notes || '',
     telegram_chat_id: employee.telegram_chat_id || '',
     position_id: employee.position_id || '',
+    is_freelancer: employee.is_freelancer || false,
+    hourly_rate: employee.hourly_rate || 0,
   });
 
   // Verification settings state
@@ -1169,55 +1277,142 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
       {/* Salary Info */}
       <div className="border-t pt-4">
         <Label className="text-base font-medium">{t('employees.salaryInfo')}</Label>
+        
+        {/* Freelancer Toggle */}
+        <div className="mt-3 mb-4">
+          <Card 
+            className={cn(
+              "p-4 transition-all duration-300 cursor-pointer border-2",
+              formData.is_freelancer 
+                ? "bg-warning/10 border-warning/30 hover:border-warning/50" 
+                : "bg-muted/30 border-muted-foreground/20 hover:border-muted-foreground/40"
+            )}
+            onClick={() => setFormData({ ...formData, is_freelancer: !formData.is_freelancer })}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                  formData.is_freelancer ? "bg-warning/20" : "bg-muted-foreground/10"
+                )}>
+                  <Clock className={cn("w-5 h-5", formData.is_freelancer ? "text-warning" : "text-muted-foreground")} />
+                </div>
+                <div>
+                  <p className={cn("font-medium", formData.is_freelancer ? "text-warning" : "text-muted-foreground")}>
+                    {language === 'ar' ? 'عمالة غير منتظمة (Freelancer)' : 'Freelancer (Hourly)'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar' 
+                      ? 'يُحسب الراتب بالساعة - لا تطبق قوانين الشركة' 
+                      : 'Paid hourly - Company policies do not apply'}
+                  </p>
+                </div>
+              </div>
+              <Switch 
+                checked={formData.is_freelancer || false}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_freelancer: checked })}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </Card>
+          
+          {formData.is_freelancer && (
+            <div className="mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+              <p className="text-sm text-warning-foreground">
+                <strong>{language === 'ar' ? '⚠️ ملاحظة:' : '⚠️ Note:'}</strong>{' '}
+                {language === 'ar' 
+                  ? 'الموظف الفريلانسر لا يطبق عليه: خصومات التأخير، الغياب التلقائي، تنبيهات الحضور، أو أي سياسات أخرى للشركة. يتم حساب راتبه فقط بناءً على ساعات العمل الفعلية.'
+                  : 'Freelancer employees are exempt from: late deductions, auto-absence, attendance reminders, or any other company policies. Salary is calculated solely based on actual hours worked.'}
+              </p>
+            </div>
+          )}
+        </div>
+        
         <div className="grid gap-4 sm:grid-cols-3 mt-3">
-          <div className="space-y-2">
-            <Label>{t('employees.salaryType')}</Label>
-            <Select 
-              value={formData.salary_type} 
-              onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">{t('employees.monthly')}</SelectItem>
-                <SelectItem value="daily">{t('employees.daily')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-salary">{t('employees.salaryAmount')}</Label>
-            <NumberInput 
-              id="edit-salary" 
-              value={formData.base_salary || 0}
-              onChange={(value) => setFormData({ ...formData, base_salary: value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>{t('employees.currency')}</Label>
-            <Select 
-              value={formData.currency} 
-              onValueChange={(value) => setFormData({ ...formData, currency: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((curr) => (
-                  <SelectItem key={curr.code} value={curr.code}>
-                    {curr.symbol} - {curr.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {formData.is_freelancer ? (
+            <>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>{language === 'ar' ? 'سعر الساعة' : 'Hourly Rate'}</Label>
+                <NumberInput 
+                  value={formData.hourly_rate || 0}
+                  onChange={(value) => setFormData({ ...formData, hourly_rate: value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('employees.currency')}</Label>
+                <Select 
+                  value={formData.currency} 
+                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((curr) => (
+                      <SelectItem key={curr.code} value={curr.code}>
+                        {curr.symbol} - {curr.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label>{t('employees.salaryType')}</Label>
+                <Select 
+                  value={formData.salary_type} 
+                  onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">{t('employees.monthly')}</SelectItem>
+                    <SelectItem value="daily">{t('employees.daily')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-salary">{t('employees.salaryAmount')}</Label>
+                <NumberInput 
+                  id="edit-salary" 
+                  value={formData.base_salary || 0}
+                  onChange={(value) => setFormData({ ...formData, base_salary: value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('employees.currency')}</Label>
+                <Select 
+                  value={formData.currency} 
+                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((curr) => (
+                      <SelectItem key={curr.code} value={curr.code}>
+                        {curr.symbol} - {curr.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Work Schedule */}
       <div className="border-t pt-4">
         <Label className="text-base font-medium">{t('employees.workSchedule')}</Label>
-        <p className="text-sm text-muted-foreground mb-3">{t('employees.workScheduleDesc')}</p>
+        <p className="text-sm text-muted-foreground mb-3">
+          {formData.is_freelancer 
+            ? (language === 'ar' ? 'اختياري - للتذكير فقط (لن يتم تطبيق خصومات)' : 'Optional - For reminders only (no deductions applied)')
+            : t('employees.workScheduleDesc')}
+        </p>
         
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">

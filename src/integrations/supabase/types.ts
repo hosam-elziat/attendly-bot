@@ -860,8 +860,10 @@ export type Database = {
           emergency_leave_balance: number | null
           full_name: string
           hire_date: string | null
+          hourly_rate: number | null
           id: string
           is_active: boolean | null
+          is_freelancer: boolean
           leave_balance: number | null
           level3_verification_mode: string | null
           monthly_late_balance_minutes: number | null
@@ -893,8 +895,10 @@ export type Database = {
           emergency_leave_balance?: number | null
           full_name: string
           hire_date?: string | null
+          hourly_rate?: number | null
           id?: string
           is_active?: boolean | null
+          is_freelancer?: boolean
           leave_balance?: number | null
           level3_verification_mode?: string | null
           monthly_late_balance_minutes?: number | null
@@ -926,8 +930,10 @@ export type Database = {
           emergency_leave_balance?: number | null
           full_name?: string
           hire_date?: string | null
+          hourly_rate?: number | null
           id?: string
           is_active?: boolean | null
+          is_freelancer?: boolean
           leave_balance?: number | null
           level3_verification_mode?: string | null
           monthly_late_balance_minutes?: number | null

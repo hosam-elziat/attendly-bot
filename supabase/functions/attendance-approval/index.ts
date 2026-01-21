@@ -46,7 +46,9 @@ serve(async (req) => {
           work_end_time,
           base_salary,
           currency,
-          monthly_late_balance_minutes
+          monthly_late_balance_minutes,
+          is_freelancer,
+          hourly_rate
         )
       `)
       .eq('id', pending_id)
@@ -143,6 +145,8 @@ serve(async (req) => {
         }
 
         // Check for lateness and apply deductions with monthly balance logic
+        // Skip deductions for freelancers
+        const isFreelancer = (employee as any).is_freelancer === true
         const checkInTime = new Date(attendanceTime)
         const workStartTime = employee.work_start_time || '09:00:00'
         const [startH, startM] = workStartTime.split(':').map(Number)
@@ -150,7 +154,7 @@ serve(async (req) => {
         const expectedStart = new Date(checkInTime)
         expectedStart.setHours(startH, startM, 0, 0)
 
-        if (checkInTime > expectedStart) {
+        if (!isFreelancer && checkInTime > expectedStart) {
           const lateMinutes = Math.floor((checkInTime.getTime() - expectedStart.getTime()) / 60000)
           
           // Get current late balance
