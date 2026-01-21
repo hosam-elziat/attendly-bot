@@ -12,16 +12,20 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
   ({ className, value, onChange, allowEmpty = true, emptyValue = 0, min, max, step, ...props }, ref) => {
     // Store the display value as string to allow empty state
     const [displayValue, setDisplayValue] = React.useState<string>(String(value ?? ''));
+    
+    // Track if we're internally updating to avoid loops
+    const isInternalUpdate = React.useRef(false);
 
     // Sync display value when external value changes
     React.useEffect(() => {
-      // Only update if the values are actually different (to avoid cursor issues)
-      const numericDisplay = displayValue === '' ? emptyValue : parseFloat(displayValue);
-      const numericValue = typeof value === 'string' ? parseFloat(value) || emptyValue : value;
-      
-      if (numericDisplay !== numericValue) {
-        setDisplayValue(String(value ?? ''));
+      // Skip if this update was triggered internally
+      if (isInternalUpdate.current) {
+        isInternalUpdate.current = false;
+        return;
       }
+      
+      const numericValue = typeof value === 'string' ? parseFloat(value) || emptyValue : (value ?? emptyValue);
+      setDisplayValue(String(numericValue));
     }, [value, emptyValue]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,6 +60,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       }
 
       setDisplayValue(inputValue);
+      isInternalUpdate.current = true;
       onChange(constrainedValue);
     };
 
@@ -63,6 +68,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       // On blur, if empty, set to emptyValue
       if (displayValue === '' || displayValue === '-') {
         setDisplayValue(String(emptyValue));
+        isInternalUpdate.current = true;
         onChange(emptyValue);
         return;
       }
@@ -80,6 +86,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           constrainedValue = Number(max);
         }
         setDisplayValue(String(constrainedValue));
+        isInternalUpdate.current = true;
         onChange(constrainedValue);
       }
     };
