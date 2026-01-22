@@ -260,11 +260,18 @@ const databaseTools = [
   }
 ];
 
-// Input validation helpers
+// Input validation helpers - SECURITY HARDENED
+function sanitizeSearchPattern(input: string | undefined, maxLength = 100): string {
+  if (!input) return '';
+  // Remove ALL wildcards and special ILIKE characters to prevent DoS via full table scans
+  const cleaned = input.replace(/[%_\\]/g, '').trim().slice(0, maxLength);
+  return cleaned;
+}
+
+// Legacy sanitizeString for backwards compatibility - now uses strict sanitization
 function sanitizeString(input: string | undefined, maxLength = 200): string {
   if (!input) return '';
-  // Remove excessive wildcards and limit length
-  return input.replace(/%{3,}/g, '%%').slice(0, maxLength);
+  return sanitizeSearchPattern(input, maxLength);
 }
 
 function validateDate(dateStr: string | undefined): boolean {
@@ -280,6 +287,20 @@ function validateUUID(uuid: string | undefined): boolean {
 function validateStatus(status: string | undefined, allowedValues: string[]): boolean {
   if (!status) return true;
   return allowedValues.includes(status);
+}
+
+// Currency/numeric validation to prevent unbounded values
+function validateCurrency(value: any): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0 || num > 10000000) {
+    throw new Error('Invalid amount: must be between 0 and 10,000,000');
+  }
+  return Math.round(num * 100) / 100; // Round to 2 decimal places
+}
+
+function validateLimit(value: any, defaultVal: number, maxVal: number): number {
+  const num = Number(value) || defaultVal;
+  return Math.min(Math.max(1, num), maxVal);
 }
 
 // Role-based access control context
