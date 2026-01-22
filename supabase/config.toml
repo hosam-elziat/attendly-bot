@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.recalculate-attendance-deduction]
 verify_jwt = false
+
+[functions.biometric-verification]
+verify_jwt = false

@@ -373,6 +373,165 @@ export type Database = {
           },
         ]
       }
+      biometric_otp_codes: {
+        Row: {
+          attempts: number | null
+          company_id: string
+          created_at: string | null
+          employee_id: string
+          expires_at: string
+          id: string
+          otp_code: string
+          request_type: string
+          used_at: string | null
+          verification_token: string
+        }
+        Insert: {
+          attempts?: number | null
+          company_id: string
+          created_at?: string | null
+          employee_id: string
+          expires_at: string
+          id?: string
+          otp_code: string
+          request_type: string
+          used_at?: string | null
+          verification_token: string
+        }
+        Update: {
+          attempts?: number | null
+          company_id?: string
+          created_at?: string | null
+          employee_id?: string
+          expires_at?: string
+          id?: string
+          otp_code?: string
+          request_type?: string
+          used_at?: string | null
+          verification_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biometric_otp_codes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "biometric_otp_codes_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      biometric_pending_verifications: {
+        Row: {
+          company_id: string
+          completed_at: string | null
+          created_at: string | null
+          employee_id: string
+          expires_at: string
+          id: string
+          location_lat: number | null
+          location_lng: number | null
+          request_type: string
+          telegram_chat_id: string
+          verification_token: string
+        }
+        Insert: {
+          company_id: string
+          completed_at?: string | null
+          created_at?: string | null
+          employee_id: string
+          expires_at: string
+          id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          request_type: string
+          telegram_chat_id: string
+          verification_token: string
+        }
+        Update: {
+          company_id?: string
+          completed_at?: string | null
+          created_at?: string | null
+          employee_id?: string
+          expires_at?: string
+          id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          request_type?: string
+          telegram_chat_id?: string
+          verification_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biometric_pending_verifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "biometric_pending_verifications_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      biometric_verification_logs: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          device_info: string | null
+          employee_id: string
+          id: string
+          ip_address: string | null
+          success: boolean
+          verification_type: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          device_info?: string | null
+          employee_id: string
+          id?: string
+          ip_address?: string | null
+          success: boolean
+          verification_type: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          device_info?: string | null
+          employee_id?: string
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          verification_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biometric_verification_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "biometric_verification_logs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bot_photo_requests: {
         Row: {
           admin_notes: string | null
@@ -469,6 +628,8 @@ export type Database = {
           attendance_approver_type: string | null
           attendance_verification_level: number | null
           auto_absent_after_hours: number | null
+          biometric_otp_fallback: boolean | null
+          biometric_verification_enabled: boolean | null
           break_duration_minutes: number | null
           checkin_reminder_count: number | null
           checkin_reminder_interval_minutes: number | null
@@ -521,6 +682,8 @@ export type Database = {
           attendance_approver_type?: string | null
           attendance_verification_level?: number | null
           auto_absent_after_hours?: number | null
+          biometric_otp_fallback?: boolean | null
+          biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
           checkin_reminder_count?: number | null
           checkin_reminder_interval_minutes?: number | null
@@ -573,6 +736,8 @@ export type Database = {
           attendance_approver_type?: string | null
           attendance_verification_level?: number | null
           auto_absent_after_hours?: number | null
+          biometric_otp_fallback?: boolean | null
+          biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
           checkin_reminder_count?: number | null
           checkin_reminder_interval_minutes?: number | null
@@ -851,6 +1016,8 @@ export type Database = {
           attendance_approver_type: string | null
           attendance_verification_level: number | null
           base_salary: number | null
+          biometric_credential_id: string | null
+          biometric_verification_enabled: boolean | null
           break_duration_minutes: number | null
           company_id: string
           created_at: string
@@ -886,6 +1053,8 @@ export type Database = {
           attendance_approver_type?: string | null
           attendance_verification_level?: number | null
           base_salary?: number | null
+          biometric_credential_id?: string | null
+          biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
           company_id: string
           created_at?: string
@@ -921,6 +1090,8 @@ export type Database = {
           attendance_approver_type?: string | null
           attendance_verification_level?: number | null
           base_salary?: number | null
+          biometric_credential_id?: string | null
+          biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
           company_id?: string
           created_at?: string
@@ -2242,6 +2413,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      cleanup_expired_biometric_data: { Args: never; Returns: undefined }
       cleanup_rate_limits: { Args: never; Returns: undefined }
       get_employee_managers: {
         Args: { emp_id: string }

@@ -31,6 +31,7 @@ const Chats = lazy(() => import("./pages/Chats"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyAttendance = lazy(() => import("./pages/VerifyAttendance"));
 
 // Super Admin Pages - Lazy loaded
 const SuperAdminAuth = lazy(() => import("./pages/super-admin/SuperAdminAuth"));
@@ -72,6 +73,7 @@ const App = () => (
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/verify-attendance" element={<VerifyAttendance />} />
                     <Route path="/dashboard" element={
                       <ProtectedRoute><Dashboard /></ProtectedRoute>
                     } />
