@@ -109,6 +109,9 @@ serve(async (req) => {
     // Update bot name via Telegram API
     const botToken = availableBot.bot_token;
     const newBotName = `${company.name} - حضور وانصراف`;
+    
+    // Generate a secure webhook secret for verification
+    const webhookSecret = crypto.randomUUID();
 
     try {
       // Set bot name
@@ -129,14 +132,15 @@ serve(async (req) => {
         body: JSON.stringify({ description: description.substring(0, 512) })
       });
 
-      // Set webhook for the bot
+      // Set webhook for the bot WITH SECRET TOKEN for security verification
       const webhookUrl = `${supabaseUrl}/functions/v1/telegram-webhook?bot=${availableBot.bot_username}`;
       const setWebhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           url: webhookUrl,
-          allowed_updates: ['message', 'callback_query']
+          allowed_updates: ['message', 'callback_query'],
+          secret_token: webhookSecret  // SECURITY: Telegram will send this in X-Telegram-Bot-Api-Secret-Token header
         })
       });
       
@@ -148,14 +152,15 @@ serve(async (req) => {
       // Continue even if Telegram API fails - we can update the name later
     }
 
-    // Assign bot to company using service role
+    // Assign bot to company using service role - include webhook secret
     const { error: updateBotError } = await supabaseAdmin
       .from('telegram_bots')
       .update({
         is_available: false,
         assigned_company_id: companyId,
         assigned_at: new Date().toISOString(),
-        bot_name: newBotName
+        bot_name: newBotName,
+        webhook_secret: webhookSecret  // SECURITY: Store secret for webhook verification
       })
       .eq('id', availableBot.id);
 

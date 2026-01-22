@@ -2056,6 +2056,7 @@ export type Database = {
           id: string
           is_available: boolean | null
           updated_at: string
+          webhook_secret: string | null
         }
         Insert: {
           assigned_at?: string | null
@@ -2067,6 +2068,7 @@ export type Database = {
           id?: string
           is_available?: boolean | null
           updated_at?: string
+          webhook_secret?: string | null
         }
         Update: {
           assigned_at?: string | null
@@ -2078,6 +2080,7 @@ export type Database = {
           id?: string
           is_available?: boolean | null
           updated_at?: string
+          webhook_secret?: string | null
         }
         Relationships: [
           {
