@@ -83,48 +83,64 @@ const RegisterBiometric = () => {
     try {
       // Check WebAuthn support first
       if (!window.PublicKeyCredential) {
-        console.log('WebAuthn API not available');
+        console.error('WebAuthn API not available - PublicKeyCredential is undefined');
+        setError('متصفحك لا يدعم تقنية WebAuthn. جرب متصفح Chrome أو Safari.');
         setStep('unsupported');
         setIsRegistering(false);
         return;
       }
+
+      // Check if we're in a cross-origin iframe (which blocks WebAuthn)
+      const isInIframe = window.self !== window.top;
+      if (isInIframe) {
+        console.warn('Running in iframe - WebAuthn may be blocked');
+      }
+
+      console.log('Starting WebAuthn credential creation...');
+      console.log('Hostname:', window.location.hostname);
+      console.log('Is secure context:', window.isSecureContext);
 
       // Generate a unique user ID for this registration
       const userId = new TextEncoder().encode(registrationData.employeeId);
       const challenge = new Uint8Array(32);
       crypto.getRandomValues(challenge);
 
-      // Create new credential - try with less restrictive options first
+      // Create new credential with maximum compatibility
+      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
+        challenge,
+        rp: {
+          name: "Attendly Bot",
+          id: window.location.hostname,
+        },
+        user: {
+          id: userId,
+          name: registrationData.employeeName,
+          displayName: registrationData.employeeName,
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: 'public-key' },   // ES256
+          { alg: -257, type: 'public-key' }, // RS256
+          { alg: -37, type: 'public-key' },  // PS256
+        ],
+        authenticatorSelection: {
+          userVerification: 'preferred',
+          residentKey: 'discouraged', // More compatible
+        },
+        timeout: 120000,
+        attestation: 'none',
+      };
+
+      console.log('WebAuthn options:', JSON.stringify(publicKeyOptions, null, 2));
+
       const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge,
-          rp: {
-            name: "Attendly Bot",
-            id: window.location.hostname,
-          },
-          user: {
-            id: userId,
-            name: registrationData.employeeName,
-            displayName: registrationData.employeeName,
-          },
-          pubKeyCredParams: [
-            { alg: -7, type: 'public-key' },  // ES256
-            { alg: -257, type: 'public-key' }, // RS256
-          ],
-          authenticatorSelection: {
-            // Remove 'platform' restriction to allow both platform and roaming authenticators
-            // This allows more devices to register
-            userVerification: 'preferred', // Changed from 'required' to 'preferred'
-            residentKey: 'preferred',
-          },
-          timeout: 120000, // Increased timeout to 2 minutes
-          attestation: 'none',
-        }
+        publicKey: publicKeyOptions
       }) as PublicKeyCredential;
 
       if (!credential) {
-        throw new Error('Failed to create credential');
+        throw new Error('Failed to create credential - null returned');
       }
+
+      console.log('Credential created successfully:', credential.id);
 
       // Get the credential ID
       const credentialId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
@@ -148,14 +164,23 @@ const RegisterBiometric = () => {
       }
     } catch (err: any) {
       console.error('Biometric registration failed:', err);
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
       
       if (err.name === 'NotAllowedError') {
-        toast.error('تم رفض التسجيل أو انتهت المهلة');
+        toast.error('تم رفض التسجيل أو انتهت المهلة. تأكد من السماح للمتصفح بالوصول للبصمة.');
       } else if (err.name === 'NotSupportedError') {
+        setError('هذا المتصفح لا يدعم البصمة. جرب فتح الرابط في متصفح Chrome أو Safari.');
         setStep('unsupported');
         return;
+      } else if (err.name === 'SecurityError') {
+        setError('خطأ أمني: جرب فتح الرابط مباشرة في المتصفح وليس من داخل تطبيق آخر.');
+        setStep('unsupported');
+        return;
+      } else if (err.name === 'InvalidStateError') {
+        toast.error('البصمة مسجلة مسبقاً على هذا الجهاز.');
       } else {
-        toast.error(err.message || 'فشل تسجيل البصمة');
+        toast.error(err.message || 'فشل تسجيل البصمة. جرب مرة أخرى.');
       }
     } finally {
       setIsRegistering(false);
@@ -228,23 +253,42 @@ const RegisterBiometric = () => {
             <div className="p-6 rounded-full bg-amber-500/10">
               <Smartphone className="w-20 h-20 text-amber-500" />
             </div>
-            <div className="text-center space-y-2">
+            <div className="text-center space-y-3">
               <h2 className="text-2xl font-bold text-amber-600">
-                جهازك لا يدعم البصمة
+                تعذر تسجيل البصمة
               </h2>
-              <p className="text-muted-foreground">
-                لا يمكن تسجيل البصمة على هذا الجهاز.
-              </p>
-              <p className="text-muted-foreground text-sm">
-                حاول من جهاز يدعم البصمة أو Face ID
-              </p>
+              {error ? (
+                <p className="text-muted-foreground">{error}</p>
+              ) : (
+                <p className="text-muted-foreground">
+                  لا يمكن تسجيل البصمة على هذا الجهاز.
+                </p>
+              )}
+              <div className="bg-muted/50 p-4 rounded-lg text-sm text-start space-y-2 max-w-sm mx-auto">
+                <p className="font-semibold">جرب الآتي:</p>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>افتح الرابط في متصفح Chrome أو Safari</li>
+                  <li>تأكد من تفعيل البصمة في إعدادات الجهاز</li>
+                  <li>لا تفتح الرابط من داخل تطبيق تيليجرام - انسخه وافتحه في المتصفح</li>
+                </ul>
+              </div>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => window.close()}
-            >
-              إغلاق الصفحة
-            </Button>
+            <div className="flex flex-col gap-2 w-full max-w-xs">
+              <Button
+                onClick={() => {
+                  setError('');
+                  setStep('register');
+                }}
+              >
+                إعادة المحاولة
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.close()}
+              >
+                إغلاق الصفحة
+              </Button>
+            </div>
           </div>
         );
 
