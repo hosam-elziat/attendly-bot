@@ -33,7 +33,39 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Missing authorization header' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Verify the JWT token
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+    
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const { 
       backup_id, 
       backup_data, 
@@ -52,10 +84,8 @@ serve(async (req: Request) => {
       if (error) throw error;
       backupDataToRestore = backup.backup_data as typeof backupDataToRestore;
       targetCompanyId = targetCompanyId || backup.company_id;
-      await supabase.from('backups').update({ status: 'restoring' }).eq('id', backup_id);
     } else if (backup_data) {
       backupDataToRestore = backup_data;
-      // Use company_id from backup_info if not provided in request
       targetCompanyId = targetCompanyId || backupDataToRestore?.backup_info?.company_id;
     } else {
       throw new Error('Either backup_id or backup_data required');
@@ -64,10 +94,71 @@ serve(async (req: Request) => {
     if (!backupDataToRestore?.data) throw new Error('Invalid backup data');
     if (!targetCompanyId) throw new Error('Company ID is required');
 
+    // ========== AUTHORIZATION ==========
+    // Check if user is SaaS admin (can restore any company)
+    const { data: saasTeam } = await supabase
+      .from('saas_team')
+      .select('is_active, role')
+      .eq('user_id', userId)
+      .single();
+
+    const isSaasAdmin = saasTeam?.is_active && saasTeam.role === 'super_admin';
+
+    if (!isSaasAdmin) {
+      // Regular users must be admin/owner of the target company
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (!profile || profile.company_id !== targetCompanyId) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden - You do not have access to this company' }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // Check if user is admin or owner
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
+
+      if (!userRole || !['owner', 'admin'].includes(userRole.role)) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden - Admin or owner access required for restore operations' }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // Non-SaaS admins cannot create new companies
+      if (create_company_if_missing) {
+        const { data: existingCompany } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('id', targetCompanyId)
+          .maybeSingle();
+
+        if (!existingCompany) {
+          return new Response(
+            JSON.stringify({ error: 'Forbidden - Only SaaS admins can create new companies via restore' }),
+            { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          );
+        }
+      }
+    }
+
+    // ========== RESTORE LOGIC ==========
+    if (backup_id) {
+      await supabase.from('backups').update({ status: 'restoring' }).eq('id', backup_id);
+    }
+
     console.log(`Starting restore for company: ${targetCompanyId}`);
 
     // Check if company exists
-    const { data: existingCompany, error: companyError } = await supabase
+    const { data: existingCompany } = await supabase
       .from('companies')
       .select('id, name')
       .eq('id', targetCompanyId)
@@ -75,21 +166,19 @@ serve(async (req: Request) => {
 
     let company = existingCompany;
 
-    // If company doesn't exist and we have backup info, create it
+    // If company doesn't exist and we have backup info, create it (only SaaS admins can reach here)
     if (!company && create_company_if_missing) {
       const backupInfo = backupDataToRestore.backup_info;
       const companySettings = backupInfo?.company_settings || {};
       
       console.log(`Company ${targetCompanyId} not found, creating from backup...`);
       
-      // Create the company with settings from backup
       const { data: newCompany, error: createError } = await supabase
         .from('companies')
         .insert({
           id: targetCompanyId,
           name: backupInfo?.company_name || 'Restored Company',
-          owner_id: restored_by || '00000000-0000-0000-0000-000000000000',
-          // Restore company settings if available
+          owner_id: restored_by || userId,
           work_start_time: companySettings.work_start_time || '09:00',
           work_end_time: companySettings.work_end_time || '17:00',
           break_duration_minutes: companySettings.break_duration_minutes || 60,
@@ -125,7 +214,6 @@ serve(async (req: Request) => {
       company = newCompany;
       console.log(`Company created successfully: ${newCompany.name}`);
 
-      // Also create a subscription for the company
       await supabase.from('subscriptions').insert({
         company_id: targetCompanyId,
         status: 'trial',
@@ -133,7 +221,6 @@ serve(async (req: Request) => {
         max_employees: 10
       });
 
-      // Create backup settings
       await supabase.from('backup_settings').insert({
         company_id: targetCompanyId,
         is_active: true,
@@ -148,7 +235,7 @@ serve(async (req: Request) => {
     const results: Record<string, { deleted: number; inserted: number; error?: string }> = {};
     const tablesToProcess = tables_to_restore || TABLE_ORDER;
 
-    // Delete existing data in reverse order (to handle foreign keys)
+    // Delete existing data in reverse order
     console.log('Deleting existing data...');
     for (const tableName of [...tablesToProcess].reverse()) {
       if (!backupDataToRestore.data![tableName]) continue;

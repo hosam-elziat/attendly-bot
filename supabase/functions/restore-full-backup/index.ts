@@ -28,7 +28,53 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Missing authorization header' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Verify the JWT token
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+    
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ========== AUTHORIZATION - SaaS Admin Only ==========
+    const { data: saasTeam } = await supabase
+      .from('saas_team')
+      .select('is_active, role')
+      .eq('user_id', userId)
+      .single();
+
+    if (!saasTeam?.is_active || saasTeam.role !== 'super_admin') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden - SaaS admin access required for full system restore' }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const { backup_data, restored_by }: { backup_data: FullBackup; restored_by?: string } = await req.json();
 
     if (!backup_data || backup_data.backup_info?.backup_type !== 'full_system') {
@@ -37,6 +83,7 @@ serve(async (req: Request) => {
 
     console.log(`Starting full system restore: ${backup_data.backup_info.total_companies} companies`);
 
+    // ========== RESTORE LOGIC ==========
     const results: {
       companies_created: number;
       companies_updated: number;
@@ -49,12 +96,10 @@ serve(async (req: Request) => {
       errors: []
     };
 
-    // First, restore all companies
     for (const company of backup_data.companies || []) {
       try {
         const companyId = company.id as string;
         
-        // Check if company exists
         const { data: existing } = await supabase
           .from('companies')
           .select('id')
@@ -62,7 +107,6 @@ serve(async (req: Request) => {
           .maybeSingle();
 
         if (existing) {
-          // Update existing company
           const { error } = await supabase
             .from('companies')
             .update(company)
@@ -72,7 +116,6 @@ serve(async (req: Request) => {
           results.companies_updated++;
           console.log(`Updated company: ${company.name}`);
         } else {
-          // Create new company
           const { error } = await supabase
             .from('companies')
             .insert(company);
@@ -82,11 +125,9 @@ serve(async (req: Request) => {
           console.log(`Created company: ${company.name}`);
         }
 
-        // Now restore company data
         const companyData = backup_data.data[companyId];
         if (!companyData) continue;
 
-        // Delete existing data in reverse order
         for (const tableName of [...TABLE_ORDER].reverse()) {
           if (!companyData[tableName]) continue;
           try {
@@ -96,7 +137,6 @@ serve(async (req: Request) => {
           }
         }
 
-        // Insert new data in correct order
         for (const tableName of TABLE_ORDER) {
           const tableData = companyData[tableName] as Record<string, unknown>[];
           if (!tableData || tableData.length === 0) continue;
@@ -112,7 +152,6 @@ serve(async (req: Request) => {
           }
         }
 
-        // Restore subscription if exists
         const subscription = companyData['subscription']?.[0] as Record<string, unknown> | undefined;
         if (subscription) {
           await supabase.from('subscriptions').upsert(subscription, { onConflict: 'company_id' });
@@ -125,12 +164,10 @@ serve(async (req: Request) => {
       }
     }
 
-    // Restore global data (optional - subscription_plans, telegram_bots, etc.)
     if (backup_data.global_data) {
       for (const [tableName, data] of Object.entries(backup_data.global_data)) {
         if (!data || data.length === 0) continue;
         try {
-          // For global tables, we upsert
           const { error } = await supabase.from(tableName).upsert(data as Record<string, unknown>[], { onConflict: 'id' });
           if (error) {
             console.error(`Error restoring global table ${tableName}:`, error);

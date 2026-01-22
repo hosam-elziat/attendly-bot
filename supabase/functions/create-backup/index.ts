@@ -28,10 +28,90 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Missing authorization header' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Verify the JWT token
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+    
+    // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { company_id, backup_all = false, backup_type = 'automatic', created_by }: BackupRequest = await req.json();
 
+    // ========== AUTHORIZATION ==========
+    if (backup_all) {
+      // System-wide backup requires SaaS admin access
+      const { data: saasTeam } = await supabase
+        .from('saas_team')
+        .select('is_active, role')
+        .eq('user_id', userId)
+        .single();
+
+      if (!saasTeam?.is_active || saasTeam.role !== 'super_admin') {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden - SaaS admin access required for system-wide backups' }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    } else if (company_id) {
+      // Company-specific backup requires admin/owner access
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (!profile || profile.company_id !== company_id) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden - You do not have access to this company' }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // Check if user is admin or owner
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
+
+      if (!userRole || !['owner', 'admin'].includes(userRole.role)) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden - Admin or owner access required for backups' }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+    } else {
+      return new Response(
+        JSON.stringify({ error: 'Either company_id or backup_all must be provided' }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // ========== BACKUP LOGIC ==========
     let companiesToBackup: { id: string; name: string }[] = [];
     
     if (backup_all) {
@@ -42,8 +122,6 @@ serve(async (req: Request) => {
       const { data: company, error } = await supabase.from('companies').select('id, name').eq('id', company_id).single();
       if (error) throw error;
       companiesToBackup = [company];
-    } else {
-      throw new Error('Either company_id or backup_all must be provided');
     }
 
     const results = [];
@@ -72,7 +150,7 @@ serve(async (req: Request) => {
 
         const { data: backup, error: insertError } = await supabase.from('backups').insert({
           company_id: company.id, backup_type, backup_data: backupObject, tables_included: [...TABLES_TO_BACKUP, 'company_settings'],
-          size_bytes: sizeBytes, status: 'completed', created_by, notes: `Backup: ${totalRecords} records`
+          size_bytes: sizeBytes, status: 'completed', created_by: created_by || userId, notes: `Backup: ${totalRecords} records`
         }).select().single();
 
         if (insertError) throw insertError;
