@@ -776,12 +776,11 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
         <div className="mt-3 mb-4">
           <Card 
             className={cn(
-              "p-4 transition-all duration-300 cursor-pointer border-2",
+              "p-4 transition-all duration-300 border-2",
               formData.is_freelancer 
-                ? "bg-warning/10 border-warning/30 hover:border-warning/50" 
-                : "bg-muted/30 border-muted-foreground/20 hover:border-muted-foreground/40"
+                ? "bg-warning/10 border-warning/30" 
+                : "bg-muted/30 border-muted-foreground/20"
             )}
-            onClick={() => setFormData({ ...formData, is_freelancer: !formData.is_freelancer })}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -803,9 +802,8 @@ const AddEmployeeForm = ({ defaultCurrency, onClose, onSubmit, isLoading, positi
                 </div>
               </div>
               <Switch 
-                checked={formData.is_freelancer || false}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_freelancer: checked })}
-                onClick={(e) => e.stopPropagation()}
+                checked={formData.is_freelancer === true}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_freelancer: checked }))}
               />
             </div>
           </Card>
@@ -1292,12 +1290,11 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         <div className="mt-3 mb-4">
           <Card 
             className={cn(
-              "p-4 transition-all duration-300 cursor-pointer border-2",
+              "p-4 transition-all duration-300 border-2",
               formData.is_freelancer 
-                ? "bg-warning/10 border-warning/30 hover:border-warning/50" 
-                : "bg-muted/30 border-muted-foreground/20 hover:border-muted-foreground/40"
+                ? "bg-warning/10 border-warning/30" 
+                : "bg-muted/30 border-muted-foreground/20"
             )}
-            onClick={() => setFormData({ ...formData, is_freelancer: !formData.is_freelancer })}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1319,9 +1316,8 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
                 </div>
               </div>
               <Switch 
-                checked={formData.is_freelancer || false}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_freelancer: checked })}
-                onClick={(e) => e.stopPropagation()}
+                checked={formData.is_freelancer === true}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_freelancer: checked }))}
               />
             </div>
           </Card>
