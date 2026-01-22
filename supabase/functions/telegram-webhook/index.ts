@@ -176,18 +176,20 @@ serve(async (req) => {
     // Telegram sends the secret_token in X-Telegram-Bot-Api-Secret-Token header
     const telegramSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token')
     
-    if (bot.webhook_secret) {
-      // If we have a stored secret, verify the request
-      if (telegramSecret !== bot.webhook_secret) {
-        console.error(`SECURITY: Invalid webhook secret for bot ${botUsername}. Request rejected.`)
-        // Return 200 OK to prevent Telegram from retrying (could be an attack)
-        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
-      }
-      console.log(`SECURITY: Webhook secret verified for bot ${botUsername}`)
-    } else {
-      // No secret stored yet (legacy bots) - log a warning but allow
-      console.warn(`SECURITY WARNING: Bot ${botUsername} has no webhook_secret configured. Consider re-assigning the bot.`)
+    // SECURITY: Always require webhook_secret for ALL bots (including legacy)
+    if (!bot.webhook_secret) {
+      console.error(`SECURITY: Bot ${botUsername} has no webhook_secret. Rejecting request. Please re-assign the bot to generate a secret.`)
+      // Return 200 OK to prevent Telegram from retrying
+      return new Response(JSON.stringify({ ok: true, error: 'Bot requires reconfiguration' }), { headers: corsHeaders })
     }
+    
+    if (telegramSecret !== bot.webhook_secret) {
+      console.error(`SECURITY: Invalid webhook secret for bot ${botUsername}. Request rejected.`)
+      // Return 200 OK to prevent Telegram from retrying (could be an attack)
+      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+    }
+    
+    console.log(`SECURITY: Webhook secret verified for bot ${botUsername}`)
     // ===== END SECURITY CHECK =====
 
     const botToken = bot.bot_token
