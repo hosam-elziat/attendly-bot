@@ -13,7 +13,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { ShieldCheck, MapPin, UserCheck, Lock, Loader2, Wifi, Camera, Map, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, MapPin, UserCheck, Lock, Loader2, Wifi, Camera, Map, AlertTriangle, Fingerprint } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePositions } from '@/hooks/usePositions';
@@ -29,7 +29,7 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
   const { data: positions = [] } = usePositions();
   const { data: employees = [] } = useEmployees();
   
-  // Verification level (1, 2, 3)
+  // Verification level (1, 2, 3, 4)
   const [verificationLevel, setVerificationLevel] = useState(1);
   
   // Level 2 settings
@@ -42,6 +42,9 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
   const [companyLongitude, setCompanyLongitude] = useState<string>('');
   const [locationRadius, setLocationRadius] = useState(100);
 
+  // Level 4 settings (Biometric)
+  const [biometricOtpFallback, setBiometricOtpFallback] = useState(true);
+
   useEffect(() => {
     if (company) {
       setVerificationLevel((company as any).attendance_verification_level || 1);
@@ -51,6 +54,7 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
       setCompanyLatitude((company as any).company_latitude?.toString() || '');
       setCompanyLongitude((company as any).company_longitude?.toString() || '');
       setLocationRadius((company as any).location_radius_meters || 100);
+      setBiometricOtpFallback((company as any).biometric_otp_fallback ?? true);
     }
   }, [company]);
 
@@ -87,6 +91,8 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
           company_latitude: companyLatitude ? parseFloat(companyLatitude) : null,
           company_longitude: companyLongitude ? parseFloat(companyLongitude) : null,
           location_radius_meters: locationRadius,
+          biometric_verification_enabled: verificationLevel === 4,
+          biometric_otp_fallback: biometricOtpFallback,
         } as any)
         .eq('id', company.id);
 
@@ -179,6 +185,20 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
                   التأكد من وجود الموظف في موقع الشركة مع إجراءات مكافحة الاحتيال
+                </p>
+              </div>
+            </div>
+
+            {/* Level 4 - Biometric */}
+            <div className={`flex items-start space-x-3 rtl:space-x-reverse p-4 border rounded-lg cursor-pointer transition-colors ${verificationLevel === 4 ? 'border-purple-500 bg-purple-500/5' : 'hover:bg-muted/50'}`}>
+              <RadioGroupItem value="4" id="level-4" className="mt-1" />
+              <div className="flex-1">
+                <Label htmlFor="level-4" className="flex items-center gap-2 cursor-pointer font-medium">
+                  <Fingerprint className="w-4 h-4 text-purple-500" />
+                  المستوى الرابع - التحقق بالبصمة
+                </Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  التأكد من هوية الموظف بالبصمة أو التعرف على الوجه (Face ID)
                 </p>
               </div>
             </div>
@@ -366,6 +386,26 @@ const AttendanceVerificationSettings = ({ company, onRefetch }: AttendanceVerifi
                 <li>التحقق من عنوان IP مقابل عناوين الشركة المعروفة</li>
                 {level3Mode.includes('selfie') && <li>التحقق من صورة السيلفي بالذكاء الاصطناعي</li>}
               </ul>
+            </div>
+          </div>
+        )}
+
+        {/* Level 4 Settings - Biometric */}
+        {verificationLevel === 4 && (
+          <div className="space-y-4 p-4 bg-purple-500/5 border border-purple-500/20 rounded-lg">
+            <h4 className="font-medium flex items-center gap-2">
+              <Fingerprint className="w-4 h-4 text-purple-500" />
+              إعدادات التحقق بالبصمة
+            </h4>
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <Checkbox 
+                id="otp-fallback"
+                checked={biometricOtpFallback}
+                onCheckedChange={(checked) => setBiometricOtpFallback(checked === true)}
+              />
+              <Label htmlFor="otp-fallback" className="cursor-pointer">
+                السماح برمز OTP كبديل للأجهزة غير المدعومة
+              </Label>
             </div>
           </div>
         )}
