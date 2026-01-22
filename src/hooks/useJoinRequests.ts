@@ -23,6 +23,38 @@ export interface JoinRequest {
   weekend_days: string[] | null;
 }
 
+// Helper function to send Telegram notifications via secure edge function
+async function sendJoinRequestNotification(
+  action: 'approved' | 'rejected' | 'reactivated' | 'restored',
+  telegram_chat_id: string,
+  employee_name?: string,
+  rejection_reason?: string
+): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.error('No session for notification');
+      return;
+    }
+
+    const response = await supabase.functions.invoke('notify-join-request', {
+      body: {
+        action,
+        telegram_chat_id,
+        employee_name,
+        rejection_reason
+      }
+    });
+
+    if (response.error) {
+      console.error('Failed to send notification:', response.error);
+    }
+  } catch (notifyError) {
+    console.error('Failed to send Telegram notification:', notifyError);
+    // Don't throw - the main operation succeeded
+  }
+}
+
 export function useJoinRequests() {
   const { profile } = useAuth();
 
@@ -105,44 +137,8 @@ export function useApproveJoinRequest() {
 
       if (updateError) throw updateError;
 
-      // Send Telegram notification to employee
-      try {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('telegram_bot_username')
-          .eq('id', profile.company_id)
-          .single();
-
-        if (company?.telegram_bot_username) {
-          const { data: bot } = await supabase
-            .from('telegram_bots')
-            .select('bot_token')
-            .eq('bot_username', company.telegram_bot_username)
-            .single();
-
-          if (bot?.bot_token) {
-            await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: employeeData.telegram_chat_id,
-                text: `🎉 مرحباً ${employeeData.full_name}!\n\nتم قبول طلب انضمامك بنجاح!\nيمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.\n\nأرسل /start للبدء.`,
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
-                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
-                    ]
-                  ]
-                }
-              })
-            });
-          }
-        }
-      } catch (notifyError) {
-        console.error('Failed to send Telegram notification:', notifyError);
-        // Don't throw - the main operation succeeded
-      }
+      // Send Telegram notification via secure edge function
+      await sendJoinRequestNotification('approved', employeeData.telegram_chat_id, employeeData.full_name);
 
       return { success: true };
     },
@@ -180,40 +176,9 @@ export function useRejectJoinRequest() {
 
       if (error) throw error;
 
-      // Send Telegram notification to the rejected user
+      // Send Telegram notification via secure edge function
       if (telegram_chat_id && profile?.company_id) {
-        try {
-          const { data: company } = await supabase
-            .from('companies')
-            .select('telegram_bot_username')
-            .eq('id', profile.company_id)
-            .single();
-
-          if (company?.telegram_bot_username) {
-            const { data: bot } = await supabase
-              .from('telegram_bots')
-              .select('bot_token')
-              .eq('bot_username', company.telegram_bot_username)
-              .single();
-
-            if (bot?.bot_token) {
-              const message = reason 
-                ? `❌ عذراً، تم رفض طلب انضمامك.\n\nالسبب: ${reason}`
-                : '❌ عذراً، تم رفض طلب انضمامك.';
-              
-              await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chat_id: telegram_chat_id,
-                  text: message
-                })
-              });
-            }
-          }
-        } catch (notifyError) {
-          console.error('Failed to send rejection notification:', notifyError);
-        }
+        await sendJoinRequestNotification('rejected', telegram_chat_id, undefined, reason);
       }
 
       return { success: true };
@@ -324,43 +289,8 @@ export function useReactivateEmployee() {
 
       if (jrError) throw jrError;
 
-      // Send Telegram notification
-      try {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('telegram_bot_username')
-          .eq('id', profile.company_id)
-          .single();
-
-        if (company?.telegram_bot_username) {
-          const { data: bot } = await supabase
-            .from('telegram_bots')
-            .select('bot_token')
-            .eq('bot_username', company.telegram_bot_username)
-            .single();
-
-          if (bot?.bot_token) {
-            await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: telegram_chat_id,
-                text: `🎉 مرحباً بعودتك ${employee?.full_name}!\n\nتم إعادة تفعيل حسابك بنجاح!\nيمكنك الآن استخدام البوت لتسجيل الحضور والانصراف.\n\nأرسل /start للبدء.`,
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
-                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
-                    ]
-                  ]
-                }
-              })
-            });
-          }
-        }
-      } catch (notifyError) {
-        console.error('Failed to send Telegram notification:', notifyError);
-      }
+      // Send Telegram notification via secure edge function
+      await sendJoinRequestNotification('reactivated', telegram_chat_id, employee?.full_name);
 
       return { success: true, employeeName: employee?.full_name };
     },
@@ -456,46 +386,12 @@ export function useRestoreDeletedEmployee() {
 
       if (jrError) throw jrError;
 
-      // Send Telegram notification
-      try {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('telegram_bot_username')
-          .eq('id', profile.company_id)
-          .single();
+      const employeeName = (employeeData as any)?.full_name;
 
-        if (company?.telegram_bot_username) {
-          const { data: bot } = await supabase
-            .from('telegram_bots')
-            .select('bot_token')
-            .eq('bot_username', company.telegram_bot_username)
-            .single();
+      // Send Telegram notification via secure edge function
+      await sendJoinRequestNotification('restored', telegram_chat_id, employeeName);
 
-          if (bot?.bot_token) {
-            const employeeName = (employeeData as any)?.full_name || 'الموظف';
-            await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: telegram_chat_id,
-                text: `🎉 مرحباً بعودتك ${employeeName}!\n\nتم استعادة حسابك بنجاح!\nجميع بياناتك السابقة متاحة الآن.\n\nأرسل /start للبدء.`,
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: '✅ تسجيل حضور', callback_data: 'check_in' },
-                      { text: '🔴 تسجيل انصراف', callback_data: 'check_out' }
-                    ]
-                  ]
-                }
-              })
-            });
-          }
-        }
-      } catch (notifyError) {
-        console.error('Failed to send Telegram notification:', notifyError);
-      }
-
-      return { success: true, employeeName: (employeeData as any)?.full_name };
+      return { success: true, employeeName };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['join-requests'] });
