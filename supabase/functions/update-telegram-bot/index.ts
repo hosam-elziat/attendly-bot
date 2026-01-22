@@ -84,10 +84,10 @@ serve(async (req) => {
       );
     }
 
-    // Get bot token
+    // Get bot token and webhook secret
     const { data: bot } = await supabaseAdmin
       .from('telegram_bots')
-      .select('bot_token')
+      .select('bot_token, webhook_secret')
       .eq('assigned_company_id', companyId)
       .single();
 
@@ -216,14 +216,28 @@ serve(async (req) => {
         );
       }
 
+      // Generate new webhook secret if not exists
+      let webhookSecret = bot.webhook_secret;
+      if (!webhookSecret) {
+        webhookSecret = crypto.randomUUID();
+        // Save the new secret to database
+        await supabaseAdmin
+          .from('telegram_bots')
+          .update({ webhook_secret: webhookSecret })
+          .eq('assigned_company_id', companyId);
+        console.log('Generated new webhook secret for bot');
+      }
+
       const webhookUrl = `${supabaseUrl}/functions/v1/telegram-webhook?bot=${company.telegram_bot_username}`;
 
+      // SECURITY: Include secret_token so Telegram sends it in X-Telegram-Bot-Api-Secret-Token header
       const setWebhookResponse = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: webhookUrl,
-          allowed_updates: ['message', 'callback_query']
+          allowed_updates: ['message', 'callback_query'],
+          secret_token: webhookSecret  // CRITICAL: This ensures Telegram sends the secret with each request
         })
       });
 
