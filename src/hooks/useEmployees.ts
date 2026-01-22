@@ -33,6 +33,14 @@ export interface Employee {
   position_id: string | null;
   is_freelancer: boolean;
   hourly_rate: number | null;
+  biometric_verification_enabled: boolean | null;
+  biometric_credential_id: string | null;
+  biometric_registered_at: string | null;
+  attendance_verification_level: number | null;
+  attendance_approver_type: string | null;
+  attendance_approver_id: string | null;
+  level3_verification_mode: string | null;
+  allowed_wifi_ips: string[] | null;
   created_at: string;
   updated_at: string;
 }
