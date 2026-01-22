@@ -32,6 +32,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const VerifyAttendance = lazy(() => import("./pages/VerifyAttendance"));
+const RegisterBiometric = lazy(() => import("./pages/RegisterBiometric"));
 
 // Super Admin Pages - Lazy loaded
 const SuperAdminAuth = lazy(() => import("./pages/super-admin/SuperAdminAuth"));
@@ -74,6 +75,7 @@ const App = () => (
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/verify-attendance" element={<VerifyAttendance />} />
+                    <Route path="/register-biometric" element={<RegisterBiometric />} />
                     <Route path="/dashboard" element={
                       <ProtectedRoute><Dashboard /></ProtectedRoute>
                     } />

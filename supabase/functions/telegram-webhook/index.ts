@@ -224,7 +224,7 @@ serve(async (req) => {
     // Check if employee exists
     const { data: employee } = await supabase
       .from('employees')
-      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, allowed_wifi_ips, biometric_verification_enabled')
+      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, allowed_wifi_ips, biometric_verification_enabled, biometric_credential_id')
       .eq('telegram_chat_id', telegramChatId)
       .eq('company_id', companyId)
       .eq('is_active', true)
@@ -3435,7 +3435,60 @@ function getArabicDayName(dayIndex: number): string {
   return days[dayIndex]
 }
 
-// Helper function to initiate biometric verification
+// Helper function to initiate biometric registration (first-time setup)
+async function initiateBiometricRegistration(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  employee: any,
+  companyId: string,
+  telegramChatId: string,
+  nextVerificationLevel: number = 1
+) {
+  // Create a registration token
+  const verificationToken = crypto.randomUUID()
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes for registration
+  
+  // Store pending registration in database
+  const { error } = await supabase
+    .from('biometric_pending_verifications')
+    .insert({
+      employee_id: employee.id,
+      company_id: companyId,
+      verification_token: verificationToken,
+      request_type: 'registration',
+      telegram_chat_id: telegramChatId,
+      expires_at: expiresAt.toISOString(),
+      verification_purpose: 'registration',
+      next_verification_level: nextVerificationLevel
+    })
+  
+  if (error) {
+    console.error('Failed to create biometric registration:', error)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ في إنشاء جلسة التسجيل. حاول مرة أخرى.')
+    return
+  }
+  
+  // Get the site URL from environment
+  const siteUrl = Deno.env.get('SITE_URL') || 'https://attendly-bot.lovable.app'
+  const registerUrl = `${siteUrl}/register-biometric?token=${verificationToken}`
+  
+  await sendMessage(botToken, chatId,
+    `🔐 <b>تسجيل البصمة مطلوب</b>\n\n` +
+    `يجب تسجيل بصمتك أولاً للتحقق من هويتك.\n\n` +
+    `👆 اضغط على الزر أدناه لتسجيل البصمة:\n\n` +
+    `⏰ صالح لمدة 30 دقيقة`,
+    {
+      inline_keyboard: [[
+        { text: '✋ تسجيل البصمة الآن', url: registerUrl }
+      ]]
+    }
+  )
+  
+  console.log(`Biometric registration initiated for employee ${employee.id}, token: ${verificationToken}`)
+}
+
+// Helper function to initiate biometric verification (authentication)
 async function initiateBiometricVerification(
   supabase: any,
   botToken: string,
@@ -3443,9 +3496,19 @@ async function initiateBiometricVerification(
   employee: any,
   companyId: string,
   requestType: 'check_in' | 'check_out',
-  telegramChatId: string
+  telegramChatId: string,
+  nextVerificationLevel: number = 1
 ) {
-  // Create a verification token
+  // Check if employee has registered biometric
+  const hasCredential = employee.biometric_credential_id != null
+  
+  if (!hasCredential) {
+    // First time - need to register biometric
+    await initiateBiometricRegistration(supabase, botToken, chatId, employee, companyId, telegramChatId, nextVerificationLevel)
+    return
+  }
+  
+  // Employee has registered biometric - proceed with verification
   const verificationToken = crypto.randomUUID()
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
   
@@ -3458,7 +3521,9 @@ async function initiateBiometricVerification(
       verification_token: verificationToken,
       request_type: requestType,
       telegram_chat_id: telegramChatId,
-      expires_at: expiresAt.toISOString()
+      expires_at: expiresAt.toISOString(),
+      verification_purpose: 'authentication',
+      next_verification_level: nextVerificationLevel
     })
   
   if (error) {
