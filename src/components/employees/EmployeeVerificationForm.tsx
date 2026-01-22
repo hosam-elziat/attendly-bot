@@ -173,11 +173,12 @@ const EmployeeVerificationForm = ({
                   </RadioGroup>
 
                   {value.approverType === 'specific_person' && (
-                    <Select value={value.approverId || ''} onValueChange={(v) => onChange({ ...value, approverId: v })}>
+                    <Select value={value.approverId ?? 'none'} onValueChange={(v) => onChange({ ...value, approverId: v === 'none' ? null : v })}>
                       <SelectTrigger className="mt-2">
                         <SelectValue placeholder="اختر موظف..." />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="none">-- اختر موظف --</SelectItem>
                         {employees.filter(e => e.id !== employee.id).map((emp) => (
                           <SelectItem key={emp.id} value={emp.id}>
                             {emp.full_name}

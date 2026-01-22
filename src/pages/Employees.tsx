@@ -543,8 +543,9 @@ const Employees = () => {
           <DialogHeader>
             <DialogTitle>{t('employees.editEmployee')}</DialogTitle>
           </DialogHeader>
-          {selectedEmployee && (
+          {editDialogOpen && selectedEmployee && (
             <EditEmployeeForm 
+              key={selectedEmployee.id}
               employee={selectedEmployee}
               defaultCurrency={defaultCurrency}
               positions={positions}
