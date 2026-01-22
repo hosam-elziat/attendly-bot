@@ -26,30 +26,48 @@ const RegisterBiometric = () => {
   const [isSupported, setIsSupported] = useState<boolean | null>(null);
 
   useEffect(() => {
-    checkWebAuthnSupport();
-    if (token) {
-      validateToken(token);
-    } else {
-      setStep('error');
-      setError('رابط غير صالح');
-    }
-  }, [token]);
-
-  const checkWebAuthnSupport = async () => {
-    try {
-      if (!window.PublicKeyCredential) {
-        setIsSupported(false);
+    const initialize = async () => {
+      if (!token) {
+        setStep('error');
+        setError('رابط غير صالح');
         return;
       }
+      
+      // First check WebAuthn support
+      const supported = await checkWebAuthnSupport();
+      
+      // Then validate token
+      await validateToken(token, supported);
+    };
+    
+    initialize();
+  }, [token]);
+
+  const checkWebAuthnSupport = async (): Promise<boolean> => {
+    try {
+      // Check if WebAuthn API exists
+      if (!window.PublicKeyCredential) {
+        console.log('WebAuthn API not available');
+        setIsSupported(false);
+        return false;
+      }
+
+      // Check if platform authenticator is available
       const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      console.log('Platform authenticator available:', available);
       setIsSupported(available);
+      
+      // Even if platform authenticator is not available, we can try with cross-platform authenticators
+      // Some devices may still support fingerprint through alternative methods
+      return available;
     } catch (error) {
       console.error('Error checking WebAuthn support:', error);
       setIsSupported(false);
+      return false;
     }
   };
 
-  const validateToken = async (verificationToken: string) => {
+  const validateToken = async (verificationToken: string, deviceSupported: boolean) => {
     try {
       const { data, error } = await supabase.functions.invoke('biometric-verification', {
         body: { 
@@ -75,8 +93,8 @@ const RegisterBiometric = () => {
         expiresAt: new Date(data.expiresAt)
       });
       
-      // Check if device supports biometrics
-      if (isSupported === false) {
+      // Check if device supports biometrics using the passed value
+      if (!deviceSupported) {
         setStep('unsupported');
       } else {
         setStep('register');
@@ -99,7 +117,7 @@ const RegisterBiometric = () => {
       const challenge = new Uint8Array(32);
       crypto.getRandomValues(challenge);
 
-      // Create new credential
+      // Create new credential - try with less restrictive options first
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge,
@@ -117,11 +135,12 @@ const RegisterBiometric = () => {
             { alg: -257, type: 'public-key' }, // RS256
           ],
           authenticatorSelection: {
-            authenticatorAttachment: 'platform',
-            userVerification: 'required',
+            // Remove 'platform' restriction to allow both platform and roaming authenticators
+            // This allows more devices to register
+            userVerification: 'preferred', // Changed from 'required' to 'preferred'
             residentKey: 'preferred',
           },
-          timeout: 60000,
+          timeout: 120000, // Increased timeout to 2 minutes
           attestation: 'none',
         }
       }) as PublicKeyCredential;
