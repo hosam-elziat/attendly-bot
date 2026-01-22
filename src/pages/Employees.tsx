@@ -1090,7 +1090,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
       allowed_wifi_ips: verificationSettings.allowedWifiIps.trim() 
         ? verificationSettings.allowedWifiIps.split(',').map(ip => ip.trim()).filter(ip => ip) 
         : null,
-      biometric_verification_enabled: verificationSettings.biometricEnabled || null,
+      biometric_verification_enabled: verificationSettings.biometricEnabled,
     };
 
     // Update employee locations
