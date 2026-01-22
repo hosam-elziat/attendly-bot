@@ -40,11 +40,11 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
   try {
-    const { action, token, otp, verificationType, employeeId, companyId, requestType, telegramChatId, locationLat, locationLng } = await req.json()
+    const { action, token, otp, verificationType, employeeId, companyId, requestType, telegramChatId, locationLat, locationLng, credentialId, nextVerificationLevel } = await req.json()
 
     switch (action) {
       case 'initiate': {
-        // Create a new pending verification session
+        // Create a new pending verification session for authentication
         const verificationToken = crypto.randomUUID()
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
@@ -58,7 +58,9 @@ serve(async (req) => {
             telegram_chat_id: telegramChatId,
             location_lat: locationLat || null,
             location_lng: locationLng || null,
-            expires_at: expiresAt.toISOString()
+            expires_at: expiresAt.toISOString(),
+            verification_purpose: 'authentication',
+            next_verification_level: nextVerificationLevel || 1
           })
 
         if (error) {
@@ -75,16 +77,49 @@ serve(async (req) => {
         )
       }
 
+      case 'initiate-registration': {
+        // Create a new pending session for biometric registration
+        const verificationToken = crypto.randomUUID()
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes for registration
+
+        const { error } = await supabase
+          .from('biometric_pending_verifications')
+          .insert({
+            employee_id: employeeId,
+            company_id: companyId,
+            verification_token: verificationToken,
+            request_type: requestType || 'registration',
+            telegram_chat_id: telegramChatId,
+            expires_at: expiresAt.toISOString(),
+            verification_purpose: 'registration',
+            next_verification_level: nextVerificationLevel || 1
+          })
+
+        if (error) {
+          console.error('Failed to create registration session:', error)
+          return new Response(
+            JSON.stringify({ success: false, message: 'فشل إنشاء جلسة التسجيل' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, token: verificationToken, expiresAt: expiresAt.toISOString() }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       case 'validate': {
-        // Validate an existing token
+        // Validate an existing authentication token
         const { data: pending, error } = await supabase
           .from('biometric_pending_verifications')
           .select(`
             *,
-            employees!inner(id, full_name, biometric_verification_enabled),
+            employees!inner(id, full_name, biometric_verification_enabled, biometric_credential_id),
             companies!inner(id, biometric_verification_enabled, biometric_otp_fallback)
           `)
           .eq('verification_token', token)
+          .eq('verification_purpose', 'authentication')
           .is('completed_at', null)
           .single()
 
@@ -113,8 +148,126 @@ serve(async (req) => {
             companyId: pending.company_id,
             requestType: pending.request_type,
             expiresAt: pending.expires_at,
-            otpFallbackEnabled: (pending as any).companies?.biometric_otp_fallback ?? true
+            otpFallbackEnabled: (pending as any).companies?.biometric_otp_fallback ?? true,
+            credentialId: (pending as any).employees?.biometric_credential_id || null,
+            nextVerificationLevel: pending.next_verification_level
           }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      case 'validate-registration': {
+        // Validate a registration token
+        const { data: pending, error } = await supabase
+          .from('biometric_pending_verifications')
+          .select(`
+            *,
+            employees!inner(id, full_name, biometric_credential_id),
+            companies!inner(id)
+          `)
+          .eq('verification_token', token)
+          .eq('verification_purpose', 'registration')
+          .is('completed_at', null)
+          .single()
+
+        if (error || !pending) {
+          return new Response(
+            JSON.stringify({ valid: false, message: 'رابط غير صالح أو تم استخدامه مسبقاً' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        const now = new Date()
+        const expiresAt = new Date(pending.expires_at)
+
+        if (now > expiresAt) {
+          return new Response(
+            JSON.stringify({ valid: false, expired: true, message: 'انتهت صلاحية الرابط' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        return new Response(
+          JSON.stringify({
+            valid: true,
+            employeeId: pending.employee_id,
+            employeeName: (pending as any).employees?.full_name || '',
+            companyId: pending.company_id,
+            expiresAt: pending.expires_at
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      case 'complete-registration': {
+        // Complete biometric registration - save credential ID
+        const { data: pending, error: pendingError } = await supabase
+          .from('biometric_pending_verifications')
+          .select('*')
+          .eq('verification_token', token)
+          .eq('verification_purpose', 'registration')
+          .is('completed_at', null)
+          .single()
+
+        if (pendingError || !pending) {
+          return new Response(
+            JSON.stringify({ success: false, message: 'جلسة غير صالحة أو مكتملة' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Save credential ID to employee record
+        const { error: updateError } = await supabase
+          .from('employees')
+          .update({
+            biometric_credential_id: credentialId,
+            biometric_registered_at: new Date().toISOString()
+          })
+          .eq('id', pending.employee_id)
+
+        if (updateError) {
+          console.error('Failed to save credential:', updateError)
+          return new Response(
+            JSON.stringify({ success: false, message: 'فشل حفظ البصمة' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Mark session as completed
+        await supabase
+          .from('biometric_pending_verifications')
+          .update({ completed_at: new Date().toISOString() })
+          .eq('id', pending.id)
+
+        // Log the registration
+        await supabase
+          .from('biometric_verification_logs')
+          .insert({
+            employee_id: pending.employee_id,
+            company_id: pending.company_id,
+            verification_type: 'registration',
+            success: true
+          })
+
+        // Notify employee via Telegram
+        const { data: bot } = await supabase
+          .from('telegram_bots')
+          .select('bot_token')
+          .eq('assigned_company_id', pending.company_id)
+          .single()
+
+        if (bot?.bot_token) {
+          await sendTelegramMessage(
+            bot.bot_token,
+            pending.telegram_chat_id,
+            `✅ <b>تم تسجيل بصمتك بنجاح!</b>\n\n` +
+            `يمكنك الآن استخدام البصمة للتحقق من هويتك عند تسجيل الحضور والانصراف.\n\n` +
+            `🔐 هويتك محمية بتقنية WebAuthn الآمنة.`
+          )
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -295,7 +448,10 @@ async function completeVerification(supabase: any, token: string, verificationTy
   // Mark as completed
   await supabase
     .from('biometric_pending_verifications')
-    .update({ completed_at: new Date().toISOString() })
+    .update({ 
+      completed_at: new Date().toISOString(),
+      biometric_verified_at: new Date().toISOString()
+    })
     .eq('id', pending.id)
 
   // Log the verification
@@ -341,8 +497,8 @@ async function completeVerification(supabase: any, token: string, verificationTy
         date: today,
         check_in_time: nowUtc,
         status: 'checked_in',
-        location_lat: pending.location_lat,
-        location_lng: pending.location_lng,
+        check_in_latitude: pending.location_lat,
+        check_in_longitude: pending.location_lng,
         notes: `تم التحقق بالبصمة (${verificationType})`
       })
 

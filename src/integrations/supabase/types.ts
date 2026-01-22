@@ -429,6 +429,7 @@ export type Database = {
       }
       biometric_pending_verifications: {
         Row: {
+          biometric_verified_at: string | null
           company_id: string
           completed_at: string | null
           created_at: string | null
@@ -437,11 +438,14 @@ export type Database = {
           id: string
           location_lat: number | null
           location_lng: number | null
+          next_verification_level: number | null
           request_type: string
           telegram_chat_id: string
+          verification_purpose: string | null
           verification_token: string
         }
         Insert: {
+          biometric_verified_at?: string | null
           company_id: string
           completed_at?: string | null
           created_at?: string | null
@@ -450,11 +454,14 @@ export type Database = {
           id?: string
           location_lat?: number | null
           location_lng?: number | null
+          next_verification_level?: number | null
           request_type: string
           telegram_chat_id: string
+          verification_purpose?: string | null
           verification_token: string
         }
         Update: {
+          biometric_verified_at?: string | null
           company_id?: string
           completed_at?: string | null
           created_at?: string | null
@@ -463,8 +470,10 @@ export type Database = {
           id?: string
           location_lat?: number | null
           location_lng?: number | null
+          next_verification_level?: number | null
           request_type?: string
           telegram_chat_id?: string
+          verification_purpose?: string | null
           verification_token?: string
         }
         Relationships: [
@@ -1017,6 +1026,7 @@ export type Database = {
           attendance_verification_level: number | null
           base_salary: number | null
           biometric_credential_id: string | null
+          biometric_registered_at: string | null
           biometric_verification_enabled: boolean | null
           break_duration_minutes: number | null
           company_id: string
@@ -1054,6 +1064,7 @@ export type Database = {
           attendance_verification_level?: number | null
           base_salary?: number | null
           biometric_credential_id?: string | null
+          biometric_registered_at?: string | null
           biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
           company_id: string
@@ -1091,6 +1102,7 @@ export type Database = {
           attendance_verification_level?: number | null
           base_salary?: number | null
           biometric_credential_id?: string | null
+          biometric_registered_at?: string | null
           biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
           company_id?: string

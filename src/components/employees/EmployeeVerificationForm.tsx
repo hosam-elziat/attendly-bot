@@ -9,7 +9,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { ShieldCheck, MapPin, UserCheck, Lock, Building, Wifi, Camera, Map } from 'lucide-react';
+import { ShieldCheck, MapPin, UserCheck, Lock, Building, Wifi, Camera, Map, Fingerprint } from 'lucide-react';
 
 interface Employee {
   id: string;
@@ -19,11 +19,15 @@ interface Employee {
   attendance_approver_id?: string | null;
   level3_verification_mode?: string | null;
   allowed_wifi_ips?: string[] | null;
+  biometric_verification_enabled?: boolean | null;
+  biometric_credential_id?: string | null;
+  biometric_registered_at?: string | null;
 }
 
 interface Company {
   attendance_verification_level?: number | null;
   level3_verification_mode?: string | null;
+  biometric_verification_enabled?: boolean | null;
 }
 
 interface EmployeeVerificationFormProps {
@@ -37,6 +41,7 @@ interface EmployeeVerificationFormProps {
     approverId: string | null;
     level3Requirements: string[];
     allowedWifiIps: string;
+    biometricEnabled: boolean;
   };
   onChange: (value: EmployeeVerificationFormProps['value']) => void;
 }
@@ -91,11 +96,49 @@ const EmployeeVerificationForm = ({
     onChange({ ...value, level3Requirements: newReqs });
   };
 
+  const hasBiometricRegistered = !!employee.biometric_credential_id;
+  const biometricRegisteredAt = employee.biometric_registered_at 
+    ? new Date(employee.biometric_registered_at).toLocaleDateString('ar-EG')
+    : null;
+
   return (
     <div className="border-t pt-4 space-y-4">
       <div className="flex items-center gap-2">
         <ShieldCheck className="w-5 h-5 text-primary" />
         <Label className="text-base font-medium">إعدادات التحقق من الحضور</Label>
+      </div>
+
+      {/* Biometric Verification Toggle */}
+      <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Fingerprint className="w-5 h-5 text-primary" />
+            <div>
+              <Label className="font-medium">التحقق بالبصمة (البيومتري)</Label>
+              <p className="text-xs text-muted-foreground">
+                يتطلب من الموظف التحقق بالبصمة أو Face ID قبل تسجيل الحضور
+              </p>
+            </div>
+          </div>
+          <Checkbox 
+            checked={value.biometricEnabled}
+            onCheckedChange={(checked) => onChange({ ...value, biometricEnabled: checked as boolean })}
+          />
+        </div>
+        
+        {hasBiometricRegistered && (
+          <div className="flex items-center gap-2 text-xs text-green-600 bg-green-500/10 p-2 rounded">
+            <ShieldCheck className="w-4 h-4" />
+            <span>البصمة مسجلة{biometricRegisteredAt ? ` منذ ${biometricRegisteredAt}` : ''}</span>
+          </div>
+        )}
+        
+        {value.biometricEnabled && !hasBiometricRegistered && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-500/10 p-2 rounded">
+            <Fingerprint className="w-4 h-4" />
+            <span>سيُطلب من الموظف تسجيل بصمته عند أول محاولة حضور</span>
+          </div>
+        )}
       </div>
 
       {/* Use Company Default */}

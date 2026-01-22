@@ -1035,6 +1035,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     approverId: (employee as any).attendance_approver_id || null,
     level3Requirements: parseLevel3Requirements((employee as any).level3_verification_mode),
     allowedWifiIps: ((employee as any).allowed_wifi_ips || []).join(', '),
+    biometricEnabled: (employee as any).biometric_verification_enabled ?? false,
   });
 
   // Employee locations state
@@ -1089,6 +1090,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
       allowed_wifi_ips: verificationSettings.allowedWifiIps.trim() 
         ? verificationSettings.allowedWifiIps.split(',').map(ip => ip.trim()).filter(ip => ip) 
         : null,
+      biometric_verification_enabled: verificationSettings.biometricEnabled || null,
     };
 
     // Update employee locations
