@@ -3482,7 +3482,10 @@ async function processDirectCheckIn(
 
   const attendanceLogId = newAttendance.id
   
-  if (workStartTime && checkInTime > workStartTime) {
+  // Freelancers are exempt from all time-based policies (late deductions)
+  const isFreelancer = empDetails?.is_freelancer === true
+  
+  if (workStartTime && checkInTime > workStartTime && !isFreelancer) {
     const [startH, startM] = workStartTime.split(':').map(Number)
     const [checkH, checkM] = checkInTime.split(':').map(Number)
     const lateMinutes = (checkH * 60 + checkM) - (startH * 60 + startM)
