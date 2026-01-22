@@ -584,6 +584,7 @@ interface EmployeeFormData extends CreateEmployeeData {
   attendance_approver_id?: string | null;
   level3_verification_mode?: string | null;
   allowed_wifi_ips?: string[] | null;
+  biometric_verification_enabled?: boolean | null;
 }
 
 interface AddEmployeeFormProps {
