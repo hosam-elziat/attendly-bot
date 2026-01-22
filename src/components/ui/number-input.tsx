@@ -9,7 +9,7 @@ interface NumberInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEleme
 }
 
 const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ className, value, onChange, allowEmpty = true, emptyValue = 0, min, max, step, ...props }, ref) => {
+  ({ className, value, onChange, allowEmpty = true, emptyValue = 0, min, max, step = "0.01", ...props }, ref) => {
     // Use the value directly - treat undefined/null as emptyValue
     const displayValue = value === undefined || value === null || value === '' 
       ? '' 

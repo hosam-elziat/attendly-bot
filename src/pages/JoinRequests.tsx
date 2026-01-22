@@ -509,8 +509,9 @@ const JoinRequests = () => {
               <Label>{language === 'ar' ? 'الراتب الأساسي' : 'Base Salary'}</Label>
               <Input
                 type="number"
+                step="0.01"
                 value={employeeData.base_salary}
-                onChange={(e) => setEmployeeData({ ...employeeData, base_salary: Number(e.target.value) })}
+                onChange={(e) => setEmployeeData({ ...employeeData, base_salary: parseFloat(e.target.value) || 0 })}
               />
             </div>
           </div>
