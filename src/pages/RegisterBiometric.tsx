@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ShieldCheck, XCircle, CheckCircle, Fingerprint, AlertTriangle, Smartphone } from 'lucide-react';
+import { Loader2, ShieldCheck, XCircle, CheckCircle, Fingerprint, AlertTriangle, Smartphone, Copy, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-type RegistrationStep = 'loading' | 'register' | 'success' | 'error' | 'expired' | 'unsupported';
+type RegistrationStep = 'loading' | 'register' | 'success' | 'error' | 'expired' | 'unsupported' | 'telegram-browser';
 
 interface RegistrationData {
   employeeId: string;
@@ -14,6 +14,19 @@ interface RegistrationData {
   companyId: string;
   expiresAt: Date;
 }
+
+// Detect if running inside Telegram's in-app browser
+const isTelegramBrowser = (): boolean => {
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('telegram') || 
+         ua.includes('tgweb') || 
+         ua.includes('webview') ||
+         // Check if opened from Telegram on iOS
+         (ua.includes('iphone') && ua.includes('mobile') && !ua.includes('safari')) ||
+         // Check if window.TelegramWebviewProxy exists (Telegram WebApp)
+         typeof (window as any).TelegramWebviewProxy !== 'undefined' ||
+         typeof (window as any).Telegram !== 'undefined';
+};
 
 const RegisterBiometric = () => {
   const [searchParams] = useSearchParams();
@@ -24,12 +37,24 @@ const RegisterBiometric = () => {
   const [error, setError] = useState<string>('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isSupported, setIsSupported] = useState<boolean | null>(null);
+  const [isTelegram, setIsTelegram] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const initialize = async () => {
+      // Check if in Telegram browser first
+      const inTelegram = isTelegramBrowser();
+      setIsTelegram(inTelegram);
+      
       if (!token) {
         setStep('error');
         setError('رابط غير صالح');
+        return;
+      }
+      
+      // If in Telegram browser, show the "open in browser" prompt
+      if (inTelegram) {
+        setStep('telegram-browser');
         return;
       }
       
@@ -187,6 +212,46 @@ const RegisterBiometric = () => {
     }
   };
 
+  const copyLinkToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      toast.success('تم نسخ الرابط!');
+      setTimeout(() => setCopied(false), 3000);
+    } catch (err) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = window.location.href;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      toast.success('تم نسخ الرابط!');
+      setTimeout(() => setCopied(false), 3000);
+    }
+  };
+
+  const openInExternalBrowser = () => {
+    // Try to open in external browser using different methods
+    const url = window.location.href;
+    
+    // Method 1: Try window.open with _system target (works on some platforms)
+    const newWindow = window.open(url, '_system');
+    
+    // Method 2: If that didn't work, show instructions
+    if (!newWindow) {
+      toast.info('انسخ الرابط وافتحه في Chrome أو Safari');
+    }
+  };
+
+  const skipTelegramCheck = async () => {
+    // Allow user to try anyway
+    if (token) {
+      await validateToken(token);
+    }
+  };
+
   const renderContent = () => {
     switch (step) {
       case 'loading':
@@ -194,6 +259,80 @@ const RegisterBiometric = () => {
           <div className="flex flex-col items-center justify-center p-12 space-y-4">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
             <p className="text-muted-foreground">جارٍ التحقق من الرابط...</p>
+          </div>
+        );
+
+      case 'telegram-browser':
+        return (
+          <div className="flex flex-col items-center justify-center p-8 space-y-6">
+            <div className="p-6 rounded-full bg-blue-500/10">
+              <ExternalLink className="w-20 h-20 text-blue-500" />
+            </div>
+            
+            <div className="text-center space-y-3">
+              <h2 className="text-xl font-bold">افتح الرابط في المتصفح</h2>
+              <p className="text-muted-foreground text-sm">
+                متصفح تيليجرام لا يدعم تسجيل البصمة.
+                <br />
+                انسخ الرابط وافتحه في Chrome أو Safari.
+              </p>
+            </div>
+
+            <div className="bg-muted p-3 rounded-lg w-full max-w-xs">
+              <p className="text-xs text-muted-foreground break-all text-center font-mono">
+                {window.location.href.substring(0, 50)}...
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <Button 
+                onClick={copyLinkToClipboard}
+                size="lg"
+                className="w-full"
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle className="w-5 h-5 me-2" />
+                    تم النسخ!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-5 h-5 me-2" />
+                    نسخ الرابط
+                  </>
+                )}
+              </Button>
+
+              <Button 
+                variant="outline"
+                onClick={openInExternalBrowser}
+                className="w-full"
+              >
+                <ExternalLink className="w-5 h-5 me-2" />
+                فتح في المتصفح
+              </Button>
+
+              <Button 
+                variant="ghost"
+                onClick={skipTelegramCheck}
+                className="w-full text-muted-foreground"
+                size="sm"
+              >
+                المتابعة على أي حال
+              </Button>
+            </div>
+
+            <div className="bg-amber-500/10 p-4 rounded-lg text-sm text-amber-700 dark:text-amber-400 max-w-sm">
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                <span>
+                  <strong>خطوات:</strong><br />
+                  1. اضغط "نسخ الرابط"<br />
+                  2. افتح Chrome أو Safari<br />
+                  3. الصق الرابط في شريط العنوان
+                </span>
+              </p>
+            </div>
           </div>
         );
 
@@ -221,7 +360,7 @@ const RegisterBiometric = () => {
 
             <div className="bg-muted/50 p-4 rounded-lg text-sm text-muted-foreground max-w-sm">
               <p className="flex items-start gap-2">
-                <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0 text-green-500" />
+                <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0 text-green-600 dark:text-green-400" />
                 <span>بصمتك آمنة تماماً ولا تغادر جهازك. يتم تخزين معرف التحقق فقط.</span>
               </p>
             </div>
