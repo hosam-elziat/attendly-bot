@@ -84,6 +84,9 @@ export const EmployeeSchema = z.object({
   ),
   allowed_wifi_ips: z.array(z.string()).nullable().optional(),
   
+  // Biometric verification settings
+  biometric_verification_enabled: z.boolean().nullable().optional(),
+  
   // Freelancer settings
   is_freelancer: z.boolean().optional(),
   hourly_rate: z.number().min(0, 'Hourly rate cannot be negative').nullable().optional(),
