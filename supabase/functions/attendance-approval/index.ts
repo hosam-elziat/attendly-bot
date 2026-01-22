@@ -13,9 +13,38 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
   try {
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Verify the JWT token
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
+    
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token)
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const userId = claimsData.claims.sub as string
+
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
     const { 
       pending_id, 
       action, // 'approve' | 'reject' | 'modify'
@@ -72,6 +101,36 @@ serve(async (req) => {
     const employee = pendingRequest.employees
     const companyId = employee.company_id
 
+    // ========== AUTHORIZATION ==========
+    // Check if user belongs to the same company and is admin/owner
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', userId)
+      .single()
+
+    if (!profile || profile.company_id !== companyId) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden - You do not have access to this company' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Check if user is admin or owner
+    const { data: userRole } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single()
+
+    if (!userRole || !['owner', 'admin'].includes(userRole.role)) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden - Admin or owner access required for attendance approval' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // ========== APPROVAL LOGIC ==========
     // Get bot token
     const { data: bot } = await supabase
       .from('telegram_bots')

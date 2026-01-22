@@ -29,12 +29,58 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // ========== AUTHENTICATION ==========
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Missing authorization header' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Verify the JWT token
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const userId = claimsData.claims.sub as string;
+    
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ========== AUTHORIZATION - SaaS Admin Only ==========
+    const { data: saasTeam } = await supabase
+      .from('saas_team')
+      .select('is_active, role')
+      .eq('user_id', userId)
+      .single();
+
+    if (!saasTeam?.is_active || saasTeam.role !== 'super_admin') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden - SaaS admin access required for full system backups' }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const { created_by }: { created_by?: string } = await req.json();
 
     console.log('Starting full system backup...');
 
-    // Get all companies with their settings
+    // ========== BACKUP LOGIC ==========
     const { data: companiesData, error: companiesError } = await supabase
       .from('companies')
       .select(COMPANY_FIELDS.join(', '));
@@ -60,7 +106,6 @@ serve(async (req: Request) => {
     const backupData = fullBackup.data as Record<string, Record<string, unknown[]>>;
     const backupInfo = fullBackup.backup_info as { total_records: number; companies_summary: { id: string; name: string; records: number }[] };
 
-    // For each company, backup all their data
     for (const company of companies) {
       const companyId = company.id as string;
       const companyName = company.name as string;
@@ -81,7 +126,6 @@ serve(async (req: Request) => {
         }
       }
 
-      // Also get subscriptions for this company
       const { data: subscription } = await supabase
         .from('subscriptions')
         .select('*')
@@ -106,7 +150,6 @@ serve(async (req: Request) => {
 
     backupInfo.total_records = totalRecords;
 
-    // Also backup global tables (subscription_plans, telegram_bots, saas_team, discount_codes)
     const globalTables = ['subscription_plans', 'telegram_bots', 'saas_team', 'discount_codes', 'backup_email_recipients'];
     const globalData: Record<string, unknown[]> = {};
     
@@ -119,15 +162,14 @@ serve(async (req: Request) => {
 
     const backupSize = new Blob([JSON.stringify(fullBackup)]).size;
 
-    // Save backup record
     const { data: backupRecord, error: insertError } = await supabase.from('backups').insert({
-      company_id: null, // null means full system backup
+      company_id: null,
       backup_type: 'full_system',
       backup_data: fullBackup,
       tables_included: [...BACKUP_TABLES, 'companies', 'subscriptions', ...globalTables],
       size_bytes: backupSize,
       status: 'completed',
-      created_by,
+      created_by: created_by || userId,
       notes: `Full system backup: ${companies?.length || 0} companies, ${totalRecords} records`
     }).select().single();
 
