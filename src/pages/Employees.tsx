@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
@@ -129,10 +129,32 @@ const Employees = () => {
     }
   };
 
-  const handleEdit = (employee: Employee) => {
+  const handleEdit = useCallback((employee: Employee) => {
     setSelectedEmployee(employee);
     setEditDialogOpen(true);
-  };
+  }, []);
+
+  const handleEditClose = useCallback(() => {
+    setEditDialogOpen(false);
+    setSelectedEmployee(null);
+  }, []);
+
+  const handleEditSubmit = useCallback(async (data: any) => {
+    if (selectedEmployee) {
+      await updateEmployee.mutateAsync({ id: selectedEmployee.id, oldData: selectedEmployee, ...data });
+      setEditDialogOpen(false);
+      setSelectedEmployee(null);
+    }
+  }, [selectedEmployee, updateEmployee]);
+
+  const handleAddClose = useCallback(() => {
+    setDialogOpen(false);
+  }, []);
+
+  const handleAddSubmit = useCallback(async (data: any) => {
+    await createEmployee.mutateAsync(data);
+    setDialogOpen(false);
+  }, [createEmployee]);
 
   const getCurrencySymbol = (code: string | null) => {
     const currency = CURRENCIES.find(c => c.code === (code || defaultCurrency));
@@ -198,11 +220,8 @@ const Employees = () => {
               <AddEmployeeForm 
                 defaultCurrency={defaultCurrency}
                 positions={positions}
-                onClose={() => setDialogOpen(false)} 
-                onSubmit={async (data) => {
-                  await createEmployee.mutateAsync(data);
-                  setDialogOpen(false);
-                }}
+                onClose={handleAddClose} 
+                onSubmit={handleAddSubmit}
                 isLoading={createEmployee.isPending}
               />
             </DialogContent>
@@ -531,15 +550,8 @@ const Employees = () => {
               positions={positions}
               company={company}
               employees={employees}
-              onClose={() => {
-                setEditDialogOpen(false);
-                setSelectedEmployee(null);
-              }} 
-              onSubmit={async (data) => {
-                await updateEmployee.mutateAsync({ id: selectedEmployee.id, oldData: selectedEmployee, ...data });
-                setEditDialogOpen(false);
-                setSelectedEmployee(null);
-              }}
+              onClose={handleEditClose} 
+              onSubmit={handleEditSubmit}
               isLoading={updateEmployee.isPending}
             />
           )}
@@ -1028,22 +1040,19 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
 
   // Employee locations state
   const { data: employeeLocationsDataRaw } = useEmployeeLocations(employee.id);
-  const employeeLocationsData = employeeLocationsDataRaw ?? [];
   const updateEmployeeLocations = useUpdateEmployeeLocations();
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const locationsInitializedRef = useRef(false);
 
-  // Memoize location IDs to prevent infinite loop
-  const locationIdsFromData = useMemo(() => 
-    employeeLocationsData.map(loc => loc.location_id).join(','),
-    [employeeLocationsData]
-  );
-
-  // Effect to update selected locations when data loads
+  // Effect to update selected locations when data loads (only once)
   useEffect(() => {
-    if (employeeLocationsData.length > 0) {
-      setSelectedLocationIds(employeeLocationsData.map(loc => loc.location_id));
+    if (!locationsInitializedRef.current && employeeLocationsDataRaw && employeeLocationsDataRaw.length > 0) {
+      setSelectedLocationIds(employeeLocationsDataRaw.map(loc => loc.location_id));
+      locationsInitializedRef.current = true;
     }
-  }, [locationIdsFromData]);
+  }, [employeeLocationsDataRaw]);
+  
+  const employeeLocationsData = employeeLocationsDataRaw ?? [];
 
   const getLevel3ModeString = (requirements: string[]): string => {
     const hasLocation = requirements.includes('location');
