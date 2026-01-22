@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
@@ -1027,16 +1027,23 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
   });
 
   // Employee locations state
-  const { data: employeeLocationsData = [] } = useEmployeeLocations(employee.id);
+  const { data: employeeLocationsDataRaw } = useEmployeeLocations(employee.id);
+  const employeeLocationsData = employeeLocationsDataRaw ?? [];
   const updateEmployeeLocations = useUpdateEmployeeLocations();
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+
+  // Memoize location IDs to prevent infinite loop
+  const locationIdsFromData = useMemo(() => 
+    employeeLocationsData.map(loc => loc.location_id).join(','),
+    [employeeLocationsData]
+  );
 
   // Effect to update selected locations when data loads
   useEffect(() => {
     if (employeeLocationsData.length > 0) {
       setSelectedLocationIds(employeeLocationsData.map(loc => loc.location_id));
     }
-  }, [employeeLocationsData]);
+  }, [locationIdsFromData]);
 
   const getLevel3ModeString = (requirements: string[]): string => {
     const hasLocation = requirements.includes('location');
