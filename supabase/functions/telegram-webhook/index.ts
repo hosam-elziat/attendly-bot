@@ -199,7 +199,7 @@ serve(async (req) => {
     // Get company info for defaults
     const { data: company } = await supabase
       .from('companies')
-      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, company_latitude, company_longitude, location_radius_meters, level3_verification_mode, max_excused_absence_days, late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction, monthly_late_allowance_minutes')
+      .select('work_start_time, work_end_time, name, annual_leave_days, emergency_leave_days, timezone, default_currency, absence_without_permission_deduction, join_request_reviewer_type, join_request_reviewer_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, company_latitude, company_longitude, location_radius_meters, level3_verification_mode, max_excused_absence_days, late_under_15_deduction, late_15_to_30_deduction, late_over_30_deduction, monthly_late_allowance_minutes, biometric_verification_enabled, biometric_otp_fallback')
       .eq('id', companyId)
       .single()
 
@@ -224,7 +224,7 @@ serve(async (req) => {
     // Check if employee exists
     const { data: employee } = await supabase
       .from('employees')
-      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, allowed_wifi_ips')
+      .select('id, full_name, leave_balance, emergency_leave_balance, work_start_time, work_end_time, position_id, user_id, attendance_verification_level, attendance_approver_type, attendance_approver_id, allowed_wifi_ips, biometric_verification_enabled')
       .eq('telegram_chat_id', telegramChatId)
       .eq('company_id', companyId)
       .eq('is_active', true)
@@ -675,8 +675,15 @@ serve(async (req) => {
             const nowUtc = new Date().toISOString()
             const checkInTime = localTime.time
             
-            // Check verification level
-            if (effectiveVerificationLevel === 1) {
+            // Check if biometric verification is required for this employee
+            const employeeBiometricEnabled = (employee as any)?.biometric_verification_enabled
+            const companyBiometricEnabled = (company as any)?.biometric_verification_enabled
+            const biometricRequired = employeeBiometricEnabled === true || (employeeBiometricEnabled === null && companyBiometricEnabled === true)
+            
+            if (biometricRequired) {
+              // Biometric verification required - initiate verification flow
+              await initiateBiometricVerification(supabase, botToken, chatId, employee, companyId, 'check_in', telegramChatId)
+            } else if (effectiveVerificationLevel === 1) {
               // Level 1: Direct check-in without verification
               await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, companyPolicies, empDetails, managerPermissions)
             } else if (effectiveVerificationLevel === 2) {
@@ -711,73 +718,83 @@ serve(async (req) => {
           } else if (attendance.check_out_time) {
             await sendMessage(botToken, chatId, '⚠️ لقد سجلت انصرافك بالفعل!')
           } else {
-            const localTime = getLocalTime(companyTimezone)
-            const checkOutTime = localTime.time
+            // Check if biometric verification is required for this employee
+            const employeeBiometricEnabled = (employee as any)?.biometric_verification_enabled
+            const companyBiometricEnabled = (company as any)?.biometric_verification_enabled
+            const biometricRequiredForCheckout = employeeBiometricEnabled === true || (employeeBiometricEnabled === null && companyBiometricEnabled === true)
             
-            // Check if this is a night shift (attendance from yesterday)
-            const isNightShift = attendanceDate !== today
-            
-            // Calculate time difference from work end
-            const workEndTime = employee.work_end_time || companyDefaults.work_end_time
-            let earlyMinutes = 0
-            
-            // Freelancers are exempt from all time-based policies
-            const isFreelancer = empDetails?.is_freelancer === true
-            
-            if (workEndTime && !isNightShift && !isFreelancer) {
-              const [endH, endM] = workEndTime.split(':').map(Number)
-              const [checkH, checkM] = checkOutTime.split(':').map(Number)
-              const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
-              
-              if (timeDiff < 0) {
-                earlyMinutes = Math.abs(timeDiff)
-              }
-            }
-            
-            // Get early departure settings from company policies
-            const earlyDepartureGrace = companyPolicies?.early_departure_grace_minutes ?? 5
-            const earlyDepartureThreshold = companyPolicies?.early_departure_threshold_minutes ?? 30
-            const earlyDepartureDeduction = companyPolicies?.early_departure_deduction ?? 0.5
-            
-            // Check if early departure requires confirmation (skip for freelancers)
-            if (earlyMinutes > earlyDepartureGrace && !isNightShift && !isFreelancer) {
-              // Need to ask for confirmation
-              const deductionDays = earlyDepartureDeduction
-              const baseSalary = empDetails?.base_salary ?? 0
-              const dailyRate = baseSalary / 30
-              const deductionAmount = dailyRate * deductionDays
-              const deductionText = deductionDays === 0.25 ? 'ربع يوم' : deductionDays === 0.5 ? 'نصف يوم' : `${deductionDays} يوم`
-              
-              // Store pending checkout info in session
-              await setSession('pending_early_checkout', {
-                attendance_id: attendance.id,
-                early_minutes: earlyMinutes,
-                deduction_days: deductionDays,
-                deduction_amount: deductionAmount,
-                attendance_date: attendanceDate,
-                work_end_time: workEndTime,
-              })
-              
-              await sendMessage(botToken, chatId,
-                `⚠️ <b>تنبيه انصراف مبكر</b>\n\n` +
-                `📅 التاريخ: ${attendanceDate}\n` +
-                `⏰ موعد الانصراف الرسمي: ${workEndTime}\n` +
-                `⏰ الوقت الحالي: ${checkOutTime}\n\n` +
-                `🔴 ستنصرف مبكراً بـ <b>${earlyMinutes}</b> دقيقة\n\n` +
-                `💸 سيتم خصم <b>${deductionText}</b>` + (deductionAmount > 0 ? ` (${deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '') + `\n\n` +
-                `هل تريد تأكيد الانصراف؟`,
-                {
-                  inline_keyboard: [
-                    [
-                      { text: '✅ تأكيد الانصراف', callback_data: 'confirm_early_checkout' },
-                      { text: '❌ إلغاء', callback_data: 'cancel_early_checkout' }
-                    ]
-                  ]
-                }
-              )
+            if (biometricRequiredForCheckout) {
+              // Biometric verification required - initiate verification flow
+              await initiateBiometricVerification(supabase, botToken, chatId, employee, companyId, 'check_out', telegramChatId)
             } else {
-              // Normal checkout (on time, overtime, or within grace period, or freelancer)
-              await processCheckout(supabase, botToken, chatId, employee, attendance, attendanceDate, companyId, companyTimezone, companyDefaults, companyPolicies, empDetails, managerPermissions, isNightShift)
+              const localTime = getLocalTime(companyTimezone)
+              const checkOutTime = localTime.time
+              
+              // Check if this is a night shift (attendance from yesterday)
+              const isNightShift = attendanceDate !== today
+              
+              // Calculate time difference from work end
+              const workEndTime = employee.work_end_time || companyDefaults.work_end_time
+              let earlyMinutes = 0
+              
+              // Freelancers are exempt from all time-based policies
+              const isFreelancer = empDetails?.is_freelancer === true
+              
+              if (workEndTime && !isNightShift && !isFreelancer) {
+                const [endH, endM] = workEndTime.split(':').map(Number)
+                const [checkH, checkM] = checkOutTime.split(':').map(Number)
+                const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
+                
+                if (timeDiff < 0) {
+                  earlyMinutes = Math.abs(timeDiff)
+                }
+              }
+              
+              // Get early departure settings from company policies
+              const earlyDepartureGrace = companyPolicies?.early_departure_grace_minutes ?? 5
+              const earlyDepartureThreshold = companyPolicies?.early_departure_threshold_minutes ?? 30
+              const earlyDepartureDeduction = companyPolicies?.early_departure_deduction ?? 0.5
+              
+              // Check if early departure requires confirmation (skip for freelancers)
+              if (earlyMinutes > earlyDepartureGrace && !isNightShift && !isFreelancer) {
+                // Need to ask for confirmation
+                const deductionDays = earlyDepartureDeduction
+                const baseSalary = empDetails?.base_salary ?? 0
+                const dailyRate = baseSalary / 30
+                const deductionAmount = dailyRate * deductionDays
+                const deductionText = deductionDays === 0.25 ? 'ربع يوم' : deductionDays === 0.5 ? 'نصف يوم' : `${deductionDays} يوم`
+                
+                // Store pending checkout info in session
+                await setSession('pending_early_checkout', {
+                  attendance_id: attendance.id,
+                  early_minutes: earlyMinutes,
+                  deduction_days: deductionDays,
+                  deduction_amount: deductionAmount,
+                  attendance_date: attendanceDate,
+                  work_end_time: workEndTime,
+                })
+                
+                await sendMessage(botToken, chatId,
+                  `⚠️ <b>تنبيه انصراف مبكر</b>\n\n` +
+                  `📅 التاريخ: ${attendanceDate}\n` +
+                  `⏰ موعد الانصراف الرسمي: ${workEndTime}\n` +
+                  `⏰ الوقت الحالي: ${checkOutTime}\n\n` +
+                  `🔴 ستنصرف مبكراً بـ <b>${earlyMinutes}</b> دقيقة\n\n` +
+                  `💸 سيتم خصم <b>${deductionText}</b>` + (deductionAmount > 0 ? ` (${deductionAmount.toFixed(2)} ${empDetails?.currency || 'SAR'})` : '') + `\n\n` +
+                  `هل تريد تأكيد الانصراف؟`,
+                  {
+                    inline_keyboard: [
+                      [
+                        { text: '✅ تأكيد الانصراف', callback_data: 'confirm_early_checkout' },
+                        { text: '❌ إلغاء', callback_data: 'cancel_early_checkout' }
+                      ]
+                    ]
+                  }
+                )
+              } else {
+                // Normal checkout (on time, overtime, or within grace period, or freelancer)
+                await processCheckout(supabase, botToken, chatId, employee, attendance, attendanceDate, companyId, companyTimezone, companyDefaults, companyPolicies, empDetails, managerPermissions, isNightShift)
+              }
             }
           }
           break
@@ -3416,6 +3433,59 @@ function getExtendedDatePickerKeyboard(leaveType: 'emergency' | 'regular') {
 function getArabicDayName(dayIndex: number): string {
   const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
   return days[dayIndex]
+}
+
+// Helper function to initiate biometric verification
+async function initiateBiometricVerification(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  employee: any,
+  companyId: string,
+  requestType: 'check_in' | 'check_out',
+  telegramChatId: string
+) {
+  // Create a verification token
+  const verificationToken = crypto.randomUUID()
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+  
+  // Store pending verification in database
+  const { error } = await supabase
+    .from('biometric_pending_verifications')
+    .insert({
+      employee_id: employee.id,
+      company_id: companyId,
+      verification_token: verificationToken,
+      request_type: requestType,
+      telegram_chat_id: telegramChatId,
+      expires_at: expiresAt.toISOString()
+    })
+  
+  if (error) {
+    console.error('Failed to create biometric verification:', error)
+    await sendMessage(botToken, chatId, '❌ حدث خطأ في إنشاء جلسة التحقق. حاول مرة أخرى.')
+    return
+  }
+  
+  // Get the site URL from environment
+  const siteUrl = Deno.env.get('SITE_URL') || 'https://attendly-bot.lovable.app'
+  const verifyUrl = `${siteUrl}/verify-attendance?token=${verificationToken}`
+  
+  const requestTypeText = requestType === 'check_in' ? 'حضورك' : 'انصرافك'
+  
+  await sendMessage(botToken, chatId,
+    `🔐 <b>التحقق من الهوية مطلوب</b>\n\n` +
+    `لتسجيل ${requestTypeText}، يجب التحقق من هويتك أولاً.\n\n` +
+    `👆 اضغط على الزر أدناه للتحقق بالبصمة أو الوجه:\n\n` +
+    `⏰ صالح لمدة 10 دقائق`,
+    {
+      inline_keyboard: [[
+        { text: '🔐 التحقق الآن', url: verifyUrl }
+      ]]
+    }
+  )
+  
+  console.log(`Biometric verification initiated for employee ${employee.id}, type: ${requestType}, token: ${verificationToken}`)
 }
 
 // Helper function for direct check-in (Level 1)
