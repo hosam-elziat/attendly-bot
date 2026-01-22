@@ -122,11 +122,12 @@ const TelegramBot = () => {
       
       if (selectedPhotoFile) {
         const fileExt = selectedPhotoFile.name.split('.').pop();
-        const fileName = `${company.id}-${Date.now()}.${fileExt}`;
+        // Use folder-based path for RLS: company_id/filename
+        const filePath = `${company.id}/${Date.now()}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('bot-photos')
-          .upload(fileName, selectedPhotoFile);
+          .upload(filePath, selectedPhotoFile);
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
@@ -136,7 +137,7 @@ const TelegramBot = () => {
         } else {
           const { data: urlData } = supabase.storage
             .from('bot-photos')
-            .getPublicUrl(fileName);
+            .getPublicUrl(filePath);
           photoUrl = urlData.publicUrl;
         }
       }
