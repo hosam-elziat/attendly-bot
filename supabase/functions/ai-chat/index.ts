@@ -282,19 +282,57 @@ function validateStatus(status: string | undefined, allowedValues: string[]): bo
   return allowedValues.includes(status);
 }
 
-// Execute database functions
+// Role-based access control context
+interface RBACContext {
+  userId: string;
+  companyId: string;
+  isAdmin: boolean;
+  hasLeaveApprovalPermission: boolean;
+}
+
+// Execute database functions with role-based access control
 async function executeFunction(
   supabase: any,
   companyId: string,
   currentDate: string,
   functionName: string,
-  args: Record<string, any>
+  args: Record<string, any>,
+  rbacContext?: RBACContext
 ): Promise<string> {
   // Replace current_date placeholder with actual date
   const resolveDate = (dateStr: string | undefined) => {
     if (!dateStr || dateStr === 'current_date' || dateStr === 'today') return currentDate;
     return dateStr;
   };
+  
+  // SECURITY: Check role-based access for sensitive operations
+  if (rbacContext) {
+    const ADMIN_ONLY_FUNCTIONS = [
+      "bulk_attendance",
+      "add_salary_adjustment", 
+      "bulk_salary_adjustment",
+      "update_employee",
+      "add_attendance"
+    ];
+    
+    const MANAGER_FUNCTIONS = ["update_leave_request"];
+    
+    if (ADMIN_ONLY_FUNCTIONS.includes(functionName) && !rbacContext.isAdmin) {
+      console.log(`SECURITY: User ${rbacContext.userId} denied access to ${functionName} - admin role required`);
+      return JSON.stringify({ 
+        error: "Permission denied. Only administrators and company owners can perform this action.",
+        error_ar: "تم رفض الإذن. فقط المسؤولون وأصحاب الشركات يمكنهم تنفيذ هذا الإجراء."
+      });
+    }
+    
+    if (MANAGER_FUNCTIONS.includes(functionName) && !rbacContext.isAdmin && !rbacContext.hasLeaveApprovalPermission) {
+      console.log(`SECURITY: User ${rbacContext.userId} denied access to ${functionName} - manager permission required`);
+      return JSON.stringify({ 
+        error: "Permission denied. You don't have permission to approve or reject leave requests.",
+        error_ar: "تم رفض الإذن. ليس لديك صلاحية للموافقة على أو رفض طلبات الإجازة."
+      });
+    }
+  }
   
   try {
     switch (functionName) {
@@ -1123,6 +1161,68 @@ async function verifyCompanyAccess(supabase: any, userId: string, companyId: str
   return profile.company_id === companyId;
 }
 
+// Check if user has admin or owner role
+async function isAdminOrOwner(supabase: any, userId: string, companyId: string): Promise<boolean> {
+  const { data: userRole, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .in("role", ["admin", "owner"])
+    .limit(1);
+  
+  if (error) {
+    console.error("Role lookup failed:", error);
+    return false;
+  }
+  
+  return userRole && userRole.length > 0;
+}
+
+// List of sensitive functions that require admin/owner role
+const ADMIN_ONLY_FUNCTIONS = [
+  "bulk_attendance",
+  "add_salary_adjustment",
+  "bulk_salary_adjustment",
+  "update_employee",
+  "add_attendance"
+];
+
+// List of functions that require manager permissions (can_approve_leaves)
+const MANAGER_FUNCTIONS = [
+  "update_leave_request"
+];
+
+// Check if user can perform manager actions (has position with can_approve_leaves)
+async function hasManagerPermission(supabase: any, userId: string, companyId: string, permissionType: string): Promise<boolean> {
+  // First, try to find the user as an employee
+  const { data: employee, error: empError } = await supabase
+    .from("employees")
+    .select("position_id")
+    .eq("user_id", userId)
+    .eq("company_id", companyId)
+    .single();
+  
+  if (empError || !employee?.position_id) {
+    // Check if user is admin/owner (they can do everything)
+    return await isAdminOrOwner(supabase, userId, companyId);
+  }
+  
+  // Check position permissions
+  const { data: perms, error: permsError } = await supabase
+    .from("position_permissions")
+    .select(permissionType)
+    .eq("position_id", employee.position_id)
+    .single();
+  
+  if (permsError || !perms) {
+    // Fall back to admin/owner check
+    return await isAdminOrOwner(supabase, userId, companyId);
+  }
+  
+  return perms[permissionType] === true;
+}
+
 // Rate limiting check
 async function checkRateLimit(
   supabase: any, 
@@ -1252,6 +1352,21 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
+    // ===== ROLE-BASED ACCESS CONTROL =====
+    // Pre-compute user permissions for sensitive operations
+    const isAdmin = await isAdminOrOwner(supabase, user.id, companyId);
+    const hasLeaveApprovalPermission = await hasManagerPermission(supabase, user.id, companyId, "can_approve_leaves");
+    
+    const rbacContext: RBACContext = {
+      userId: user.id,
+      companyId: companyId,
+      isAdmin: isAdmin,
+      hasLeaveApprovalPermission: hasLeaveApprovalPermission
+    };
+    
+    console.log(`RBAC context for user ${user.id}: isAdmin=${isAdmin}, hasLeaveApproval=${hasLeaveApprovalPermission}`);
+    // ===== END RBAC =====
+    
     // Use client date or server date
     const currentDate = clientDate || new Date().toISOString().split('T')[0];
 
@@ -1356,7 +1471,8 @@ Use: ✅ ❌ ⚠️ 📊 👤 📅 ⏰ 💰`;
         const args = JSON.parse(toolCall.function.arguments || "{}");
         
         console.log(`Executing tool: ${functionName}`, args);
-        const result = await executeFunction(supabase, companyId, currentDate, functionName, args);
+        // Pass RBAC context to check permissions before executing sensitive operations
+        const result = await executeFunction(supabase, companyId, currentDate, functionName, args, rbacContext);
         
         toolResults.push({
           role: "tool",

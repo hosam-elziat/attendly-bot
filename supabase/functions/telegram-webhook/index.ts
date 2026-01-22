@@ -161,16 +161,34 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, error: 'No bot specified' }), { headers: corsHeaders })
     }
 
-    // Get bot info
+    // Get bot info INCLUDING webhook_secret for security verification
     const { data: bot } = await supabase
       .from('telegram_bots')
-      .select('bot_token, assigned_company_id')
+      .select('bot_token, assigned_company_id, webhook_secret')
       .eq('bot_username', botUsername)
       .single()
 
     if (!bot?.bot_token || !bot?.assigned_company_id) {
       return new Response(JSON.stringify({ ok: true, error: 'Bot not found' }), { headers: corsHeaders })
     }
+
+    // ===== SECURITY: Verify Telegram Webhook Secret =====
+    // Telegram sends the secret_token in X-Telegram-Bot-Api-Secret-Token header
+    const telegramSecret = req.headers.get('X-Telegram-Bot-Api-Secret-Token')
+    
+    if (bot.webhook_secret) {
+      // If we have a stored secret, verify the request
+      if (telegramSecret !== bot.webhook_secret) {
+        console.error(`SECURITY: Invalid webhook secret for bot ${botUsername}. Request rejected.`)
+        // Return 200 OK to prevent Telegram from retrying (could be an attack)
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+      console.log(`SECURITY: Webhook secret verified for bot ${botUsername}`)
+    } else {
+      // No secret stored yet (legacy bots) - log a warning but allow
+      console.warn(`SECURITY WARNING: Bot ${botUsername} has no webhook_secret configured. Consider re-assigning the bot.`)
+    }
+    // ===== END SECURITY CHECK =====
 
     const botToken = bot.bot_token
     const companyId = bot.assigned_company_id
