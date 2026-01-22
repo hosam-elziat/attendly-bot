@@ -33,41 +33,14 @@ const RegisterBiometric = () => {
         return;
       }
       
-      // First check WebAuthn support
-      const supported = await checkWebAuthnSupport();
-      
-      // Then validate token
-      await validateToken(token, supported);
+      // Validate token first, we'll check biometric support when user tries to register
+      await validateToken(token);
     };
     
     initialize();
   }, [token]);
 
-  const checkWebAuthnSupport = async (): Promise<boolean> => {
-    try {
-      // Check if WebAuthn API exists
-      if (!window.PublicKeyCredential) {
-        console.log('WebAuthn API not available');
-        setIsSupported(false);
-        return false;
-      }
-
-      // Check if platform authenticator is available
-      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      console.log('Platform authenticator available:', available);
-      setIsSupported(available);
-      
-      // Even if platform authenticator is not available, we can try with cross-platform authenticators
-      // Some devices may still support fingerprint through alternative methods
-      return available;
-    } catch (error) {
-      console.error('Error checking WebAuthn support:', error);
-      setIsSupported(false);
-      return false;
-    }
-  };
-
-  const validateToken = async (verificationToken: string, deviceSupported: boolean) => {
+  const validateToken = async (verificationToken: string) => {
     try {
       const { data, error } = await supabase.functions.invoke('biometric-verification', {
         body: { 
@@ -93,12 +66,8 @@ const RegisterBiometric = () => {
         expiresAt: new Date(data.expiresAt)
       });
       
-      // Check if device supports biometrics using the passed value
-      if (!deviceSupported) {
-        setStep('unsupported');
-      } else {
-        setStep('register');
-      }
+      // Always show register step - we'll check support when user tries to register
+      setStep('register');
     } catch (err: any) {
       console.error('Token validation error:', err);
       setStep('error');
@@ -112,6 +81,14 @@ const RegisterBiometric = () => {
     setIsRegistering(true);
 
     try {
+      // Check WebAuthn support first
+      if (!window.PublicKeyCredential) {
+        console.log('WebAuthn API not available');
+        setStep('unsupported');
+        setIsRegistering(false);
+        return;
+      }
+
       // Generate a unique user ID for this registration
       const userId = new TextEncoder().encode(registrationData.employeeId);
       const challenge = new Uint8Array(32);
