@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
@@ -1031,19 +1031,12 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
   const updateEmployeeLocations = useUpdateEmployeeLocations();
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
 
-  // Initialize selected locations when data loads
-  useState(() => {
+  // Effect to update selected locations when data loads
+  useEffect(() => {
     if (employeeLocationsData.length > 0) {
       setSelectedLocationIds(employeeLocationsData.map(loc => loc.location_id));
     }
-  });
-
-  // Effect to update selected locations when data loads
-  const [locationsInitialized, setLocationsInitialized] = useState(false);
-  if (!locationsInitialized && employeeLocationsData.length > 0) {
-    setSelectedLocationIds(employeeLocationsData.map(loc => loc.location_id));
-    setLocationsInitialized(true);
-  }
+  }, [employeeLocationsData]);
 
   const getLevel3ModeString = (requirements: string[]): string => {
     const hasLocation = requirements.includes('location');
