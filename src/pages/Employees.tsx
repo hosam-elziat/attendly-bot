@@ -102,6 +102,25 @@ const Employees = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Safety cleanup: if a Radix Dialog/AlertDialog leaves the document body locked,
+  // the UI can appear "frozen" (no clicks/menus). Ensure we always restore interaction
+  // once all modals are closed.
+  useEffect(() => {
+    const anyModalOpen = dialogOpen || editDialogOpen || deleteDialogOpen;
+    if (!anyModalOpen) {
+      document.body.style.pointerEvents = '';
+      document.body.style.overflow = '';
+      document.body.removeAttribute('data-scroll-locked');
+    }
+  }, [dialogOpen, editDialogOpen, deleteDialogOpen]);
+
+  // If for any reason the edit dialog is open without a selected employee, force-close it.
+  useEffect(() => {
+    if (editDialogOpen && !selectedEmployee) {
+      setEditDialogOpen(false);
+    }
+  }, [editDialogOpen, selectedEmployee]);
+
   const defaultCurrency = (company as any)?.default_currency || 'SAR';
 
   const filteredEmployees = employees.filter(emp => {
@@ -544,7 +563,13 @@ const Employees = () => {
       </AlertDialog>
 
       {/* Edit Employee Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setSelectedEmployee(null);
+        }}
+      >
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('employees.editEmployee')}</DialogTitle>
