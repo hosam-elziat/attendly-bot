@@ -1291,9 +1291,9 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         
         {/* Freelancer Toggle */}
         <div className="mt-3 mb-4">
-          <Card 
+          <div 
             className={cn(
-              "p-4 transition-all duration-300 border-2",
+              "p-4 transition-all duration-300 border-2 rounded-lg",
               formData.is_freelancer 
                 ? "bg-warning/10 border-warning/30" 
                 : "bg-muted/30 border-muted-foreground/20"
@@ -1320,10 +1320,12 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               </div>
               <Switch 
                 checked={formData.is_freelancer === true}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_freelancer: checked }))}
+                onCheckedChange={(checked) => {
+                  setFormData(prev => ({ ...prev, is_freelancer: checked }));
+                }}
               />
             </div>
-          </Card>
+          </div>
           
           {formData.is_freelancer && (
             <div className="mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
