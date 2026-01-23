@@ -1129,7 +1129,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               id="edit-name" 
               required 
               value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
             />
           </div>
           <div className="space-y-2">
@@ -1139,7 +1139,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               type="email" 
               required 
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
             />
           </div>
         </div>
@@ -1151,7 +1151,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           <Input 
             id="edit-phone" 
             value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
           />
         </div>
         <div className="space-y-2">
@@ -1159,7 +1159,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           <Input 
             id="edit-national_id" 
             value={formData.national_id}
-            onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, national_id: e.target.value }))}
           />
         </div>
       </div>
@@ -1169,7 +1169,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           <Label>{language === 'ar' ? 'المنصب' : 'Position'}</Label>
           <Select 
             value={formData.position_id || 'none'} 
-            onValueChange={(value) => setFormData({ ...formData, position_id: value === 'none' ? '' : value })}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, position_id: value === 'none' ? '' : value }))}
           >
             <SelectTrigger>
               <SelectValue placeholder={language === 'ar' ? 'اختر المنصب' : 'Select position'} />
@@ -1194,7 +1194,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               ? "bg-success/10 border-success/30 hover:border-success/50" 
               : "bg-muted/50 border-muted-foreground/20 hover:border-muted-foreground/40"
           )}
-          onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+          onClick={() => setFormData(prev => ({ ...prev, is_active: !prev.is_active }))}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1225,7 +1225,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               </div>
               <Switch 
                 checked={formData.is_active}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
@@ -1239,7 +1239,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           <Input 
             id="edit-department" 
             value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
           />
         </div>
         <div className="space-y-2">
@@ -1265,7 +1265,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               <Calendar
                 mode="single"
                 selected={formData.hire_date ? parseISO(formData.hire_date) : undefined}
-                onSelect={(date) => setFormData({ ...formData, hire_date: date ? format(date, 'yyyy-MM-dd') : '' })}
+                onSelect={(date) => setFormData(prev => ({ ...prev, hire_date: date ? format(date, 'yyyy-MM-dd') : '' }))}
                 initialFocus
                 className={cn("p-3 pointer-events-auto")}
               />
@@ -1280,7 +1280,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           <Input 
             id="edit-address" 
             value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
           />
         </div>
         <div className="space-y-2">
@@ -1289,7 +1289,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
             id="edit-telegram_id" 
             placeholder="123456789"
             value={formData.telegram_chat_id}
-            onChange={(e) => setFormData({ ...formData, telegram_chat_id: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, telegram_chat_id: e.target.value }))}
           />
         </div>
       </div>
@@ -1355,14 +1355,14 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
                 <Label>{language === 'ar' ? 'سعر الساعة' : 'Hourly Rate'}</Label>
                 <NumberInput 
                   value={formData.hourly_rate || 0}
-                  onChange={(value) => setFormData({ ...formData, hourly_rate: value })}
+                  onChange={(value) => setFormData(prev => ({ ...prev, hourly_rate: value }))}
                 />
               </div>
               <div className="space-y-2">
                 <Label>{t('employees.currency')}</Label>
                 <Select 
                   value={formData.currency} 
-                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1383,7 +1383,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
                 <Label>{t('employees.salaryType')}</Label>
                 <Select 
                   value={formData.salary_type} 
-                  onValueChange={(value: 'monthly' | 'daily') => setFormData({ ...formData, salary_type: value })}
+                  onValueChange={(value: 'monthly' | 'daily') => setFormData(prev => ({ ...prev, salary_type: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1399,14 +1399,14 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
                 <NumberInput 
                   id="edit-salary" 
                   value={formData.base_salary || 0}
-                  onChange={(value) => setFormData({ ...formData, base_salary: value })}
+                  onChange={(value) => setFormData(prev => ({ ...prev, base_salary: value }))}
                 />
               </div>
               <div className="space-y-2">
                 <Label>{t('employees.currency')}</Label>
                 <Select 
                   value={formData.currency} 
-                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1439,7 +1439,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
             <Label>{t('settings.workStart')}</Label>
             <TimePicker
               value={formData.work_start_time}
-              onChange={(time) => setFormData({ ...formData, work_start_time: time })}
+              onChange={(time) => setFormData(prev => ({ ...prev, work_start_time: time }))}
               placeholder={language === 'ar' ? 'وقت البدء' : 'Start time'}
             />
           </div>
@@ -1447,7 +1447,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
             <Label>{t('settings.workEnd')}</Label>
             <TimePicker
               value={formData.work_end_time}
-              onChange={(time) => setFormData({ ...formData, work_end_time: time })}
+              onChange={(time) => setFormData(prev => ({ ...prev, work_end_time: time }))}
               placeholder={language === 'ar' ? 'وقت الانتهاء' : 'End time'}
             />
           </div>
@@ -1455,7 +1455,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
             <Label>{t('settings.breakDuration')}</Label>
             <NumberInput 
               value={formData.break_duration_minutes}
-              onChange={(value) => setFormData({ ...formData, break_duration_minutes: value })}
+              onChange={(value) => setFormData(prev => ({ ...prev, break_duration_minutes: value }))}
             />
           </div>
         </div>
@@ -1505,7 +1505,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         <Textarea 
           id="edit-notes" 
           value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
           rows={3}
         />
       </div>
