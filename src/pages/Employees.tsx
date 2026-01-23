@@ -141,9 +141,15 @@ const Employees = () => {
 
   const handleEditSubmit = useCallback(async (data: any) => {
     if (selectedEmployee) {
-      await updateEmployee.mutateAsync({ id: selectedEmployee.id, oldData: selectedEmployee, ...data });
+      const employeeId = selectedEmployee.id;
+      const oldData = selectedEmployee;
+      
+      // Close dialog immediately to prevent UI freeze
       setEditDialogOpen(false);
       setSelectedEmployee(null);
+      
+      // Then perform the update
+      await updateEmployee.mutateAsync({ id: employeeId, oldData, ...data });
     }
   }, [selectedEmployee, updateEmployee]);
 
@@ -1091,30 +1097,35 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Build verification data
-    const verificationData = {
-      attendance_verification_level: verificationSettings.useCompanyDefault ? null : verificationSettings.verificationLevel,
-      attendance_approver_type: verificationSettings.useCompanyDefault ? null : verificationSettings.approverType,
-      attendance_approver_id: !verificationSettings.useCompanyDefault && verificationSettings.approverType === 'specific_person' ? verificationSettings.approverId : null,
-      level3_verification_mode: !verificationSettings.useCompanyDefault && verificationSettings.verificationLevel === 3 ? getLevel3ModeString(verificationSettings.level3Requirements) : null,
-      allowed_wifi_ips: verificationSettings.allowedWifiIps.trim() 
-        ? verificationSettings.allowedWifiIps.split(',').map(ip => ip.trim()).filter(ip => ip) 
-        : null,
-      biometric_verification_enabled: verificationSettings.biometricEnabled,
-    };
+    try {
+      // Build verification data
+      const verificationData = {
+        attendance_verification_level: verificationSettings.useCompanyDefault ? null : verificationSettings.verificationLevel,
+        attendance_approver_type: verificationSettings.useCompanyDefault ? null : verificationSettings.approverType,
+        attendance_approver_id: !verificationSettings.useCompanyDefault && verificationSettings.approverType === 'specific_person' ? verificationSettings.approverId : null,
+        level3_verification_mode: !verificationSettings.useCompanyDefault && verificationSettings.verificationLevel === 3 ? getLevel3ModeString(verificationSettings.level3Requirements) : null,
+        allowed_wifi_ips: verificationSettings.allowedWifiIps.trim() 
+          ? verificationSettings.allowedWifiIps.split(',').map(ip => ip.trim()).filter(ip => ip) 
+          : null,
+        biometric_verification_enabled: verificationSettings.biometricEnabled,
+      };
 
-    // Update employee locations
-    await updateEmployeeLocations.mutateAsync({
-      employeeId: employee.id,
-      locationIds: selectedLocationIds,
-    });
+      // Submit employee data first, then update locations
+      await onSubmit({
+        ...formData,
+        work_start_time: formData.work_start_time + ':00',
+        work_end_time: formData.work_end_time + ':00',
+        ...verificationData,
+      });
 
-    await onSubmit({
-      ...formData,
-      work_start_time: formData.work_start_time + ':00',
-      work_end_time: formData.work_end_time + ':00',
-      ...verificationData,
-    });
+      // Update employee locations after main update succeeds
+      await updateEmployeeLocations.mutateAsync({
+        employeeId: employee.id,
+        locationIds: selectedLocationIds,
+      });
+    } catch (error) {
+      console.error('Error updating employee:', error);
+    }
   };
 
   return (
