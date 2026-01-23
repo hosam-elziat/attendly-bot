@@ -1035,7 +1035,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     return requirements.length > 0 ? requirements : ['location'];
   };
 
-  const [verificationSettings, setVerificationSettings] = useState({
+  const [verificationSettings, setVerificationSettings] = useState(() => ({
     useCompanyDefault: (employee as any).attendance_verification_level === null || (employee as any).attendance_verification_level === undefined,
     verificationLevel: (employee as any).attendance_verification_level || (company as any)?.attendance_verification_level || 1,
     approverType: ((employee as any).attendance_approver_type || 'direct_manager') as 'direct_manager' | 'specific_person',
@@ -1043,7 +1043,12 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     level3Requirements: parseLevel3Requirements((employee as any).level3_verification_mode),
     allowedWifiIps: ((employee as any).allowed_wifi_ips || []).join(', '),
     biometricEnabled: (employee as any).biometric_verification_enabled ?? false,
-  });
+  }));
+
+  // Memoized callback for verification settings
+  const handleVerificationSettingsChange = useCallback((newSettings: typeof verificationSettings) => {
+    setVerificationSettings(newSettings);
+  }, []);
 
   // Employee locations state
   const { data: employeeLocationsDataRaw } = useEmployeeLocations(employee.id);
@@ -1059,6 +1064,11 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
   }, [employeeLocationsDataRaw]);
 
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+
+  // Memoized callback for location changes
+  const handleLocationIdsChange = useCallback((ids: string[]) => {
+    setSelectedLocationIds(ids);
+  }, []);
 
   // Effect to update selected locations when data loads (only once)
   useEffect(() => {
@@ -1496,7 +1506,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         company={company}
         employees={employees}
         value={verificationSettings}
-        onChange={setVerificationSettings}
+        onChange={handleVerificationSettingsChange}
       />
 
       {/* Employee Locations */}
@@ -1505,7 +1515,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
           <EmployeeLocationSelector
             employeeId={employee.id}
             selectedLocationIds={selectedLocationIds}
-            onChange={setSelectedLocationIds}
+            onChange={handleLocationIdsChange}
           />
         </div>
       )}

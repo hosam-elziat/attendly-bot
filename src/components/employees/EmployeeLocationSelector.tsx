@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback } from 'react';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MapPin, Building } from 'lucide-react';
-import { useCompanyLocations, CompanyLocation } from '@/hooks/useCompanyLocations';
+import { useCompanyLocations } from '@/hooks/useCompanyLocations';
 
 interface EmployeeLocationSelectorProps {
   employeeId: string;
@@ -10,20 +10,20 @@ interface EmployeeLocationSelectorProps {
   onChange: (locationIds: string[]) => void;
 }
 
-const EmployeeLocationSelector = ({ 
+const EmployeeLocationSelector = memo(({ 
   employeeId, 
   selectedLocationIds, 
   onChange 
 }: EmployeeLocationSelectorProps) => {
   const { data: locations = [], isLoading } = useCompanyLocations();
 
-  const handleToggle = (locationId: string, checked: boolean) => {
+  const handleToggle = useCallback((locationId: string, checked: boolean) => {
     if (checked) {
       onChange([...selectedLocationIds, locationId]);
     } else {
       onChange(selectedLocationIds.filter(id => id !== locationId));
     }
-  };
+  }, [selectedLocationIds, onChange]);
 
   if (isLoading) {
     return (
@@ -92,6 +92,8 @@ const EmployeeLocationSelector = ({
       )}
     </div>
   );
-};
+});
+
+EmployeeLocationSelector.displayName = 'EmployeeLocationSelector';
 
 export default EmployeeLocationSelector;
