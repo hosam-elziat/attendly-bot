@@ -1042,16 +1042,25 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
   // Employee locations state
   const { data: employeeLocationsDataRaw } = useEmployeeLocations(employee.id);
   const updateEmployeeLocations = useUpdateEmployeeLocations();
-  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const locationsInitializedRef = useRef(false);
+  
+  // Initialize locations only once from the fetched data
+  const initialLocationIds = useMemo(() => {
+    if (employeeLocationsDataRaw && employeeLocationsDataRaw.length > 0) {
+      return employeeLocationsDataRaw.map(loc => loc.location_id);
+    }
+    return [];
+  }, [employeeLocationsDataRaw]);
+
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
 
   // Effect to update selected locations when data loads (only once)
   useEffect(() => {
-    if (!locationsInitializedRef.current && employeeLocationsDataRaw && employeeLocationsDataRaw.length > 0) {
-      setSelectedLocationIds(employeeLocationsDataRaw.map(loc => loc.location_id));
+    if (!locationsInitializedRef.current && initialLocationIds.length > 0) {
+      setSelectedLocationIds(initialLocationIds);
       locationsInitializedRef.current = true;
     }
-  }, [employeeLocationsDataRaw]);
+  }, [initialLocationIds]);
   
   const employeeLocationsData = employeeLocationsDataRaw ?? [];
 
