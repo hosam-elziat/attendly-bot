@@ -434,7 +434,7 @@ async function completeVerification(supabase: any, token: string, verificationTy
     .from('biometric_pending_verifications')
     .select(`
       *,
-      employees!inner(id, full_name, telegram_chat_id, work_start_time, company_id),
+      employees!inner(id, full_name, telegram_chat_id, work_start_time, company_id, is_freelancer, hourly_rate, currency),
       companies!inner(id, work_start_time, timezone)
     `)
     .eq('verification_token', token)
@@ -445,12 +445,15 @@ async function completeVerification(supabase: any, token: string, verificationTy
     return { success: false, message: 'جلسة غير صالحة أو مكتملة' }
   }
 
-  // Mark as completed
+  const nextLevel = pending.next_verification_level || 1
+
+  // Mark biometric as verified (but session not complete if level > 1)
   await supabase
     .from('biometric_pending_verifications')
     .update({ 
-      completed_at: new Date().toISOString(),
-      biometric_verified_at: new Date().toISOString()
+      biometric_verified_at: new Date().toISOString(),
+      // Only mark as complete if level 1 (direct check-in/out)
+      ...(nextLevel === 1 ? { completed_at: new Date().toISOString() } : {})
     })
     .eq('id', pending.id)
 
@@ -487,6 +490,39 @@ async function completeVerification(supabase: any, token: string, verificationTy
   const checkTime = `${getValue('hour')}:${getValue('minute')}:${getValue('second')}`
   const nowUtc = now.toISOString()
 
+  // Get bot token for messaging
+  const { data: bot } = await supabase
+    .from('telegram_bots')
+    .select('bot_token')
+    .eq('assigned_company_id', pending.company_id)
+    .single()
+
+  // If next level is > 1, just confirm biometric and tell user to continue in bot
+  if (nextLevel > 1) {
+    if (bot?.bot_token) {
+      const requestTypeText = pending.request_type === 'check_in' ? 'الحضور' : 'الانصراف'
+      const levelText = nextLevel === 2 ? 'موافقة المدير' : 'التحقق من الموقع'
+      
+      await sendTelegramMessage(
+        bot.bot_token,
+        pending.telegram_chat_id,
+        `✅ <b>تم التحقق من هويتك بنجاح</b>\n\n` +
+        `🔐 طريقة التحقق: ${verificationType === 'biometric' ? 'البصمة' : 'رمز OTP'}\n\n` +
+        `📋 الخطوة التالية: ${levelText}\n` +
+        `👆 اضغط على زر "${pending.request_type === 'check_in' ? '✅ تسجيل الحضور' : '🚪 تسجيل الانصراف'}" في البوت لإكمال ${requestTypeText}.`
+      )
+    }
+    
+    // Mark session as complete since we've notified the user
+    await supabase
+      .from('biometric_pending_verifications')
+      .update({ completed_at: new Date().toISOString() })
+      .eq('id', pending.id)
+    
+    return { success: true, message: 'تم التحقق من هويتك. يرجى متابعة التسجيل من البوت.' }
+  }
+
+  // Level 1: Direct check-in/out
   if (pending.request_type === 'check_in') {
     // Create attendance record
     await supabase
@@ -501,13 +537,6 @@ async function completeVerification(supabase: any, token: string, verificationTy
         check_in_longitude: pending.location_lng,
         notes: `تم التحقق بالبصمة (${verificationType})`
       })
-
-    // Send confirmation via Telegram
-    const { data: bot } = await supabase
-      .from('telegram_bots')
-      .select('bot_token')
-      .eq('assigned_company_id', pending.company_id)
-      .single()
 
     if (bot?.bot_token) {
       await sendTelegramMessage(
@@ -532,6 +561,42 @@ async function completeVerification(supabase: any, token: string, verificationTy
       .single()
 
     if (attendance) {
+      // Calculate work hours for freelancer earnings
+      const employee = (pending as any).employees
+      const isFreelancer = employee?.is_freelancer === true
+      let freelancerNote = ''
+      
+      if (isFreelancer && employee?.hourly_rate && attendance.check_in_time) {
+        const checkInDate = new Date(attendance.check_in_time)
+        const checkOutDate = new Date(nowUtc)
+        const totalMinutesWorked = Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 60000)
+        const hoursWorked = totalMinutesWorked / 60
+        const earnings = hoursWorked * employee.hourly_rate
+        const roundedEarnings = Math.round(earnings * 100) / 100
+        const hours = Math.floor(totalMinutesWorked / 60)
+        const mins = totalMinutesWorked % 60
+        const monthKey = attendance.date.substring(0, 7) + '-01'
+        
+        // Insert salary adjustment for freelancer
+        await supabase.from('salary_adjustments').insert({
+          employee_id: pending.employee_id,
+          company_id: pending.company_id,
+          month: monthKey,
+          bonus: roundedEarnings,
+          deduction: 0,
+          adjustment_days: null,
+          description: `أجر عمل يوم ${attendance.date} - ${hours} ساعة و ${mins} دقيقة × ${employee.hourly_rate} ${employee.currency || 'EGP'}/ساعة`,
+          added_by_name: 'النظام التلقائي',
+          attendance_log_id: attendance.id,
+          is_auto_generated: true
+        })
+        
+        // Don't show hourly rate in message
+        freelancerNote = `\n\n💰 <b>تم حساب مستحقاتك</b>\n` +
+          `🕐 ساعات العمل: ${hours} ساعة و ${mins} دقيقة\n` +
+          `✅ تم إضافة المبلغ لحسابك تلقائياً`
+      }
+      
       await supabase
         .from('attendance_logs')
         .update({
@@ -540,13 +605,6 @@ async function completeVerification(supabase: any, token: string, verificationTy
         })
         .eq('id', attendance.id)
 
-      // Send confirmation via Telegram
-      const { data: bot } = await supabase
-        .from('telegram_bots')
-        .select('bot_token')
-        .eq('assigned_company_id', pending.company_id)
-        .single()
-
       if (bot?.bot_token) {
         await sendTelegramMessage(
           bot.bot_token,
@@ -554,7 +612,8 @@ async function completeVerification(supabase: any, token: string, verificationTy
           `✅ <b>تم تسجيل انصرافك بنجاح</b>\n\n` +
           `📅 التاريخ: ${today}\n` +
           `⏰ الوقت: ${checkTime}\n` +
-          `🔐 طريقة التحقق: ${verificationType === 'biometric' ? 'البصمة' : 'رمز OTP'}`
+          `🔐 طريقة التحقق: ${verificationType === 'biometric' ? 'البصمة' : 'رمز OTP'}` +
+          freelancerNote
         )
       }
     }
