@@ -1,9 +1,9 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -11,6 +11,20 @@ import { SuperAdminProvider } from "@/contexts/SuperAdminContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SuperAdminProtectedRoute from "@/components/super-admin/SuperAdminProtectedRoute";
 import { Loader2 } from "lucide-react";
+
+// Component to cleanup body locks on route change (safety net for dialogs)
+const RouteCleanup = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
+  
+  useEffect(() => {
+    // Clean up any lingering body locks when navigating
+    document.body.style.pointerEvents = '';
+    document.body.style.overflow = '';
+    document.body.removeAttribute('data-scroll-locked');
+  }, [location.pathname]);
+  
+  return <>{children}</>;
+};
 
 // Lazy loaded pages for better performance
 const Landing = lazy(() => import("./pages/Landing"));
@@ -68,9 +82,10 @@ const App = () => (
               <Toaster />
               <Sonner />
               <BrowserRouter>
-                <Suspense fallback={<PageLoader />}>
-                  <Routes>
-                    <Route path="/" element={<Landing />} />
+                <RouteCleanup>
+                  <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                      <Route path="/" element={<Landing />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
@@ -149,6 +164,7 @@ const App = () => (
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
+                </RouteCleanup>
               </BrowserRouter>
             </TooltipProvider>
           </SuperAdminProvider>
