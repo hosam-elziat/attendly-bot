@@ -636,7 +636,15 @@ serve(async (req) => {
             (attendance.status === 'checked_in' || attendance.status === 'on_break')
           
           // Check if today's attendance exists (any status except absent means already worked today)
+          // Freelancers can check in multiple times per day - only block if they have an OPEN session
+          const isFreelancerEmployee = empDetails?.is_freelancer === true
           const hasTodayAttendance = todayAttendance && todayAttendance.status !== 'absent'
+          
+          // For freelancers: only block if they have an open (non-checked_out) session today
+          // For regular employees: block any attendance today (except absent)
+          const shouldBlockCheckIn = isFreelancerEmployee 
+            ? (todayAttendance && todayAttendance.status !== 'absent' && todayAttendance.status !== 'checked_out')
+            : hasTodayAttendance
           
           if (hasOpenYesterdayAttendance) {
             // Night shift still active - must check out first
@@ -647,8 +655,8 @@ serve(async (req) => {
               '🔴 يجب تسجيل الانصراف أولاً قبل تسجيل حضور جديد.',
               getEmployeeKeyboard(managerPermissions)
             )
-          } else if (hasTodayAttendance) {
-            // Today's attendance exists (checked_in, on_break, or checked_out)
+          } else if (shouldBlockCheckIn) {
+            // Today's attendance exists and still open (or regular employee with any attendance)
             const checkInTimeDisplay = todayAttendance.check_in_time 
               ? new Date(todayAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
               : '-'
@@ -680,9 +688,27 @@ serve(async (req) => {
             const companyBiometricEnabled = (company as any)?.biometric_verification_enabled
             const biometricRequired = employeeBiometricEnabled === true || (employeeBiometricEnabled === null && companyBiometricEnabled === true)
             
+            // Check if biometric was recently verified (within last 10 minutes)
+            let biometricAlreadyVerified = false
             if (biometricRequired) {
+              const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+              const { data: recentBiometric } = await supabase
+                .from('biometric_pending_verifications')
+                .select('id')
+                .eq('employee_id', employee.id)
+                .eq('request_type', 'check_in')
+                .not('biometric_verified_at', 'is', null)
+                .gte('biometric_verified_at', tenMinutesAgo)
+                .limit(1)
+                .maybeSingle()
+              
+              biometricAlreadyVerified = !!recentBiometric
+            }
+            
+            if (biometricRequired && !biometricAlreadyVerified) {
               // Biometric verification required - initiate verification flow
-              await initiateBiometricVerification(supabase, botToken, chatId, employee, companyId, 'check_in', telegramChatId)
+              // Pass the actual verification level so biometric is done FIRST, then continue with level 1/2/3
+              await initiateBiometricVerification(supabase, botToken, chatId, employee, companyId, 'check_in', telegramChatId, effectiveVerificationLevel)
             } else if (effectiveVerificationLevel === 1) {
               // Level 1: Direct check-in without verification
               await processDirectCheckIn(supabase, botToken, chatId, employee, companyId, today, nowUtc, checkInTime, companyDefaults, companyPolicies, empDetails, managerPermissions)
@@ -723,9 +749,27 @@ serve(async (req) => {
             const companyBiometricEnabled = (company as any)?.biometric_verification_enabled
             const biometricRequiredForCheckout = employeeBiometricEnabled === true || (employeeBiometricEnabled === null && companyBiometricEnabled === true)
             
+            // Check if biometric was recently verified (within last 10 minutes)
+            let biometricAlreadyVerifiedCheckout = false
             if (biometricRequiredForCheckout) {
+              const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+              const { data: recentBiometric } = await supabase
+                .from('biometric_pending_verifications')
+                .select('id')
+                .eq('employee_id', employee.id)
+                .eq('request_type', 'check_out')
+                .not('biometric_verified_at', 'is', null)
+                .gte('biometric_verified_at', tenMinutesAgo)
+                .limit(1)
+                .maybeSingle()
+              
+              biometricAlreadyVerifiedCheckout = !!recentBiometric
+            }
+            
+            if (biometricRequiredForCheckout && !biometricAlreadyVerifiedCheckout) {
               // Biometric verification required - initiate verification flow
-              await initiateBiometricVerification(supabase, botToken, chatId, employee, companyId, 'check_out', telegramChatId)
+              // Pass the actual verification level so biometric is done FIRST, then continue with level 1/2/3
+              await initiateBiometricVerification(supabase, botToken, chatId, employee, companyId, 'check_out', telegramChatId, effectiveVerificationLevel)
             } else {
               const localTime = getLocalTime(companyTimezone)
               const checkOutTime = localTime.time
@@ -3760,6 +3804,15 @@ async function createPendingAttendance(
   
   // Also check if already checked in today in attendance_logs
   if (requestType === 'check_in') {
+    // Get employee details to check if freelancer
+    const { data: empDetails } = await supabase
+      .from('employees')
+      .select('is_freelancer')
+      .eq('id', employee.id)
+      .single()
+    
+    const isFreelancer = empDetails?.is_freelancer === true
+    
     const { data: existingAttendance } = await supabase
       .from('attendance_logs')
       .select('id, check_in_time, status')
@@ -3768,7 +3821,13 @@ async function createPendingAttendance(
       .neq('status', 'absent')
       .maybeSingle()
     
-    if (existingAttendance && existingAttendance.status !== 'checked_out') {
+    // For freelancers: only block if they have an OPEN session (not checked_out)
+    // For regular employees: block if any attendance exists (except absent)
+    const shouldBlock = isFreelancer 
+      ? (existingAttendance && existingAttendance.status !== 'checked_out')
+      : (existingAttendance && existingAttendance.status !== 'checked_out')
+    
+    if (shouldBlock) {
       const checkInTimeDisplay = existingAttendance.check_in_time 
         ? new Date(existingAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })
         : '-'
@@ -4325,9 +4384,10 @@ async function processCheckout(
       if (freelancerBonusError) {
         console.error('Failed to create freelancer earnings adjustment:', freelancerBonusError)
       } else {
-        freelancerEarningsMessage = `\n\n💰 <b>مستحقاتك اليوم:</b> ${roundedEarnings.toFixed(2)} ${empDetails.currency || 'EGP'}\n` +
-          `📊 سعر الساعة: ${empDetails.hourly_rate} ${empDetails.currency || 'EGP'}\n` +
-          `✅ تم إضافة المبلغ لحسابك`
+        // Don't show hourly rate in the message - just confirm earnings added
+        freelancerEarningsMessage = `\n\n💰 <b>تم حساب مستحقاتك</b>\n` +
+          `🕐 ساعات العمل: ${hours} ساعة و ${mins} دقيقة\n` +
+          `✅ تم إضافة المبلغ لحسابك تلقائياً`
       }
     }
   }

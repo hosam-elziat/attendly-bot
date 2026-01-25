@@ -131,10 +131,18 @@ serve(async (req) => {
           : days === 1 ? 'يوم واحد'
           : `${days} أيام`
         
-        message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
-          `📋 ${added_by_name} سجّل لك ${typeText} ${daysText}\n` +
-          (description ? `📝 السبب: ${description}\n` : '') +
-          `💰 القيمة: ${amount.toFixed(2)} ج.م`
+        // For deductions with days, show only the duration, not the amount
+        if (type === 'deduction') {
+          message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
+            `📋 ${added_by_name} سجّل لك ${typeText} ${daysText}\n` +
+            (description ? `📝 السبب: ${description}` : '')
+        } else {
+          // For bonuses, still show the amount
+          message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
+            `📋 ${added_by_name} سجّل لك ${typeText} ${daysText}\n` +
+            (description ? `📝 السبب: ${description}\n` : '') +
+            `💰 القيمة: ${amount.toFixed(2)} ج.م`
+        }
       } else {
         message = `${emoji} <b>إشعار ${typeText}</b>\n\n` +
           `📋 ${added_by_name} سجّل لك ${typeText}\n` +
