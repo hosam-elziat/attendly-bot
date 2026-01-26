@@ -559,22 +559,69 @@ serve(async (req) => {
       yesterdayDate.setDate(yesterdayDate.getDate() - 1)
       const yesterday = yesterdayDate.toISOString().split('T')[0]
       
-      // Get today's attendance first
-      const { data: todayAttendance } = await supabase
-        .from('attendance_logs')
-        .select('*')
-        .eq('employee_id', employee.id)
-        .eq('company_id', companyId)
-        .eq('date', today)
+      // Check if employee is a freelancer first (needed for query logic)
+      const { data: empFreelancerCheck } = await supabase
+        .from('employees')
+        .select('is_freelancer')
+        .eq('id', employee.id)
         .single()
+      const isFreelancer = empFreelancerCheck?.is_freelancer === true
       
-      // If no today attendance or today attendance is already checked out,
-      // check for an open attendance from yesterday (for night shifts)
-      let attendance = todayAttendance
+      // Get today's attendance - for freelancers get ALL records, for regular employees get first one
+      let todayAttendance: any = null
+      let allTodayAttendance: any[] = []
+      
+      if (isFreelancer) {
+        // Freelancer: get all records for today (can have multiple check-ins)
+        const { data: freelancerAttendance } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .eq('employee_id', employee.id)
+          .eq('company_id', companyId)
+          .eq('date', today)
+          .order('check_in_time', { ascending: false })
+        
+        allTodayAttendance = freelancerAttendance || []
+        // Get the latest record (most recent check-in)
+        todayAttendance = allTodayAttendance.length > 0 ? allTodayAttendance[0] : null
+      } else {
+        // Regular employee: get single record
+        const { data: regularAttendance } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .eq('employee_id', employee.id)
+          .eq('company_id', companyId)
+          .eq('date', today)
+          .single()
+        
+        todayAttendance = regularAttendance
+      }
+      
+      // Check if employee is marked as absent today (cannot check in)
+      const isMarkedAbsentToday = todayAttendance?.status === 'absent'
+      
+      // Determine current open attendance for check-out operations
+      // For check-out: find the most recent OPEN session (checked_in or on_break)
+      let attendance: any = null
       let attendanceDate = today
       
-      if (!todayAttendance || todayAttendance.status === 'checked_out') {
-        // Look for open attendance from yesterday
+      if (isFreelancer) {
+        // Freelancer: find latest open session from today first
+        const openTodaySession = allTodayAttendance.find((a: any) => a.status === 'checked_in' || a.status === 'on_break')
+        if (openTodaySession) {
+          attendance = openTodaySession
+          attendanceDate = today
+        }
+      } else {
+        // Regular employee: use today's attendance if open
+        if (todayAttendance && (todayAttendance.status === 'checked_in' || todayAttendance.status === 'on_break')) {
+          attendance = todayAttendance
+          attendanceDate = today
+        }
+      }
+      
+      // If no open session found today, check for night shift from yesterday
+      if (!attendance) {
         const { data: yesterdayAttendance } = await supabase
           .from('attendance_logs')
           .select('*')
@@ -582,7 +629,9 @@ serve(async (req) => {
           .eq('company_id', companyId)
           .eq('date', yesterday)
           .in('status', ['checked_in', 'on_break'])
-          .single()
+          .order('check_in_time', { ascending: false })
+          .limit(1)
+          .maybeSingle()
         
         if (yesterdayAttendance) {
           attendance = yesterdayAttendance
@@ -631,20 +680,35 @@ serve(async (req) => {
 
       switch (callbackData) {
         case 'check_in':
+          // FIRST: Check if employee is marked as absent today - CANNOT check in
+          if (isMarkedAbsentToday) {
+            await sendAndLogMessage(
+              '⚠️ تم تسجيلك غائباً اليوم!\n\n' +
+              'لا يمكنك تسجيل الحضور بعد تسجيل الغياب.\n' +
+              'يرجى التواصل مع الإدارة إذا كان هناك خطأ.',
+              getEmployeeKeyboard(managerPermissions)
+            )
+            break
+          }
+          
           // Check for open attendance from yesterday (night shift still active)
           const hasOpenYesterdayAttendance = attendanceDate === yesterday && attendance && 
             (attendance.status === 'checked_in' || attendance.status === 'on_break')
           
-          // Check if today's attendance exists (any status except absent means already worked today)
-          // Freelancers can check in multiple times per day - only block if they have an OPEN session
-          const isFreelancerEmployee = empDetails?.is_freelancer === true
-          const hasTodayAttendance = todayAttendance && todayAttendance.status !== 'absent'
-          
           // For freelancers: only block if they have an open (non-checked_out) session today
           // For regular employees: block any attendance today (except absent)
-          const shouldBlockCheckIn = isFreelancerEmployee 
-            ? (todayAttendance && todayAttendance.status !== 'absent' && todayAttendance.status !== 'checked_out')
-            : hasTodayAttendance
+          let shouldBlockCheckIn = false
+          
+          if (isFreelancer) {
+            // Freelancer: check if there's any open (not checked_out) session today
+            const hasOpenSession = allTodayAttendance.some((a: any) => 
+              a.status === 'checked_in' || a.status === 'on_break'
+            )
+            shouldBlockCheckIn = hasOpenSession
+          } else {
+            // Regular employee: block if any non-absent attendance exists today
+            shouldBlockCheckIn = todayAttendance && todayAttendance.status !== 'absent'
+          }
           
           if (hasOpenYesterdayAttendance) {
             // Night shift still active - must check out first
@@ -657,25 +721,38 @@ serve(async (req) => {
             )
           } else if (shouldBlockCheckIn) {
             // Today's attendance exists and still open (or regular employee with any attendance)
-            const checkInTimeDisplay = todayAttendance.check_in_time 
-              ? new Date(todayAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
+            // For freelancer: show the open session, for regular: show today's record
+            const displayAttendance = isFreelancer 
+              ? allTodayAttendance.find((a: any) => a.status === 'checked_in' || a.status === 'on_break') || todayAttendance
+              : todayAttendance
+            
+            const checkInTimeDisplay = displayAttendance?.check_in_time 
+              ? new Date(displayAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
               : '-'
-            const checkOutTimeDisplay = todayAttendance.check_out_time 
-              ? new Date(todayAttendance.check_out_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
+            const checkOutTimeDisplay = displayAttendance?.check_out_time 
+              ? new Date(displayAttendance.check_out_time).toLocaleTimeString('ar-EG', { timeZone: companyTimezone, hour: '2-digit', minute: '2-digit' })
               : null
-            const statusText = todayAttendance.status === 'checked_in' ? 'حاضر' 
-              : todayAttendance.status === 'on_break' ? 'في استراحة' 
-              : todayAttendance.status === 'checked_out' ? 'انصرف' 
-              : todayAttendance.status
+            const statusText = displayAttendance?.status === 'checked_in' ? 'حاضر' 
+              : displayAttendance?.status === 'on_break' ? 'في استراحة' 
+              : displayAttendance?.status === 'checked_out' ? 'انصرف' 
+              : displayAttendance?.status
             
-            let message = `⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n` +
-              `📅 التاريخ: ${today}\n` +
-              `⏰ وقت الحضور: ${checkInTimeDisplay}\n`
+            let message = isFreelancer 
+              ? `⚠️ لديك جلسة عمل مفتوحة!\n\n` +
+                `📅 التاريخ: ${today}\n` +
+                `⏰ وقت الحضور: ${checkInTimeDisplay}\n` +
+                `📊 الحالة: ${statusText}\n\n` +
+                `🔴 يجب تسجيل الانصراف أولاً قبل بدء جلسة جديدة.`
+              : `⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n` +
+                `📅 التاريخ: ${today}\n` +
+                `⏰ وقت الحضور: ${checkInTimeDisplay}\n`
             
-            if (checkOutTimeDisplay) {
+            if (!isFreelancer && checkOutTimeDisplay) {
               message += `⏰ وقت الانصراف: ${checkOutTimeDisplay}\n`
             }
-            message += `📊 الحالة: ${statusText}`
+            if (!isFreelancer) {
+              message += `📊 الحالة: ${statusText}`
+            }
             
             await sendAndLogMessage(message, getEmployeeKeyboard(managerPermissions))
           } else {
@@ -3813,30 +3890,73 @@ async function createPendingAttendance(
     
     const isFreelancer = empDetails?.is_freelancer === true
     
-    const { data: existingAttendance } = await supabase
+    // First check if marked as absent
+    const { data: absentRecord } = await supabase
+      .from('attendance_logs')
+      .select('id')
+      .eq('employee_id', employee.id)
+      .eq('date', todayDate)
+      .eq('status', 'absent')
+      .maybeSingle()
+    
+    if (absentRecord) {
+      await sendMessage(botToken, chatId, 
+        `⚠️ تم تسجيلك غائباً اليوم!\n\n` +
+        `لا يمكنك تسجيل الحضور بعد تسجيل الغياب.\n` +
+        `يرجى التواصل مع الإدارة إذا كان هناك خطأ.`
+      )
+      return
+    }
+    
+    // Get all attendance records for today (for freelancers who can have multiple)
+    const { data: existingAttendanceList } = await supabase
       .from('attendance_logs')
       .select('id, check_in_time, status')
       .eq('employee_id', employee.id)
       .eq('date', todayDate)
       .neq('status', 'absent')
-      .maybeSingle()
+      .order('check_in_time', { ascending: false })
     
-    // For freelancers: only block if they have an OPEN session (not checked_out)
+    const existingAttendance = existingAttendanceList && existingAttendanceList.length > 0 
+      ? existingAttendanceList[0] 
+      : null
+    
+    // For freelancers: only block if they have an OPEN session (checked_in or on_break)
     // For regular employees: block if any attendance exists (except absent)
-    const shouldBlock = isFreelancer 
-      ? (existingAttendance && existingAttendance.status !== 'checked_out')
-      : (existingAttendance && existingAttendance.status !== 'checked_out')
+    let shouldBlock = false
+    
+    if (isFreelancer) {
+      // Freelancer: check for any open session
+      const hasOpenSession = existingAttendanceList?.some((a: any) => 
+        a.status === 'checked_in' || a.status === 'on_break'
+      )
+      shouldBlock = hasOpenSession || false
+    } else {
+      // Regular employee: any attendance today (except absent) means already worked
+      shouldBlock = existingAttendance !== null
+    }
     
     if (shouldBlock) {
-      const checkInTimeDisplay = existingAttendance.check_in_time 
-        ? new Date(existingAttendance.check_in_time).toLocaleTimeString('ar-EG', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })
+      const displayRecord = isFreelancer 
+        ? existingAttendanceList?.find((a: any) => a.status === 'checked_in' || a.status === 'on_break')
+        : existingAttendance
+      
+      const checkInTimeDisplay = displayRecord?.check_in_time 
+        ? new Date(displayRecord.check_in_time).toLocaleTimeString('ar-EG', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })
         : '-'
-      await sendMessage(botToken, chatId, 
-        `⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n` +
-        `📅 التاريخ: ${todayDate}\n` +
-        `⏰ وقت الحضور: ${checkInTimeDisplay}\n` +
-        `📊 الحالة: ${existingAttendance.status === 'checked_in' ? 'حاضر' : existingAttendance.status === 'on_break' ? 'في استراحة' : existingAttendance.status}`
-      )
+      
+      const message = isFreelancer 
+        ? `⚠️ لديك جلسة عمل مفتوحة!\n\n` +
+          `📅 التاريخ: ${todayDate}\n` +
+          `⏰ وقت الحضور: ${checkInTimeDisplay}\n` +
+          `📊 الحالة: ${displayRecord?.status === 'checked_in' ? 'حاضر' : displayRecord?.status === 'on_break' ? 'في استراحة' : displayRecord?.status}\n\n` +
+          `🔴 يجب تسجيل الانصراف أولاً قبل بدء جلسة جديدة.`
+        : `⚠️ لقد سجلت حضورك اليوم بالفعل!\n\n` +
+          `📅 التاريخ: ${todayDate}\n` +
+          `⏰ وقت الحضور: ${checkInTimeDisplay}\n` +
+          `📊 الحالة: ${displayRecord?.status === 'checked_in' ? 'حاضر' : displayRecord?.status === 'on_break' ? 'في استراحة' : displayRecord?.status === 'checked_out' ? 'انصرف' : displayRecord?.status}`
+      
+      await sendMessage(botToken, chatId, message)
       return
     }
   }
