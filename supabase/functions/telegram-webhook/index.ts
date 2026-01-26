@@ -1968,7 +1968,7 @@ serve(async (req) => {
           
           const { data: locEmpDetails } = await supabase
             .from('employees')
-            .select('monthly_late_balance_minutes, base_salary, currency')
+            .select('monthly_late_balance_minutes, base_salary, currency, is_freelancer, hourly_rate')
             .eq('id', employee.id)
             .single()
           
