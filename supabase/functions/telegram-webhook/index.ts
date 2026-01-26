@@ -4150,49 +4150,53 @@ async function handleAttendanceApproval(
         return
       }
 
-      // Check for lateness and apply deductions
-      const checkInDate = new Date(attendanceTime)
-      const workStartTime = employee.work_start_time || '09:00:00'
-      const [startH, startM] = workStartTime.split(':').map(Number)
+      // Check for lateness and apply deductions - ONLY for regular employees, NOT freelancers
+      const isFreelancerEmployee = employee.is_freelancer === true
       
-      const expectedStart = new Date(checkInDate)
-      expectedStart.setHours(startH, startM, 0, 0)
-
-      if (checkInDate > expectedStart) {
-        const lateMinutes = Math.floor((checkInDate.getTime() - expectedStart.getTime()) / 60000)
+      if (!isFreelancerEmployee) {
+        const checkInDate = new Date(attendanceTime)
+        const workStartTime = employee.work_start_time || '09:00:00'
+        const [startH, startM] = workStartTime.split(':').map(Number)
         
-        let deductionDays = 0
-        let deductionText = ''
-        
-        if (lateMinutes > 30 && companyPolicies?.late_over_30_deduction) {
-          deductionDays = companyPolicies.late_over_30_deduction
-          deductionText = `تأخر أكثر من 30 دقيقة`
-        } else if (lateMinutes > 15 && companyPolicies?.late_15_to_30_deduction) {
-          deductionDays = companyPolicies.late_15_to_30_deduction
-          deductionText = `تأخر من 15 إلى 30 دقيقة`
-        } else if (lateMinutes > 0 && companyPolicies?.late_under_15_deduction) {
-          deductionDays = companyPolicies.late_under_15_deduction
-          deductionText = `تأخر أقل من 15 دقيقة`
-        }
+        const expectedStart = new Date(checkInDate)
+        expectedStart.setHours(startH, startM, 0, 0)
 
-        if (deductionDays > 0) {
-          const baseSalary = employee.base_salary || 0
-          const dailyRate = baseSalary / 30
-          const deductionAmount = dailyRate * deductionDays
-          const monthKey = today.substring(0, 7) + '-01'
+        if (checkInDate > expectedStart) {
+          const lateMinutes = Math.floor((checkInDate.getTime() - expectedStart.getTime()) / 60000)
+          
+          let deductionDays = 0
+          let deductionText = ''
+          
+          if (lateMinutes > 30 && companyPolicies?.late_over_30_deduction) {
+            deductionDays = companyPolicies.late_over_30_deduction
+            deductionText = `تأخر أكثر من 30 دقيقة`
+          } else if (lateMinutes > 15 && companyPolicies?.late_15_to_30_deduction) {
+            deductionDays = companyPolicies.late_15_to_30_deduction
+            deductionText = `تأخر من 15 إلى 30 دقيقة`
+          } else if (lateMinutes > 0 && companyPolicies?.late_under_15_deduction) {
+            deductionDays = companyPolicies.late_under_15_deduction
+            deductionText = `تأخر أقل من 15 دقيقة`
+          }
 
-          await supabase.from('salary_adjustments').insert({
-            employee_id: employee.id,
-            company_id: companyId,
-            month: monthKey,
-            deduction: deductionAmount,
-            bonus: 0,
-            adjustment_days: deductionDays,
-            description: `خصم تأخير - ${deductionText} (${lateMinutes} دقيقة) - اعتماد: ${managerName}`,
-            added_by_name: 'النظام التلقائي',
-            attendance_log_id: newAttendance.id,
-            is_auto_generated: true
-          })
+          if (deductionDays > 0) {
+            const baseSalary = employee.base_salary || 0
+            const dailyRate = baseSalary / 30
+            const deductionAmount = dailyRate * deductionDays
+            const monthKey = today.substring(0, 7) + '-01'
+
+            await supabase.from('salary_adjustments').insert({
+              employee_id: employee.id,
+              company_id: companyId,
+              month: monthKey,
+              deduction: deductionAmount,
+              bonus: 0,
+              adjustment_days: deductionDays,
+              description: `خصم تأخير - ${deductionText} (${lateMinutes} دقيقة) - اعتماد: ${managerName}`,
+              added_by_name: 'النظام التلقائي',
+              attendance_log_id: newAttendance.id,
+              is_auto_generated: true
+            })
+          }
         }
       }
     } else if (pendingRequest.request_type === 'check_out') {
