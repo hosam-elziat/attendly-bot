@@ -4433,8 +4433,9 @@ async function processCheckout(
     }
   }
   
-  // Apply early departure deduction if confirmed
-  if (earlyDepartureData) {
+  // Apply early departure deduction if confirmed - ONLY for regular employees, NOT freelancers
+  // Double-check freelancer status here to ensure no deductions are applied
+  if (earlyDepartureData && !isFreelancer) {
     const monthKey = attendanceDate.substring(0, 7) + '-01'
     
     const { error: adjustmentError } = await supabase.from('salary_adjustments').insert({
