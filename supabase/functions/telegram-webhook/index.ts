@@ -383,6 +383,14 @@ interface SessionData {
   deduction_days?: number;
   deduction_amount?: number;
   attendance_date?: string;
+  // Rewards & Marketplace session data
+  marketplace_item_id?: string;
+  marketplace_item_name?: string;
+  marketplace_item_price?: number;
+  secret_message_content?: string;
+  secret_message_recipient_type?: 'employee' | 'manager' | 'team';
+  secret_message_recipient_id?: string;
+  secret_message_anonymous?: boolean;
 }
 
 serve(async (req) => {
@@ -1535,6 +1543,373 @@ serve(async (req) => {
 
           await sendAndLogMessage(statusMsg, getEmployeeKeyboard(managerPermissions))
           break
+        
+        // ========== REWARDS SYSTEM HANDLERS ==========
+        case 'my_rewards': {
+          // Get employee wallet and level
+          const { data: wallet } = await supabase
+            .from('employee_wallets')
+            .select(`
+              total_points,
+              earned_points,
+              spent_points,
+              current_level:reward_levels(name, name_ar, icon, color)
+            `)
+            .eq('employee_id', employee.id)
+            .maybeSingle()
+          
+          // Get employee rank
+          const { data: rankData } = await supabase
+            .rpc('get_employee_rank', {
+              p_employee_id: employee.id,
+              p_company_id: companyId,
+              p_period_type: 'monthly'
+            })
+          
+          const totalPoints = wallet?.total_points || 0
+          const currentLevel = wallet?.current_level as any
+          const levelName = currentLevel?.name_ar || currentLevel?.name || 'مبتدئ'
+          const levelIcon = currentLevel?.icon || '🌟'
+          const rank = rankData || 0
+          
+          let rewardsMsg = `⭐ <b>نقاطي</b>\n\n`
+          rewardsMsg += `💰 رصيدك الحالي: <b>${totalPoints.toLocaleString()}</b> نقطة\n`
+          rewardsMsg += `${levelIcon} المستوى: <b>${levelName}</b>\n`
+          if (rank > 0) {
+            rewardsMsg += `🏆 ترتيبك: <b>#${rank}</b>\n`
+          }
+          
+          await sendAndLogMessage(rewardsMsg, {
+            inline_keyboard: [
+              [{ text: '🛒 استبدل نقاطك', callback_data: 'rewards_marketplace' }],
+              [{ text: '🧾 السجل', callback_data: 'rewards_history' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
+          break
+        }
+        
+        case 'rewards_marketplace': {
+          // Get employee wallet
+          const { data: wallet } = await supabase
+            .from('employee_wallets')
+            .select('total_points')
+            .eq('employee_id', employee.id)
+            .maybeSingle()
+          
+          const totalPoints = wallet?.total_points || 0
+          
+          // Get active marketplace items (top 5)
+          const { data: items } = await supabase
+            .from('marketplace_items')
+            .select('id, name, name_ar, points_price, item_type')
+            .eq('company_id', companyId)
+            .eq('is_active', true)
+            .order('points_price', { ascending: true })
+            .limit(5)
+          
+          let marketMsg = `🛒 <b>المتجر</b>\n\n`
+          marketMsg += `💰 رصيدك: <b>${totalPoints.toLocaleString()}</b> نقطة\n\n`
+          
+          if (!items || items.length === 0) {
+            marketMsg += `📭 لا توجد منتجات متاحة حالياً`
+            await sendAndLogMessage(marketMsg, {
+              inline_keyboard: [
+                [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            })
+            break
+          }
+          
+          const itemButtons = items.map(item => {
+            const emoji = getItemEmoji(item.item_type)
+            const name = item.name_ar || item.name
+            const canAfford = totalPoints >= item.points_price
+            const label = canAfford 
+              ? `${emoji} ${name} — ${item.points_price}⭐`
+              : `🔒 ${name} — ${item.points_price}⭐`
+            return [{ 
+              text: label, 
+              callback_data: canAfford ? `buy_item_${item.id}` : `item_locked_${item.id}` 
+            }]
+          })
+          
+          itemButtons.push([{ text: '🔽 باقي المنتجات', callback_data: 'rewards_marketplace_more' }])
+          itemButtons.push([{ text: '⭐ نقاطي', callback_data: 'my_rewards' }])
+          itemButtons.push([{ text: '🔙 رجوع', callback_data: 'back_to_main' }])
+          
+          await sendAndLogMessage(marketMsg, { inline_keyboard: itemButtons })
+          break
+        }
+        
+        case 'rewards_marketplace_more': {
+          // Get all marketplace items
+          const { data: wallet } = await supabase
+            .from('employee_wallets')
+            .select('total_points')
+            .eq('employee_id', employee.id)
+            .maybeSingle()
+          
+          const totalPoints = wallet?.total_points || 0
+          
+          const { data: items } = await supabase
+            .from('marketplace_items')
+            .select('id, name, name_ar, points_price, item_type')
+            .eq('company_id', companyId)
+            .eq('is_active', true)
+            .order('points_price', { ascending: true })
+          
+          let marketMsg = `🛒 <b>جميع المنتجات</b>\n\n`
+          marketMsg += `💰 رصيدك: <b>${totalPoints.toLocaleString()}</b> نقطة\n\n`
+          
+          const itemButtons = (items || []).map(item => {
+            const emoji = getItemEmoji(item.item_type)
+            const name = item.name_ar || item.name
+            const canAfford = totalPoints >= item.points_price
+            const label = canAfford 
+              ? `${emoji} ${name} — ${item.points_price}⭐`
+              : `🔒 ${name} — ${item.points_price}⭐`
+            return [{ 
+              text: label, 
+              callback_data: canAfford ? `buy_item_${item.id}` : `item_locked_${item.id}` 
+            }]
+          })
+          
+          itemButtons.push([{ text: '⭐ نقاطي', callback_data: 'my_rewards' }])
+          itemButtons.push([{ text: '🔙 رجوع', callback_data: 'back_to_main' }])
+          
+          await sendAndLogMessage(marketMsg, { inline_keyboard: itemButtons })
+          break
+        }
+        
+        case 'rewards_history': {
+          // Get last 5 points history
+          const { data: history } = await supabase
+            .from('points_history')
+            .select('points, event_type, description, created_at')
+            .eq('employee_id', employee.id)
+            .order('created_at', { ascending: false })
+            .limit(5)
+          
+          let historyMsg = `🧾 <b>سجل النقاط</b>\n\n`
+          
+          if (!history || history.length === 0) {
+            historyMsg += `📭 لا توجد عمليات سابقة`
+          } else {
+            for (const h of history) {
+              const sign = h.points > 0 ? '+' : ''
+              const date = new Date(h.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
+              historyMsg += `${sign}${h.points}⭐ — ${h.description || h.event_type} (${date})\n`
+            }
+          }
+          
+          await sendAndLogMessage(historyMsg, {
+            inline_keyboard: [
+              [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
+          break
+        }
+        
+        case 'confirm_buy': {
+          const session = await getSession()
+          if (!session?.data.marketplace_item_id) {
+            await sendAndLogMessage('❌ انتهت الجلسة', getEmployeeKeyboard(managerPermissions))
+            break
+          }
+          
+          const itemId = session.data.marketplace_item_id
+          const itemPrice = session.data.marketplace_item_price || 0
+          const itemName = session.data.marketplace_item_name || ''
+          
+          // Get item details for approval check
+          const { data: purchaseItem } = await supabase
+            .from('marketplace_items')
+            .select('approval_required')
+            .eq('id', itemId)
+            .single()
+          
+          // Deduct points
+          const { error: deductError } = await supabase.rpc('award_points', {
+            p_employee_id: employee.id,
+            p_company_id: companyId,
+            p_points: -itemPrice,
+            p_event_type: 'marketplace_purchase',
+            p_source: 'marketplace',
+            p_description: `شراء: ${itemName}`
+          })
+          
+          if (deductError) {
+            console.error('Error deducting points:', deductError)
+            await sendAndLogMessage('❌ حدث خطأ أثناء الشراء', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
+          
+          // Create order
+          const orderStatus = purchaseItem?.approval_required ? 'pending' : 'approved'
+          await supabase
+            .from('marketplace_orders')
+            .insert({
+              employee_id: employee.id,
+              company_id: companyId,
+              item_id: itemId,
+              points_spent: itemPrice,
+              status: orderStatus
+            })
+          
+          await deleteSession()
+          
+          const statusMsg2 = orderStatus === 'approved' 
+            ? '✅ تمت الموافقة تلقائيًا' 
+            : '⏳ في انتظار موافقة الإدارة'
+          
+          await sendAndLogMessage(
+            `🎉 <b>تم تسجيل الطلب</b>\n\n` +
+            `${statusMsg2}\n` +
+            `📦 المنتج: ${itemName}\n` +
+            `💰 تم خصم: ${itemPrice}⭐`,
+            {
+              inline_keyboard: [
+                [{ text: '🛒 استبدل تاني', callback_data: 'rewards_marketplace' }],
+                [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'cancel_purchase': {
+          await deleteSession()
+          await sendAndLogMessage('❌ تم إلغاء الشراء', {
+            inline_keyboard: [
+              [{ text: '🛒 المتجر', callback_data: 'rewards_marketplace' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
+          break
+        }
+        
+        case 'secret_recipient_employee': {
+          const session = await getSession()
+          if (!session?.data.secret_message_content) break
+          
+          const { data: employees } = await supabase
+            .from('employees')
+            .select('id, full_name')
+            .eq('company_id', companyId)
+            .eq('is_active', true)
+            .neq('id', employee.id)
+            .limit(10)
+          
+          const empButtons = (employees || []).map(e => ([{
+            text: e.full_name,
+            callback_data: `secret_to_emp_${e.id}`
+          }]))
+          
+          empButtons.push([{ text: '🔙 رجوع', callback_data: 'cancel_purchase' }])
+          
+          await sendAndLogMessage('👤 اختر الموظف:', { inline_keyboard: empButtons })
+          break
+        }
+        
+        case 'secret_recipient_manager': {
+          const session = await getSession()
+          if (!session?.data.secret_message_content) break
+          
+          await setSession('secret_anonymous_choice', {
+            ...session.data,
+            secret_message_recipient_type: 'manager'
+          })
+          
+          await sendAndLogMessage(
+            '📤 هل تريد إرسال الرسالة بشكل مجهول؟',
+            {
+              inline_keyboard: [
+                [{ text: '🎭 مجهول', callback_data: 'secret_anonymous_yes' }],
+                [{ text: '👤 باسمي', callback_data: 'secret_anonymous_no' }],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_purchase' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'secret_anonymous_yes':
+        case 'secret_anonymous_no': {
+          const session = await getSession()
+          if (!session?.data.secret_message_content) break
+          
+          const isAnonymous = callbackData === 'secret_anonymous_yes'
+          const messageContent = session.data.secret_message_content
+          const itemPrice = session.data.marketplace_item_price || 0
+          const itemId = session.data.marketplace_item_id
+          const recipientType = session.data.secret_message_recipient_type || 'manager'
+          const recipientId = session.data.secret_message_recipient_id
+          
+          // Deduct points
+          const { error: deductError } = await supabase.rpc('award_points', {
+            p_employee_id: employee.id,
+            p_company_id: companyId,
+            p_points: -itemPrice,
+            p_event_type: 'marketplace_purchase',
+            p_source: 'marketplace',
+            p_description: 'رسالة سرية'
+          })
+          
+          if (deductError) {
+            await sendAndLogMessage('❌ حدث خطأ', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
+          
+          // Create order
+          const { data: order } = await supabase
+            .from('marketplace_orders')
+            .insert({
+              employee_id: employee.id,
+              company_id: companyId,
+              item_id: itemId,
+              points_spent: itemPrice,
+              status: 'pending',
+              order_data: { message_content: messageContent, recipient_type: recipientType, recipient_id: recipientId, is_anonymous: isAnonymous }
+            })
+            .select('id')
+            .single()
+          
+          // Create secret message record
+          if (order) {
+            await supabase.from('secret_messages').insert({
+              order_id: order.id,
+              sender_id: employee.id,
+              company_id: companyId,
+              recipient_type: recipientType,
+              recipient_id: recipientId,
+              message_content: messageContent,
+              is_anonymous: isAnonymous
+            })
+          }
+          
+          await deleteSession()
+          
+          await sendAndLogMessage(
+            `🎉 <b>تم تسجيل الرسالة</b>\n\n` +
+            `⏳ في انتظار موافقة الإدارة\n` +
+            `💰 تم خصم: ${itemPrice}⭐`,
+            {
+              inline_keyboard: [
+                [{ text: '🛒 استبدل تاني', callback_data: 'rewards_marketplace' }],
+                [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            }
+          )
+          break
+        }
+        // ========== END REWARDS HANDLERS ==========
           
         case 'manage_team':
           // Check if employee has manager permissions
@@ -2112,6 +2487,115 @@ serve(async (req) => {
           else if (callbackData === 'jr_cancel') {
             await deleteSession()
             await sendMessage(botToken, chatId, '❌ تم إلغاء مراجعة الطلب', getEmployeeKeyboard(managerPermissions))
+          }
+          // ========== DYNAMIC REWARDS CALLBACKS ==========
+          // Handle locked item click (not enough points)
+          else if (callbackData.startsWith('item_locked_')) {
+            await sendAndLogMessage('❌ رصيدك غير كافٍ لشراء هذا المنتج!', {
+              inline_keyboard: [
+                [{ text: '🛒 المتجر', callback_data: 'rewards_marketplace' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            })
+          }
+          // Handle buy item
+          else if (callbackData.startsWith('buy_item_')) {
+            const itemId = callbackData.replace('buy_item_', '')
+            
+            // Get item details
+            const { data: item } = await supabase
+              .from('marketplace_items')
+              .select('*')
+              .eq('id', itemId)
+              .single()
+            
+            if (!item) {
+              await sendAndLogMessage('❌ المنتج غير موجود', getEmployeeKeyboard(managerPermissions))
+              break
+            }
+            
+            // Check balance
+            const { data: walletCheck } = await supabase
+              .from('employee_wallets')
+              .select('total_points')
+              .eq('employee_id', employee.id)
+              .maybeSingle()
+            
+            const currentPoints = walletCheck?.total_points || 0
+            if (currentPoints < item.points_price) {
+              await sendAndLogMessage('❌ رصيدك غير كافٍ!', {
+                inline_keyboard: [
+                  [{ text: '🛒 المتجر', callback_data: 'rewards_marketplace' }],
+                  [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+                ]
+              })
+              break
+            }
+            
+            // Check if secret message item - needs special flow
+            if (item.item_type === 'secret_message') {
+              await setSession('secret_message_content', {
+                marketplace_item_id: itemId,
+                marketplace_item_name: item.name_ar || item.name,
+                marketplace_item_price: item.points_price
+              })
+              await sendAndLogMessage(
+                `💎 <b>رسالة سرية</b>\n\n` +
+                `💰 السعر: ${item.points_price}⭐\n\n` +
+                `📝 اكتب رسالتك:`,
+                {
+                  inline_keyboard: [
+                    [{ text: '❌ إلغاء', callback_data: 'cancel_purchase' }]
+                  ]
+                }
+              )
+              break
+            }
+            
+            // Regular item - show confirmation
+            const itemName = item.name_ar || item.name
+            await setSession('confirm_purchase', {
+              marketplace_item_id: itemId,
+              marketplace_item_name: itemName,
+              marketplace_item_price: item.points_price
+            })
+            
+            await sendAndLogMessage(
+              `🛒 <b>تأكيد الشراء</b>\n\n` +
+              `المنتج: ${itemName}\n` +
+              `السعر: ${item.points_price}⭐\n\n` +
+              `تأكيد استبدال ${item.points_price} نقطة؟`,
+              {
+                inline_keyboard: [
+                  [{ text: '✅ تأكيد', callback_data: 'confirm_buy' }],
+                  [{ text: '❌ إلغاء', callback_data: 'cancel_purchase' }]
+                ]
+              }
+            )
+          }
+          // Handle secret message recipient selection
+          else if (callbackData.startsWith('secret_to_emp_')) {
+            const session = await getSession()
+            if (!session?.data.secret_message_content) break
+            
+            const recipientId = callbackData.replace('secret_to_emp_', '')
+            
+            await setSession('secret_anonymous_choice', {
+              ...session.data,
+              secret_message_recipient_type: 'employee',
+              secret_message_recipient_id: recipientId
+            })
+            
+            await sendAndLogMessage(
+              '📤 هل تريد إرسال الرسالة بشكل مجهول؟',
+              {
+                inline_keyboard: [
+                  [{ text: '🎭 مجهول', callback_data: 'secret_anonymous_yes' }],
+                  [{ text: '👤 باسمي', callback_data: 'secret_anonymous_no' }],
+                  [{ text: '❌ إلغاء', callback_data: 'cancel_purchase' }]
+                ]
+              }
+            )
           }
           break
       }
@@ -3639,7 +4123,7 @@ async function sendWelcomeMessage(botToken: string, chatId: number, isEmployee: 
   }
 }
 
-function getEmployeeKeyboard(managerPerms?: { can_add_bonuses?: boolean; can_make_deductions?: boolean; can_approve_leaves?: boolean } | null) {
+function getEmployeeKeyboard(managerPerms?: { can_add_bonuses?: boolean; can_make_deductions?: boolean; can_approve_leaves?: boolean } | null, showRewards: boolean = true) {
   const keyboard: { text: string; callback_data: string }[][] = [
     [
       { text: '✅ تسجيل حضور', callback_data: 'check_in' },
@@ -3654,7 +4138,8 @@ function getEmployeeKeyboard(managerPerms?: { can_add_bonuses?: boolean; can_mak
       { text: '💰 راتبي', callback_data: 'my_salary' }
     ],
     [
-      { text: '📊 حالتي', callback_data: 'my_status' }
+      { text: '📊 حالتي', callback_data: 'my_status' },
+      { text: '⭐ نقاطي', callback_data: 'my_rewards' }
     ]
   ]
   
@@ -3712,6 +4197,19 @@ function getWeekendKeyboard(selectedDays: string[] = []) {
       [{ text: '✅ تأكيد الاختيار', callback_data: 'confirm_weekend' }],
       [{ text: '❌ إلغاء', callback_data: 'cancel_registration' }]
     ]
+  }
+}
+
+// Helper to get emoji for marketplace item type
+function getItemEmoji(itemType: string | null): string {
+  switch (itemType) {
+    case 'leave_day': return '🏖️'
+    case 'permission_hours': return '⏰'
+    case 'late_tolerance': return '⏳'
+    case 'secret_message': return '💎'
+    case 'benefit': return '🎁'
+    case 'powerup': return '⚡'
+    default: return '🎯'
   }
 }
 
