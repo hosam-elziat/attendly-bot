@@ -3253,6 +3253,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_event_count: {
+        Args: {
+          p_employee_id: string
+          p_event_date: string
+          p_event_type: string
+        }
+        Returns: undefined
+      }
       is_admin_or_owner: { Args: { p_user_id: string }; Returns: boolean }
       is_saas_admin: { Args: { p_user_id: string }; Returns: boolean }
       is_saas_team_member: { Args: { p_user_id: string }; Returns: boolean }

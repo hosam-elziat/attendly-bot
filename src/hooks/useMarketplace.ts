@@ -232,12 +232,27 @@ export const useSaveMarketplaceItem = () => {
         
         if (error) throw error;
       } else {
+        const insertData: MarketplaceItemsInsert = {
+          company_id: profile.company_id,
+          name: item.name || '',
+          name_ar: item.name_ar,
+          description: item.description,
+          description_ar: item.description_ar,
+          category_id: item.category_id,
+          points_price: item.points_price || 0,
+          approval_required: item.approval_required ?? false,
+          usage_limit_type: item.usage_limit_type,
+          usage_limit_value: item.usage_limit_value,
+          stock_quantity: item.stock_quantity,
+          is_premium: item.is_premium ?? false,
+          is_active: item.is_active ?? true,
+          item_type: item.item_type || 'benefit',
+          effect_type: item.effect_type,
+          effect_value: item.effect_value,
+        };
         const { error } = await supabase
           .from('marketplace_items')
-          .insert({
-            ...item,
-            company_id: profile.company_id,
-          });
+          .insert(insertData);
         
         if (error) throw error;
       }

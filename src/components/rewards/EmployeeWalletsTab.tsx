@@ -25,7 +25,7 @@ const EmployeeWalletsTab = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [pointsDialogOpen, setPointsDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [selectedWallet, setSelectedWallet] = useState<EmployeeWallet | null>(null);
+  const [selectedWallet, setSelectedWallet] = useState<(EmployeeWallet & { employee?: { id: string; full_name: string; email: string } }) | null>(null);
   const [pointsForm, setPointsForm] = useState({
     points: 0,
     description: '',
@@ -37,11 +37,13 @@ const EmployeeWalletsTab = () => {
     20
   );
 
-  // Merge wallet data with employee data
-  const walletsWithEmployees = wallets?.map(wallet => {
+  // Merge wallet data with employee data - add type
+  type WalletWithEmployee = EmployeeWallet & { employee?: { id: string; full_name: string; email: string } };
+  
+  const walletsWithEmployees: WalletWithEmployee[] = wallets?.map(wallet => {
     const employee = employees?.find(e => e.id === wallet.employee_id);
-    return { ...wallet, employee };
-  }).filter(w => w.employee);
+    return { ...wallet, employee: employee ? { id: employee.id, full_name: employee.full_name, email: employee.email } : undefined };
+  }).filter(w => w.employee) || [];
 
   // Filter by search
   const filteredWallets = walletsWithEmployees?.filter(w => 
@@ -54,13 +56,13 @@ const EmployeeWalletsTab = () => {
     e => !wallets?.some(w => w.employee_id === e.id)
   );
 
-  const handleAddPoints = (wallet: EmployeeWallet, isDeduction: boolean) => {
+  const handleAddPoints = (wallet: WalletWithEmployee, isDeduction: boolean) => {
     setSelectedWallet(wallet);
     setPointsForm({ points: 0, description: '', isDeduction });
     setPointsDialogOpen(true);
   };
 
-  const handleViewHistory = (wallet: EmployeeWallet) => {
+  const handleViewHistory = (wallet: WalletWithEmployee) => {
     setSelectedWallet(wallet);
     setHistoryDialogOpen(true);
   };

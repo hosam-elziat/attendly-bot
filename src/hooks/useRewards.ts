@@ -421,9 +421,6 @@ export const useSaveRewardLevel = () => {
         const { error } = await supabase
           .from('reward_levels')
           .insert(insertData);
-            ...level,
-            company_id: profile.company_id,
-          });
         
         if (error) throw error;
       }
