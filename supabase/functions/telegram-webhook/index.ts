@@ -48,7 +48,258 @@ async function checkMonthlyLeaveLimit(
   return { allowed: true, usedDays, message: '' }
 }
 
-// Helper function to get current time in a specific timezone
+// ========== REWARDS SYSTEM INTEGRATION ==========
+
+// Motivational messages for rewards - Arabic
+const REWARD_MESSAGES = {
+  check_in_on_time: [
+    '✅ تم تسجيل حضورك بنجاح\n⭐ +{points} نقطة\nكمّل كده 👌',
+    'صباح الفل 🌞\nحضورك اتسجل\n+{points} نقطة في الرصيد 💰',
+    '✅ حضور في الموعد\n⭐ +{points} نقطة\nيلا بينا 💪',
+  ],
+  first_employee_checkin: [
+    '👑 إنت أول واحد النهارده!\n⚡ +{points} نقطة\nالبداية الصح 👏',
+    '🚀 سبقّت الكل!\n+{points} نقطة\nيومك شكله هيبقى جامد 😎',
+    '🥇 أول حضور اليوم!\n+{points} نقطة\nإنت نجم 🌟',
+  ],
+  early_checkin: [
+    '⏰ بدري بدري!\n+{points} نقطة إضافية\nالالتزام له ناسه 👌',
+    '🌅 صحيت قبل المنبه؟\nخد +{points} نقطة على ذوقك 😄',
+  ],
+  late_checkin: [
+    '⚠️ حضور متأخر\n{points} نقطة\nحاول تيجي بدري المرة الجاية 💪',
+  ],
+  checkout_on_time: [
+    '✅ انصراف في الموعد\n+{points} نقطة\nيوم موفق 👍',
+    '👋 مع السلامة!\n+{points} نقطة على الالتزام\nشوفك بكرة 😊',
+  ],
+  early_checkout: [
+    '⚠️ انصراف مبكر\n{points} نقطة\nحاول تكمل المرة الجاية 💪',
+  ],
+  level_up: [
+    '🚀 Level Up!\nإنت دلوقتي {level}\nكمل وسيب الباقي علينا 😎',
+    '👏 ترقيتك تمت بنجاح\nمستوى {level}\nامتيازات أكتر 🔓',
+  ],
+  badge_earned: [
+    '🏅 شارة جديدة اتحققت!\n{badge}\nواضح إنك بتلعبها صح 👌',
+    '🔥 Achievement Unlocked!\n{badge}\nقليل اللي يوصلوا للمرحلة دي 😉',
+  ],
+  milestone: [
+    '🎊 رقم قياسي!\nوصلت لـ {total} نقطة\nالسوق فاتح لك دلوقتي 😎🛒',
+    '🏆 مستوى تقيل!\nرصيدك بقى {total}\nالمدير بدأ يلاحظ 👀',
+  ],
+  top_rank: [
+    '👑 إنت متصدر الترتيب حاليًا!\nحافظ على المركز…\nالكل بيطاردك 😈🔥',
+  ],
+}
+
+// Get random message from array
+function getRandomMessage(messages: string[]): string {
+  return messages[Math.floor(Math.random() * messages.length)]
+}
+
+// Format reward message with variables
+function formatRewardMessage(template: string, vars: Record<string, string | number>): string {
+  let result = template
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`{${key}}`, 'g'), String(value))
+  }
+  return result
+}
+
+// Award points to employee and check for level up / badges
+async function awardRewardPoints(
+  supabase: any,
+  employeeId: string,
+  companyId: string,
+  eventType: string,
+  source: string = 'telegram_bot',
+  description?: string
+): Promise<{ 
+  success: boolean; 
+  points: number; 
+  message: string; 
+  levelUp?: { name: string; name_ar?: string }; 
+  badge?: { name: string; name_ar?: string };
+  newTotal?: number;
+  rank?: number;
+} | null> {
+  try {
+    // Check if rewards are enabled for this event
+    const { data: rule } = await supabase
+      .from('reward_rules')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('event_type', eventType)
+      .eq('is_enabled', true)
+      .maybeSingle()
+    
+    if (!rule) {
+      console.log(`No reward rule found for event ${eventType}`)
+      return null
+    }
+    
+    const today = new Date().toISOString().split('T')[0]
+    const weekStart = getWeekStart(today)
+    const monthStart = today.substring(0, 7) + '-01'
+    
+    // Check limits
+    // Daily limit
+    if (rule.daily_limit) {
+      const { data: dailyCount } = await supabase
+        .from('reward_event_tracking')
+        .select('event_count')
+        .eq('employee_id', employeeId)
+        .eq('event_type', eventType)
+        .eq('event_date', today)
+        .maybeSingle()
+      
+      if (dailyCount && dailyCount.event_count >= rule.daily_limit) {
+        console.log(`Daily limit reached for ${eventType}`)
+        return null
+      }
+    }
+    
+    // Weekly limit
+    if (rule.weekly_limit) {
+      const { data: weeklyEvents } = await supabase
+        .from('reward_event_tracking')
+        .select('event_count')
+        .eq('employee_id', employeeId)
+        .eq('event_type', eventType)
+        .gte('event_date', weekStart)
+      
+      const weeklyTotal = (weeklyEvents || []).reduce((sum: number, e: any) => sum + (e.event_count || 0), 0)
+      if (weeklyTotal >= rule.weekly_limit) {
+        console.log(`Weekly limit reached for ${eventType}`)
+        return null
+      }
+    }
+    
+    // Monthly limit
+    if (rule.monthly_limit) {
+      const { data: monthlyEvents } = await supabase
+        .from('reward_event_tracking')
+        .select('event_count')
+        .eq('employee_id', employeeId)
+        .eq('event_type', eventType)
+        .gte('event_date', monthStart)
+      
+      const monthlyTotal = (monthlyEvents || []).reduce((sum: number, e: any) => sum + (e.event_count || 0), 0)
+      if (monthlyTotal >= rule.monthly_limit) {
+        console.log(`Monthly limit reached for ${eventType}`)
+        return null
+      }
+    }
+    
+    // Award points using the database function
+    const { data: result, error } = await supabase.rpc('award_points', {
+      p_employee_id: employeeId,
+      p_company_id: companyId,
+      p_points: rule.points_value,
+      p_event_type: eventType,
+      p_source: source,
+      p_description: description || rule.event_name_ar || rule.event_name,
+    })
+    
+    if (error) {
+      console.error('Error awarding points:', error)
+      return null
+    }
+    
+    // Track the event
+    await supabase.from('reward_event_tracking').upsert({
+      employee_id: employeeId,
+      company_id: companyId,
+      event_type: eventType,
+      event_date: today,
+      event_count: 1,
+    }, { 
+      onConflict: 'employee_id,event_type,event_date',
+      ignoreDuplicates: false
+    }).then(async (res: any) => {
+      if (res.error && res.error.code === '23505') {
+        // Increment existing record
+        await supabase.rpc('increment_event_count', {
+          p_employee_id: employeeId,
+          p_event_type: eventType,
+          p_event_date: today
+        })
+      }
+    })
+    
+    // Build reward message
+    const messageTemplates = REWARD_MESSAGES[eventType as keyof typeof REWARD_MESSAGES]
+    let rewardMessage = ''
+    
+    if (messageTemplates) {
+      rewardMessage = formatRewardMessage(
+        getRandomMessage(messageTemplates),
+        { points: rule.points_value }
+      )
+    }
+    
+    // Check for level up
+    let levelUp = undefined
+    if (result?.level_changed && result?.level_name) {
+      levelUp = { name: result.level_name, name_ar: result.level_name }
+      const levelUpMsg = formatRewardMessage(
+        getRandomMessage(REWARD_MESSAGES.level_up),
+        { level: result.level_name }
+      )
+      rewardMessage += '\n\n' + levelUpMsg
+    }
+    
+    // Check milestones (1000, 2000, 5000, etc.)
+    const newTotal = result?.new_total || 0
+    const milestones = [1000, 2000, 5000, 10000]
+    const previousTotal = newTotal - rule.points_value
+    
+    for (const milestone of milestones) {
+      if (previousTotal < milestone && newTotal >= milestone) {
+        const milestoneMsg = formatRewardMessage(
+          getRandomMessage(REWARD_MESSAGES.milestone),
+          { total: newTotal }
+        )
+        rewardMessage += '\n\n' + milestoneMsg
+        break
+      }
+    }
+    
+    return {
+      success: true,
+      points: rule.points_value,
+      message: rewardMessage,
+      levelUp,
+      newTotal,
+    }
+  } catch (err) {
+    console.error('Error in awardRewardPoints:', err)
+    return null
+  }
+}
+
+// Get week start date (Monday)
+function getWeekStart(dateStr: string): string {
+  const date = new Date(dateStr)
+  const day = date.getDay()
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1) // Monday
+  date.setDate(diff)
+  return date.toISOString().split('T')[0]
+}
+
+// Check if employee is first to check in today
+async function isFirstCheckInToday(supabase: any, companyId: string, today: string): Promise<boolean> {
+  const { count } = await supabase
+    .from('attendance_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('date', today)
+    .not('check_in_time', 'is', null)
+  
+  return count === 0
+}
+
 function getLocalTime(timezone: string = 'Africa/Cairo'): { date: string; time: string; isoString: string } {
   const now = new Date()
   
@@ -3825,11 +4076,61 @@ async function processDirectCheckIn(
     }
   }
 
+  // ========== REWARD POINTS FOR CHECK-IN ==========
+  let rewardMessage = ''
+  
+  // Only award points to non-freelancers
+  if (!isFreelancer) {
+    // Check if first to check in today
+    const isFirst = await isFirstCheckInToday(supabase, companyId, today)
+    
+    if (isFirst) {
+      const firstReward = await awardRewardPoints(supabase, employee.id, companyId, 'first_employee_checkin', 'telegram_bot', 'أول حضور اليوم')
+      if (firstReward?.message) {
+        rewardMessage = '\n\n' + firstReward.message
+      }
+    }
+    
+    // Check if on-time, early, or late
+    if (workStartTime) {
+      const [startH, startM] = workStartTime.split(':').map(Number)
+      const [checkH, checkM] = checkInTime.split(':').map(Number)
+      const timeDiff = (checkH * 60 + checkM) - (startH * 60 + startM)
+      
+      if (timeDiff < -15) {
+        // Early check-in (more than 15 mins early)
+        const earlyReward = await awardRewardPoints(supabase, employee.id, companyId, 'early_checkin', 'telegram_bot', 'حضور مبكر')
+        if (earlyReward?.message && !rewardMessage.includes('أول واحد')) {
+          rewardMessage += '\n\n' + earlyReward.message
+        }
+      } else if (timeDiff <= 0) {
+        // On-time check-in
+        const onTimeReward = await awardRewardPoints(supabase, employee.id, companyId, 'check_in_on_time', 'telegram_bot', 'حضور في الموعد')
+        if (onTimeReward?.message && !rewardMessage) {
+          rewardMessage = '\n\n' + onTimeReward.message
+        }
+      } else if (timeDiff > 0) {
+        // Late check-in
+        const lateReward = await awardRewardPoints(supabase, employee.id, companyId, 'late_checkin', 'telegram_bot', `تأخير ${timeDiff} دقيقة`)
+        if (lateReward?.message) {
+          rewardMessage += '\n\n' + lateReward.message
+        }
+      }
+    } else {
+      // No work start time defined - treat as on-time
+      const onTimeReward = await awardRewardPoints(supabase, employee.id, companyId, 'check_in_on_time', 'telegram_bot', 'حضور')
+      if (onTimeReward?.message) {
+        rewardMessage = '\n\n' + onTimeReward.message
+      }
+    }
+  }
+
   await sendMessage(botToken, chatId, 
     `✅ تم تسجيل حضورك بنجاح!\n\n` +
     `📅 التاريخ: ${today}\n` +
     `⏰ الوقت: ${checkInTime}` +
-    lateMessage,
+    lateMessage +
+    rewardMessage,
     getEmployeeKeyboard(managerPermissions)
   )
   
@@ -4517,6 +4818,42 @@ async function processCheckout(
     }
   }
   
+  // ========== REWARD POINTS FOR CHECK-OUT ==========
+  let rewardMessage = ''
+  
+  // Only award points to non-freelancers
+  if (!isFreelancer) {
+    const workEndTimeValue = employee.work_end_time || companyDefaults.work_end_time
+    
+    if (workEndTimeValue && !earlyDepartureData) {
+      const [endH, endM] = workEndTimeValue.split(':').map(Number)
+      const [checkH, checkM] = checkOutTime.split(':').map(Number)
+      const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
+      
+      if (timeDiff >= -5 && timeDiff <= 30) {
+        // On-time checkout (within 5 min early to 30 min after)
+        const onTimeReward = await awardRewardPoints(supabase, employee.id, companyId, 'checkout_on_time', 'telegram_bot', 'انصراف في الموعد')
+        if (onTimeReward?.message) {
+          rewardMessage = '\n\n' + onTimeReward.message
+        }
+      }
+    } else if (!earlyDepartureData && !workEndTimeValue) {
+      // No work end time defined - treat as on-time
+      const onTimeReward = await awardRewardPoints(supabase, employee.id, companyId, 'checkout_on_time', 'telegram_bot', 'انصراف')
+      if (onTimeReward?.message) {
+        rewardMessage = '\n\n' + onTimeReward.message
+      }
+    }
+    
+    // Award negative points for early departure
+    if (earlyDepartureData) {
+      const earlyReward = await awardRewardPoints(supabase, employee.id, companyId, 'early_checkout', 'telegram_bot', `انصراف مبكر ${earlyDepartureData.earlyMinutes} دقيقة`)
+      if (earlyReward?.message) {
+        rewardMessage = '\n\n' + earlyReward.message
+      }
+    }
+  }
+  
   // Update attendance record
   await supabase
     .from('attendance_logs')
@@ -4534,7 +4871,8 @@ async function processCheckout(
     workHoursMessage +
     freelancerEarningsMessage +
     overtimeMessage +
-    earlyDepartureMessage,
+    earlyDepartureMessage +
+    rewardMessage,
     getEmployeeKeyboard(managerPermissions)
   )
   
