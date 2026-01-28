@@ -373,6 +373,59 @@ export type Database = {
           },
         ]
       }
+      badges: {
+        Row: {
+          company_id: string
+          condition_type: string
+          condition_value: number
+          created_at: string | null
+          description: string | null
+          description_ar: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          condition_type: string
+          condition_value: number
+          created_at?: string | null
+          description?: string | null
+          description_ar?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          condition_type?: string
+          condition_value?: number
+          created_at?: string | null
+          description?: string | null
+          description_ar?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "badges_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       biometric_otp_codes: {
         Row: {
           attempts: number | null
@@ -930,6 +983,104 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_badges: {
+        Row: {
+          badge_id: string
+          company_id: string
+          earned_at: string | null
+          employee_id: string
+          id: string
+        }
+        Insert: {
+          badge_id: string
+          company_id: string
+          earned_at?: string | null
+          employee_id: string
+          id?: string
+        }
+        Update: {
+          badge_id?: string
+          company_id?: string
+          earned_at?: string | null
+          employee_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_badges_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_badges_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_item_usage: {
+        Row: {
+          company_id: string
+          employee_id: string
+          id: string
+          item_id: string
+          last_used_at: string | null
+          month_year: string | null
+          usage_count: number | null
+        }
+        Insert: {
+          company_id: string
+          employee_id: string
+          id?: string
+          item_id: string
+          last_used_at?: string | null
+          month_year?: string | null
+          usage_count?: number | null
+        }
+        Update: {
+          company_id?: string
+          employee_id?: string
+          id?: string
+          item_id?: string
+          last_used_at?: string | null
+          month_year?: string | null
+          usage_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_item_usage_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_item_usage_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_item_usage_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_location_history: {
         Row: {
           company_id: string
@@ -1013,6 +1164,64 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "company_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_wallets: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          current_level_id: string | null
+          earned_points: number | null
+          employee_id: string
+          id: string
+          spent_points: number | null
+          total_points: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          current_level_id?: string | null
+          earned_points?: number | null
+          employee_id: string
+          id?: string
+          spent_points?: number | null
+          total_points?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          current_level_id?: string | null
+          earned_points?: number | null
+          employee_id?: string
+          id?: string
+          spent_points?: number | null
+          total_points?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_wallets_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_wallets_current_level_fkey"
+            columns: ["current_level_id"]
+            isOneToOne: false
+            referencedRelation: "reward_levels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_wallets_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1381,6 +1590,201 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_categories: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string | null
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_categories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_items: {
+        Row: {
+          approval_required: boolean | null
+          category_id: string | null
+          company_id: string
+          created_at: string | null
+          description: string | null
+          description_ar: string | null
+          effect_type: string | null
+          effect_value: Json | null
+          id: string
+          is_active: boolean | null
+          is_premium: boolean | null
+          item_type: string | null
+          name: string
+          name_ar: string | null
+          points_price: number
+          stock_quantity: number | null
+          updated_at: string | null
+          usage_limit_type: string | null
+          usage_limit_value: number | null
+        }
+        Insert: {
+          approval_required?: boolean | null
+          category_id?: string | null
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          description_ar?: string | null
+          effect_type?: string | null
+          effect_value?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_premium?: boolean | null
+          item_type?: string | null
+          name: string
+          name_ar?: string | null
+          points_price: number
+          stock_quantity?: number | null
+          updated_at?: string | null
+          usage_limit_type?: string | null
+          usage_limit_value?: number | null
+        }
+        Update: {
+          approval_required?: boolean | null
+          category_id?: string | null
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          description_ar?: string | null
+          effect_type?: string | null
+          effect_value?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_premium?: boolean | null
+          item_type?: string | null
+          name?: string
+          name_ar?: string | null
+          points_price?: number
+          stock_quantity?: number | null
+          updated_at?: string | null
+          usage_limit_type?: string | null
+          usage_limit_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_orders: {
+        Row: {
+          company_id: string
+          consumed_at: string | null
+          created_at: string | null
+          employee_id: string
+          id: string
+          item_id: string
+          order_data: Json | null
+          points_spent: number
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          consumed_at?: string | null
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          item_id: string
+          order_data?: Json | null
+          points_spent: number
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          consumed_at?: string | null
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          item_id?: string
+          order_data?: Json | null
+          points_spent?: number
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_orders_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_orders_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_attendance: {
         Row: {
           approved_time: string | null
@@ -1492,6 +1896,63 @@ export type Database = {
             columns: ["verified_location_id"]
             isOneToOne: false
             referencedRelation: "company_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      points_history: {
+        Row: {
+          added_by: string | null
+          added_by_name: string | null
+          company_id: string
+          created_at: string | null
+          description: string | null
+          employee_id: string
+          event_type: string
+          id: string
+          points: number
+          reference_id: string | null
+          source: string
+        }
+        Insert: {
+          added_by?: string | null
+          added_by_name?: string | null
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          employee_id: string
+          event_type: string
+          id?: string
+          points: number
+          reference_id?: string | null
+          source: string
+        }
+        Update: {
+          added_by?: string | null
+          added_by_name?: string | null
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          employee_id?: string
+          event_type?: string
+          id?: string
+          points?: number
+          reference_id?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_history_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1757,6 +2218,246 @@ export type Database = {
           },
         ]
       }
+      reward_event_tracking: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          employee_id: string
+          event_count: number | null
+          event_date: string
+          event_type: string
+          id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          employee_id: string
+          event_count?: number | null
+          event_date: string
+          event_type: string
+          id?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          employee_id?: string
+          event_count?: number | null
+          event_date?: string
+          event_type?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_event_tracking_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_event_tracking_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_levels: {
+        Row: {
+          color: string | null
+          company_id: string
+          created_at: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          level_order: number
+          min_points: number
+          name: string
+          name_ar: string | null
+          perks: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          company_id: string
+          created_at?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          level_order?: number
+          min_points?: number
+          name: string
+          name_ar?: string | null
+          perks?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          company_id?: string
+          created_at?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          level_order?: number
+          min_points?: number
+          name?: string
+          name_ar?: string | null
+          perks?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_levels_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_messages: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          message_template: string
+          message_type: string
+          time_of_day: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message_template: string
+          message_type: string
+          time_of_day?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message_template?: string
+          message_type?: string
+          time_of_day?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_rules: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          daily_limit: number | null
+          description: string | null
+          event_name: string
+          event_name_ar: string | null
+          event_type: string
+          id: string
+          is_enabled: boolean | null
+          monthly_limit: number | null
+          points_value: number
+          updated_at: string | null
+          weekly_limit: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          daily_limit?: number | null
+          description?: string | null
+          event_name: string
+          event_name_ar?: string | null
+          event_type: string
+          id?: string
+          is_enabled?: boolean | null
+          monthly_limit?: number | null
+          points_value?: number
+          updated_at?: string | null
+          weekly_limit?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          daily_limit?: number | null
+          description?: string | null
+          event_name?: string
+          event_name_ar?: string | null
+          event_type?: string
+          id?: string
+          is_enabled?: boolean | null
+          monthly_limit?: number | null
+          points_value?: number
+          updated_at?: string | null
+          weekly_limit?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rewards_leaderboard: {
+        Row: {
+          company_id: string
+          employee_id: string
+          id: string
+          period_type: string
+          period_value: string
+          rank: number | null
+          total_points: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          employee_id: string
+          id?: string
+          period_type: string
+          period_value: string
+          rank?: number | null
+          total_points?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          employee_id?: string
+          id?: string
+          period_type?: string
+          period_value?: string
+          rank?: number | null
+          total_points?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rewards_leaderboard_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rewards_leaderboard_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saas_team: {
         Row: {
           created_at: string
@@ -1984,6 +2685,70 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      secret_messages: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          delivered_at: string | null
+          id: string
+          is_anonymous: boolean | null
+          is_delivered: boolean | null
+          message_content: string
+          order_id: string
+          recipient_id: string | null
+          recipient_type: string
+          sender_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          delivered_at?: string | null
+          id?: string
+          is_anonymous?: boolean | null
+          is_delivered?: boolean | null
+          message_content: string
+          order_id: string
+          recipient_id?: string | null
+          recipient_type: string
+          sender_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          delivered_at?: string | null
+          id?: string
+          is_anonymous?: boolean | null
+          is_delivered?: boolean | null
+          message_content?: string
+          order_id?: string
+          recipient_id?: string | null
+          recipient_type?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "secret_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "secret_messages_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "secret_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -2408,9 +3173,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      award_points: {
+        Args: {
+          p_added_by?: string
+          p_added_by_name?: string
+          p_company_id: string
+          p_description?: string
+          p_employee_id: string
+          p_event_type: string
+          p_points: number
+          p_reference_id?: string
+          p_source?: string
+        }
+        Returns: Json
+      }
       belongs_to_company: {
         Args: { p_company_id: string; p_user_id: string }
         Returns: boolean
+      }
+      can_earn_reward: {
+        Args: {
+          p_company_id: string
+          p_employee_id: string
+          p_event_date?: string
+          p_event_type: string
+        }
+        Returns: Json
       }
       can_manage_employee: {
         Args: { manager_employee_id: string; target_employee_id: string }
@@ -2435,6 +3223,14 @@ export type Database = {
           manager_position_id: string
           manager_telegram_chat_id: string
         }[]
+      }
+      get_employee_rank: {
+        Args: {
+          p_company_id: string
+          p_employee_id: string
+          p_period_type?: string
+        }
+        Returns: number
       }
       get_saas_team_permissions: { Args: { p_user_id: string }; Returns: Json }
       get_subordinate_employees: {
