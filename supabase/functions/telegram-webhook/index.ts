@@ -125,6 +125,18 @@ async function awardRewardPoints(
   rank?: number;
 } | null> {
   try {
+    // Check if rewards system is enabled for this company
+    const { data: company } = await supabase
+      .from('companies')
+      .select('rewards_enabled')
+      .eq('id', companyId)
+      .maybeSingle()
+    
+    if (!company?.rewards_enabled) {
+      console.log(`Rewards system is disabled for company ${companyId}`)
+      return null
+    }
+
     // Check if rewards are enabled for this event
     const { data: rule } = await supabase
       .from('reward_rules')

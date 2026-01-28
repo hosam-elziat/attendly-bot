@@ -6,6 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { 
   Gift, 
   Trophy, 
@@ -17,10 +19,12 @@ import {
   Loader2,
   Crown,
   Medal,
-  Sparkles
+  Sparkles,
+  Power
 } from 'lucide-react';
 import { useRewardsStats, useRewardsLeaderboard } from '@/hooks/useMarketplace';
 import { useRewardRules, useInitializeRewardRules } from '@/hooks/useRewards';
+import { useCompany, useToggleRewardsSystem } from '@/hooks/useCompany';
 import RewardsRulesTab from '@/components/rewards/RewardsRulesTab';
 import RewardsLevelsTab from '@/components/rewards/RewardsLevelsTab';
 import RewardsBadgesTab from '@/components/rewards/RewardsBadgesTab';
@@ -32,17 +36,20 @@ const Rewards = () => {
   const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState('overview');
   
+  const { data: company, isLoading: companyLoading } = useCompany();
   const { data: stats, isLoading: statsLoading } = useRewardsStats();
   const { data: leaderboard, isLoading: leaderboardLoading } = useRewardsLeaderboard('monthly', 5);
   const { data: rules, isLoading: rulesLoading } = useRewardRules();
   const initializeRules = useInitializeRewardRules();
+  const toggleRewards = useToggleRewardsSystem();
 
   const isArabic = language === 'ar';
+  const isRewardsEnabled = company?.rewards_enabled ?? false;
 
   // Check if rules need initialization
   const needsInit = !rulesLoading && (!rules || rules.length === 0);
 
-  if (statsLoading || rulesLoading) {
+  if (statsLoading || rulesLoading || companyLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-12">
@@ -55,33 +62,69 @@ const Rewards = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header with Toggle */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+          className="space-y-4"
         >
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Gift className="w-7 h-7 text-primary" />
-              {isArabic ? 'نظام المكافآت' : 'Rewards System'}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {isArabic ? 'إدارة النقاط والمكافآت والسوق الداخلي' : 'Manage points, rewards, and internal marketplace'}
-            </p>
+          {/* System Toggle Card */}
+          <Card className={`border-2 transition-colors ${isRewardsEnabled ? 'border-green-500/50 bg-green-500/5' : 'border-muted'}`}>
+            <CardContent className="py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${isRewardsEnabled ? 'bg-green-500/20' : 'bg-muted'}`}>
+                    <Power className={`w-5 h-5 ${isRewardsEnabled ? 'text-green-500' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold flex items-center gap-2">
+                      <Gift className="w-5 h-5 text-primary" />
+                      {isArabic ? 'نظام المكافآت' : 'Rewards System'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {isArabic 
+                        ? (isRewardsEnabled ? 'النظام مفعّل - يتم منح النقاط تلقائياً' : 'النظام متوقف - لن يتم منح أي نقاط')
+                        : (isRewardsEnabled ? 'System active - Points are awarded automatically' : 'System inactive - No points will be awarded')
+                      }
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="rewards-toggle" className="text-sm font-medium">
+                    {isArabic ? (isRewardsEnabled ? 'مفعّل' : 'متوقف') : (isRewardsEnabled ? 'Enabled' : 'Disabled')}
+                  </Label>
+                  <Switch
+                    id="rewards-toggle"
+                    checked={isRewardsEnabled}
+                    onCheckedChange={(checked) => toggleRewards.mutate(checked)}
+                    disabled={toggleRewards.isPending}
+                    className="data-[state=checked]:bg-green-500"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Title and Initialize Button */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-muted-foreground">
+                {isArabic ? 'إدارة النقاط والمكافآت والسوق الداخلي' : 'Manage points, rewards, and internal marketplace'}
+              </p>
+            </div>
+            
+            {needsInit && (
+              <Button onClick={() => initializeRules.mutate()} disabled={initializeRules.isPending}>
+                {initializeRules.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin me-2" />
+                ) : (
+                  <Sparkles className="w-4 h-4 me-2" />
+                )}
+                {isArabic ? 'تهيئة النظام' : 'Initialize System'}
+              </Button>
+            )}
           </div>
-          
-          {needsInit && (
-            <Button onClick={() => initializeRules.mutate()} disabled={initializeRules.isPending}>
-              {initializeRules.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin me-2" />
-              ) : (
-                <Sparkles className="w-4 h-4 me-2" />
-              )}
-              {isArabic ? 'تهيئة النظام' : 'Initialize System'}
-            </Button>
-          )}
         </motion.div>
 
         {/* Stats Cards */}

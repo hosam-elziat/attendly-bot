@@ -727,6 +727,7 @@ export type Database = {
           overtime_multiplier: number | null
           owner_id: string
           phone: string | null
+          rewards_enabled: boolean | null
           suspended_at: string | null
           suspended_by: string | null
           suspended_reason: string | null
@@ -781,6 +782,7 @@ export type Database = {
           overtime_multiplier?: number | null
           owner_id: string
           phone?: string | null
+          rewards_enabled?: boolean | null
           suspended_at?: string | null
           suspended_by?: string | null
           suspended_reason?: string | null
@@ -835,6 +837,7 @@ export type Database = {
           overtime_multiplier?: number | null
           owner_id?: string
           phone?: string | null
+          rewards_enabled?: boolean | null
           suspended_at?: string | null
           suspended_by?: string | null
           suspended_reason?: string | null
