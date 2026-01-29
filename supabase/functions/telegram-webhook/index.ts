@@ -1795,7 +1795,12 @@ serve(async (req) => {
         
         case 'secret_recipient_employee': {
           const session = await getSession()
-          if (!session?.data.secret_message_content) break
+          // Check for secret_message_content (filled after user types the message)
+          if (!session?.data?.secret_message_content) {
+            await sendAndLogMessage('❌ حدث خطأ - أعد المحاولة', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
           
           const { data: employees } = await supabase
             .from('employees')
@@ -1818,7 +1823,12 @@ serve(async (req) => {
         
         case 'secret_recipient_manager': {
           const session = await getSession()
-          if (!session?.data.secret_message_content) break
+          // Check for secret_message_content (filled after user types the message)
+          if (!session?.data?.secret_message_content) {
+            await sendAndLogMessage('❌ حدث خطأ - أعد المحاولة', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
           
           await setSession('secret_anonymous_choice', {
             ...session.data,
@@ -1841,7 +1851,12 @@ serve(async (req) => {
         case 'secret_anonymous_yes':
         case 'secret_anonymous_no': {
           const session = await getSession()
-          if (!session?.data.secret_message_content) break
+          // Check for secret_message_content
+          if (!session?.data?.secret_message_content) {
+            await sendAndLogMessage('❌ حدث خطأ - أعد المحاولة', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
           
           const isAnonymous = callbackData === 'secret_anonymous_yes'
           const messageContent = session.data.secret_message_content
