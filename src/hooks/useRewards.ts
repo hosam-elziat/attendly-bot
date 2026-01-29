@@ -210,6 +210,53 @@ export const useInitializeRewardRules = () => {
   });
 };
 
+// Hook: Create Reward Rule
+export const useCreateRewardRule = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (rule: {
+      event_type: string;
+      event_name: string;
+      event_name_ar?: string;
+      points_value: number;
+      daily_limit?: number;
+      weekly_limit?: number;
+      monthly_limit?: number;
+      description?: string;
+    }) => {
+      if (!profile?.company_id) throw new Error('No company');
+      
+      const insertData: RewardRulesInsert = {
+        company_id: profile.company_id,
+        event_type: rule.event_type,
+        event_name: rule.event_name,
+        event_name_ar: rule.event_name_ar,
+        points_value: rule.points_value,
+        daily_limit: rule.daily_limit || null,
+        weekly_limit: rule.weekly_limit || null,
+        monthly_limit: rule.monthly_limit || null,
+        description: rule.description,
+        is_enabled: true,
+      };
+      
+      const { error } = await supabase
+        .from('reward_rules')
+        .insert(insertData);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reward-rules'] });
+      toast.success('تم إضافة القاعدة بنجاح');
+    },
+    onError: (error: any) => {
+      toast.error('فشل في الإضافة: ' + error.message);
+    },
+  });
+};
+
 // Hook: Update Reward Rule
 export const useUpdateRewardRule = () => {
   const queryClient = useQueryClient();
@@ -232,6 +279,29 @@ export const useUpdateRewardRule = () => {
     },
     onError: (error: any) => {
       toast.error('فشل في التحديث: ' + error.message);
+    },
+  });
+};
+
+// Hook: Delete Reward Rule
+export const useDeleteRewardRule = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (ruleId: string) => {
+      const { error } = await supabase
+        .from('reward_rules')
+        .delete()
+        .eq('id', ruleId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reward-rules'] });
+      toast.success('تم حذف القاعدة');
+    },
+    onError: (error: any) => {
+      toast.error('فشل في الحذف: ' + error.message);
     },
   });
 };
