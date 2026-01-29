@@ -65,3 +65,9 @@ verify_jwt = false
 
 [functions.biometric-verification]
 verify_jwt = false
+
+[functions.daily-leaderboard-message]
+verify_jwt = false
+
+[functions.announce-goal]
+verify_jwt = false
