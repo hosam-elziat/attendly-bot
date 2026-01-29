@@ -20,7 +20,8 @@ import {
   Crown,
   Medal,
   Sparkles,
-  Power
+  Power,
+  Target
 } from 'lucide-react';
 import { useRewardsStats, useRewardsLeaderboard } from '@/hooks/useMarketplace';
 import { useRewardRules, useInitializeRewardRules } from '@/hooks/useRewards';
@@ -31,6 +32,7 @@ import RewardsBadgesTab from '@/components/rewards/RewardsBadgesTab';
 import MarketplaceItemsTab from '@/components/rewards/MarketplaceItemsTab';
 import MarketplaceOrdersTab from '@/components/rewards/MarketplaceOrdersTab';
 import EmployeeWalletsTab from '@/components/rewards/EmployeeWalletsTab';
+import RewardsGoalsTab from '@/components/rewards/RewardsGoalsTab';
 
 const Rewards = () => {
   const { language } = useLanguage();
@@ -240,6 +242,10 @@ const Rewards = () => {
                 <Users className="w-4 h-4" />
                 <span className="hidden sm:inline">{isArabic ? 'المحافظ' : 'Wallets'}</span>
               </TabsTrigger>
+              <TabsTrigger value="goals" className="flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                <span className="hidden sm:inline">{isArabic ? 'الأهداف' : 'Goals'}</span>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4">
@@ -373,6 +379,10 @@ const Rewards = () => {
 
             <TabsContent value="wallets">
               <EmployeeWalletsTab />
+            </TabsContent>
+
+            <TabsContent value="goals">
+              <RewardsGoalsTab />
             </TabsContent>
           </Tabs>
         </motion.div>

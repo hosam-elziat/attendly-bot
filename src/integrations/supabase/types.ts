@@ -1400,6 +1400,67 @@ export type Database = {
         }
         Relationships: []
       }
+      goal_achievements: {
+        Row: {
+          achieved_at: string | null
+          company_id: string
+          employee_id: string
+          goal_id: string
+          id: string
+          notified: boolean | null
+          notified_at: string | null
+          points_at_achievement: number | null
+          reward_given: boolean | null
+          reward_given_at: string | null
+        }
+        Insert: {
+          achieved_at?: string | null
+          company_id: string
+          employee_id: string
+          goal_id: string
+          id?: string
+          notified?: boolean | null
+          notified_at?: string | null
+          points_at_achievement?: number | null
+          reward_given?: boolean | null
+          reward_given_at?: string | null
+        }
+        Update: {
+          achieved_at?: string | null
+          company_id?: string
+          employee_id?: string
+          goal_id?: string
+          id?: string
+          notified?: boolean | null
+          notified_at?: string | null
+          points_at_achievement?: number | null
+          reward_given?: boolean | null
+          reward_given_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_achievements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_achievements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_achievements_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "reward_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       join_request_reviewers: {
         Row: {
           company_id: string
@@ -1784,6 +1845,44 @@ export type Database = {
             columns: ["item_id"]
             isOneToOne: false
             referencedRelation: "marketplace_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motivational_messages: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          message_ar: string
+          message_en: string | null
+          message_type: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message_ar: string
+          message_en?: string | null
+          message_type?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message_ar?: string
+          message_en?: string | null
+          message_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motivational_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -2260,6 +2359,109 @@ export type Database = {
           {
             foreignKeyName: "reward_event_tracking_employee_id_fkey"
             columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_goals: {
+        Row: {
+          announced_at: string | null
+          company_id: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          description_ar: string | null
+          duration_type: string
+          end_date: string | null
+          goal_type: string
+          id: string
+          is_active: boolean | null
+          is_announced: boolean | null
+          name: string
+          name_ar: string | null
+          points_threshold: number
+          reward_description: string | null
+          reward_description_ar: string | null
+          reward_item_id: string | null
+          reward_points: number | null
+          reward_type: string
+          start_date: string | null
+          updated_at: string | null
+          winner_announced_at: string | null
+          winner_id: string | null
+        }
+        Insert: {
+          announced_at?: string | null
+          company_id: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
+          duration_type?: string
+          end_date?: string | null
+          goal_type?: string
+          id?: string
+          is_active?: boolean | null
+          is_announced?: boolean | null
+          name: string
+          name_ar?: string | null
+          points_threshold?: number
+          reward_description?: string | null
+          reward_description_ar?: string | null
+          reward_item_id?: string | null
+          reward_points?: number | null
+          reward_type?: string
+          start_date?: string | null
+          updated_at?: string | null
+          winner_announced_at?: string | null
+          winner_id?: string | null
+        }
+        Update: {
+          announced_at?: string | null
+          company_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
+          duration_type?: string
+          end_date?: string | null
+          goal_type?: string
+          id?: string
+          is_active?: boolean | null
+          is_announced?: boolean | null
+          name?: string
+          name_ar?: string | null
+          points_threshold?: number
+          reward_description?: string | null
+          reward_description_ar?: string | null
+          reward_item_id?: string | null
+          reward_points?: number | null
+          reward_type?: string
+          start_date?: string | null
+          updated_at?: string | null
+          winner_announced_at?: string | null
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_goals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_goals_reward_item_id_fkey"
+            columns: ["reward_item_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_goals_winner_id_fkey"
+            columns: ["winner_id"]
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
