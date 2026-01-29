@@ -1866,7 +1866,7 @@ serve(async (req) => {
             break
           }
           
-          // Create order
+          // Create order (auto-approved for secret messages to be delivered immediately)
           const { data: order } = await supabase
             .from('marketplace_orders')
             .insert({
@@ -1874,13 +1874,16 @@ serve(async (req) => {
               company_id: companyId,
               item_id: itemId,
               points_spent: itemPrice,
-              status: 'pending',
+              status: 'approved', // Auto-approve secret messages
               order_data: { message_content: messageContent, recipient_type: recipientType, recipient_id: recipientId, is_anonymous: isAnonymous }
             })
             .select('id')
             .single()
           
           // Create secret message record
+          let messageDelivered = false
+          let recipientName = ''
+          
           if (order) {
             await supabase.from('secret_messages').insert({
               order_id: order.id,
@@ -1889,24 +1892,67 @@ serve(async (req) => {
               recipient_type: recipientType,
               recipient_id: recipientId,
               message_content: messageContent,
-              is_anonymous: isAnonymous
+              is_anonymous: isAnonymous,
+              is_delivered: true,
+              delivered_at: new Date().toISOString()
             })
+            
+            // Actually deliver the message to recipient
+            let recipientChatId: string | null = null
+            
+            if (recipientType === 'employee' && recipientId) {
+              // Get specific employee
+              const { data: recipientEmp } = await supabase
+                .from('employees')
+                .select('telegram_chat_id, full_name')
+                .eq('id', recipientId)
+                .single()
+              
+              if (recipientEmp?.telegram_chat_id) {
+                recipientChatId = recipientEmp.telegram_chat_id
+                recipientName = recipientEmp.full_name
+              }
+            } else if (recipientType === 'manager') {
+              // Get direct manager
+              const { data: managers } = await supabase.rpc('get_employee_managers', { emp_id: employee.id })
+              if (managers && managers.length > 0 && managers[0].manager_telegram_chat_id) {
+                recipientChatId = managers[0].manager_telegram_chat_id
+                recipientName = managers[0].manager_name
+              }
+            }
+            
+            if (recipientChatId) {
+              const senderInfo = isAnonymous ? 'مجهول 🎭' : employee.full_name
+              const deliveryMessage = 
+                `💎 <b>رسالة سرية جديدة</b>\n\n` +
+                `👤 من: ${senderInfo}\n\n` +
+                `📝 الرسالة:\n${messageContent}\n\n` +
+                `🔒 ${isAnonymous ? 'هذه رسالة مجهولة - لن يتم الكشف عن هوية المرسل' : ''}`
+              
+              await sendMessage(botToken, parseInt(recipientChatId), deliveryMessage)
+              messageDelivered = true
+            }
           }
           
           await deleteSession()
           
-          await sendAndLogMessage(
-            `🎉 <b>تم تسجيل الرسالة</b>\n\n` +
-            `⏳ في انتظار موافقة الإدارة\n` +
-            `💰 تم خصم: ${itemPrice}⭐`,
-            {
-              inline_keyboard: [
-                [{ text: '🛒 استبدل تاني', callback_data: 'rewards_marketplace' }],
-                [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
-                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
-              ]
-            }
-          )
+          const statusMsg = messageDelivered 
+            ? `✅ <b>تم إرسال الرسالة بنجاح!</b>\n\n` +
+              `📤 المستلم: ${recipientName}\n` +
+              `🎭 نوع الرسالة: ${isAnonymous ? 'مجهولة' : 'باسمك'}\n\n` +
+              `🔒 ${isAnonymous ? 'لن يستطيع المستلم معرفة هويتك' : ''}\n` +
+              `💰 تم خصم: ${itemPrice}⭐`
+            : `🎉 <b>تم تسجيل الرسالة</b>\n\n` +
+              `⏳ لم نتمكن من إرسالها الآن (المستلم غير متصل)\n` +
+              `💰 تم خصم: ${itemPrice}⭐`
+          
+          await sendAndLogMessage(statusMsg, {
+            inline_keyboard: [
+              [{ text: '🛒 استبدل تاني', callback_data: 'rewards_marketplace' }],
+              [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
           break
         }
         // ========== END REWARDS HANDLERS ==========
@@ -3110,6 +3156,40 @@ serve(async (req) => {
             `📝 السبب: ${text}\n\n` +
             `⏳ سيتم إبلاغك على التيلجرام عند الموافقة أو الرفض.`,
             getEmployeeKeyboard(managerPermissions)
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+        
+        // Handle secret message content input
+        case 'secret_message_content': {
+          // User sent the message text for secret message
+          const messageContent = text.trim()
+          if (!messageContent || messageContent.length < 5) {
+            await sendMessage(botToken, chatId, '❌ الرسالة قصيرة جداً (5 أحرف على الأقل)')
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          if (messageContent.length > 500) {
+            await sendMessage(botToken, chatId, '❌ الرسالة طويلة جداً (500 حرف كحد أقصى)')
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          // Store message content and ask for recipient
+          await setSession('secret_select_recipient', {
+            ...session.data,
+            secret_message_content: messageContent
+          })
+          
+          await sendMessage(botToken, chatId,
+            `✅ تم حفظ الرسالة\n\n` +
+            `👤 الآن اختر نوع المستلم:`,
+            {
+              inline_keyboard: [
+                [{ text: '👤 موظف محدد', callback_data: 'secret_recipient_employee' }],
+                [{ text: '👔 المدير المباشر', callback_data: 'secret_recipient_manager' }],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_purchase' }]
+              ]
+            }
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }

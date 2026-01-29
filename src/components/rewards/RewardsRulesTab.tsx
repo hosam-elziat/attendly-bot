@@ -9,8 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { NumberInput } from '@/components/ui/number-input';
-import { Settings2, Loader2, Edit, TrendingUp, TrendingDown } from 'lucide-react';
-import { useRewardRules, useUpdateRewardRule, type RewardRule } from '@/hooks/useRewards';
+import { Settings2, Loader2, Edit, TrendingUp, TrendingDown, Plus, Trash2 } from 'lucide-react';
+import { useRewardRules, useUpdateRewardRule, useCreateRewardRule, useDeleteRewardRule, type RewardRule } from '@/hooks/useRewards';
 
 const RewardsRulesTab = () => {
   const { language } = useLanguage();
@@ -18,13 +18,27 @@ const RewardsRulesTab = () => {
   
   const { data: rules, isLoading } = useRewardRules();
   const updateRule = useUpdateRewardRule();
+  const createRule = useCreateRewardRule();
+  const deleteRule = useDeleteRewardRule();
   
   const [editingRule, setEditingRule] = useState<RewardRule | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     points_value: 0,
     daily_limit: undefined as number | undefined,
     weekly_limit: undefined as number | undefined,
     monthly_limit: undefined as number | undefined,
+  });
+  
+  const [newRuleForm, setNewRuleForm] = useState({
+    event_type: '',
+    event_name: '',
+    event_name_ar: '',
+    points_value: 0,
+    daily_limit: undefined as number | undefined,
+    weekly_limit: undefined as number | undefined,
+    monthly_limit: undefined as number | undefined,
+    description: '',
   });
 
   const handleEdit = (rule: RewardRule) => {
@@ -58,6 +72,39 @@ const RewardsRulesTab = () => {
     });
   };
 
+  const handleDelete = async (rule: RewardRule) => {
+    if (confirm(isArabic ? 'هل أنت متأكد من حذف هذه القاعدة؟' : 'Are you sure you want to delete this rule?')) {
+      await deleteRule.mutateAsync(rule.id);
+    }
+  };
+
+  const handleAddRule = async () => {
+    if (!newRuleForm.event_type || !newRuleForm.event_name) return;
+    
+    await createRule.mutateAsync({
+      event_type: newRuleForm.event_type,
+      event_name: newRuleForm.event_name,
+      event_name_ar: newRuleForm.event_name_ar || undefined,
+      points_value: newRuleForm.points_value,
+      daily_limit: newRuleForm.daily_limit,
+      weekly_limit: newRuleForm.weekly_limit,
+      monthly_limit: newRuleForm.monthly_limit,
+      description: newRuleForm.description || undefined,
+    });
+    
+    setIsAddDialogOpen(false);
+    setNewRuleForm({
+      event_type: '',
+      event_name: '',
+      event_name_ar: '',
+      points_value: 0,
+      daily_limit: undefined,
+      weekly_limit: undefined,
+      monthly_limit: undefined,
+      description: '',
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -70,15 +117,23 @@ const RewardsRulesTab = () => {
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings2 className="w-5 h-5" />
-            {isArabic ? 'قواعد النقاط' : 'Points Rules'}
-          </CardTitle>
-          <CardDescription>
-            {isArabic 
-              ? 'تحديد النقاط لكل حدث - النقاط السالبة تعني خصم' 
-              : 'Configure points for each event - negative points mean deduction'}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Settings2 className="w-5 h-5" />
+                {isArabic ? 'قواعد النقاط' : 'Points Rules'}
+              </CardTitle>
+              <CardDescription>
+                {isArabic 
+                  ? 'تحديد النقاط لكل حدث - النقاط السالبة تعني خصم' 
+                  : 'Configure points for each event - negative points mean deduction'}
+              </CardDescription>
+            </div>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 me-2" />
+              {isArabic ? 'إضافة قاعدة' : 'Add Rule'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -140,13 +195,23 @@ const RewardsRulesTab = () => {
                       />
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(rule)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(rule)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(rule)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -216,6 +281,113 @@ const RewardsRulesTab = () => {
             <Button onClick={handleSave} disabled={updateRule.isPending}>
               {updateRule.isPending && <Loader2 className="w-4 h-4 animate-spin me-2" />}
               {isArabic ? 'حفظ' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Rule Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isArabic ? 'إضافة قاعدة نقاط جديدة' : 'Add New Points Rule'}
+            </DialogTitle>
+            <DialogDescription>
+              {isArabic ? 'أدخل بيانات القاعدة الجديدة' : 'Enter the new rule details'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>{isArabic ? 'معرف الحدث (بالإنجليزية)' : 'Event Type (English)'}</Label>
+              <Input
+                value={newRuleForm.event_type}
+                onChange={(e) => setNewRuleForm({ ...newRuleForm, event_type: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                placeholder="custom_event"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{isArabic ? 'اسم الحدث (بالإنجليزية)' : 'Event Name (English)'}</Label>
+              <Input
+                value={newRuleForm.event_name}
+                onChange={(e) => setNewRuleForm({ ...newRuleForm, event_name: e.target.value })}
+                placeholder="Custom Event"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{isArabic ? 'اسم الحدث (بالعربية)' : 'Event Name (Arabic)'}</Label>
+              <Input
+                value={newRuleForm.event_name_ar}
+                onChange={(e) => setNewRuleForm({ ...newRuleForm, event_name_ar: e.target.value })}
+                placeholder="حدث مخصص"
+                dir="rtl"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{isArabic ? 'النقاط' : 'Points'}</Label>
+              <Input
+                type="number"
+                value={newRuleForm.points_value}
+                onChange={(e) => setNewRuleForm({ ...newRuleForm, points_value: parseInt(e.target.value) || 0 })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {isArabic ? 'القيمة السالبة تعني خصم نقاط' : 'Negative value means point deduction'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>{isArabic ? 'حد يومي' : 'Daily'}</Label>
+                <NumberInput
+                  value={newRuleForm.daily_limit || 0}
+                  onChange={(val) => setNewRuleForm({ ...newRuleForm, daily_limit: val || undefined })}
+                  min={0}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isArabic ? 'أسبوعي' : 'Weekly'}</Label>
+                <NumberInput
+                  value={newRuleForm.weekly_limit || 0}
+                  onChange={(val) => setNewRuleForm({ ...newRuleForm, weekly_limit: val || undefined })}
+                  min={0}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isArabic ? 'شهري' : 'Monthly'}</Label>
+                <NumberInput
+                  value={newRuleForm.monthly_limit || 0}
+                  onChange={(val) => setNewRuleForm({ ...newRuleForm, monthly_limit: val || undefined })}
+                  min={0}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{isArabic ? 'الوصف (اختياري)' : 'Description (optional)'}</Label>
+              <Input
+                value={newRuleForm.description}
+                onChange={(e) => setNewRuleForm({ ...newRuleForm, description: e.target.value })}
+                placeholder={isArabic ? 'وصف القاعدة...' : 'Rule description...'}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              {isArabic ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button 
+              onClick={handleAddRule} 
+              disabled={createRule.isPending || !newRuleForm.event_type || !newRuleForm.event_name}
+            >
+              {createRule.isPending && <Loader2 className="w-4 h-4 animate-spin me-2" />}
+              {isArabic ? 'إضافة' : 'Add'}
             </Button>
           </DialogFooter>
         </DialogContent>
