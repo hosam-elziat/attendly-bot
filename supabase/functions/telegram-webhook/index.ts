@@ -1794,9 +1794,13 @@ serve(async (req) => {
         }
         
         case 'secret_recipient_employee': {
+          console.log('secret_recipient_employee triggered')
           const session = await getSession()
+          console.log('Session for secret_recipient_employee:', JSON.stringify(session))
+          
           // Check for secret_message_content (filled after user types the message)
           if (!session?.data?.secret_message_content) {
+            console.log('No secret_message_content found in session data')
             await sendAndLogMessage('❌ حدث خطأ - أعد المحاولة', getEmployeeKeyboard(managerPermissions))
             await deleteSession()
             break
