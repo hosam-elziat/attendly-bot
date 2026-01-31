@@ -1032,6 +1032,104 @@ export type Database = {
           },
         ]
       }
+      employee_inventory: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          effect_type: string | null
+          effect_value: Json | null
+          employee_id: string
+          id: string
+          is_fully_used: boolean | null
+          item_id: string | null
+          item_name: string
+          item_name_ar: string | null
+          item_type: string
+          order_id: string | null
+          points_paid: number
+          purchased_at: string | null
+          quantity: number
+          updated_at: string | null
+          usage_notes: string | null
+          used_at: string | null
+          used_for_date: string | null
+          used_quantity: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          effect_type?: string | null
+          effect_value?: Json | null
+          employee_id: string
+          id?: string
+          is_fully_used?: boolean | null
+          item_id?: string | null
+          item_name: string
+          item_name_ar?: string | null
+          item_type: string
+          order_id?: string | null
+          points_paid?: number
+          purchased_at?: string | null
+          quantity?: number
+          updated_at?: string | null
+          usage_notes?: string | null
+          used_at?: string | null
+          used_for_date?: string | null
+          used_quantity?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          effect_type?: string | null
+          effect_value?: Json | null
+          employee_id?: string
+          id?: string
+          is_fully_used?: boolean | null
+          item_id?: string | null
+          item_name?: string
+          item_name_ar?: string | null
+          item_type?: string
+          order_id?: string | null
+          points_paid?: number
+          purchased_at?: string | null
+          quantity?: number
+          updated_at?: string | null
+          usage_notes?: string | null
+          used_at?: string | null
+          used_for_date?: string | null
+          used_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_inventory_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_inventory_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_inventory_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_inventory_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_item_usage: {
         Row: {
           company_id: string
@@ -1457,6 +1555,67 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "reward_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_usage_logs: {
+        Row: {
+          company_id: string
+          effect_applied: Json | null
+          employee_id: string
+          id: string
+          inventory_id: string
+          manager_notified: boolean | null
+          manager_notified_at: string | null
+          notes: string | null
+          used_at: string | null
+          used_for_date: string | null
+        }
+        Insert: {
+          company_id: string
+          effect_applied?: Json | null
+          employee_id: string
+          id?: string
+          inventory_id: string
+          manager_notified?: boolean | null
+          manager_notified_at?: string | null
+          notes?: string | null
+          used_at?: string | null
+          used_for_date?: string | null
+        }
+        Update: {
+          company_id?: string
+          effect_applied?: Json | null
+          employee_id?: string
+          id?: string
+          inventory_id?: string
+          manager_notified?: boolean | null
+          manager_notified_at?: string | null
+          notes?: string | null
+          used_at?: string | null
+          used_for_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_usage_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_usage_logs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_usage_logs_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "employee_inventory"
             referencedColumns: ["id"]
           },
         ]
