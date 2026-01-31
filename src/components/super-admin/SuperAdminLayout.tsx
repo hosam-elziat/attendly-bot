@@ -34,10 +34,12 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
     { icon: Users, label: 'الموظفين', path: '/super-admin/employees' },
     { icon: CreditCard, label: 'الاشتراكات', path: '/super-admin/subscriptions' },
     { icon: CreditCard, label: 'الباقات والأسعار', path: '/super-admin/plans' },
+    { icon: Shield, label: 'التحكم بالميزات', path: '/super-admin/feature-flags' },
     { icon: UserCog, label: 'فريق العمل', path: '/super-admin/team' },
     { icon: Bot, label: 'بوتات التيليجرام', path: '/super-admin/telegram-bots' },
     { icon: ImageIcon, label: 'طلبات تغيير الصور', path: '/super-admin/photo-requests' },
     { icon: Database, label: 'النسخ الاحتياطي', path: '/super-admin/backups' },
+    { icon: LayoutDashboard, label: 'سجلات النشاط', path: '/super-admin/activity-logs' },
   ];
 
   const handleLogout = async () => {
