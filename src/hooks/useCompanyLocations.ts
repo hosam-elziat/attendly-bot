@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 
 export interface CompanyLocation {
@@ -23,39 +23,39 @@ export interface CreateLocationData {
 }
 
 export const useCompanyLocations = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['company-locations', profile?.company_id],
+    queryKey: ['company-locations', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       const { data, error } = await (supabase as any)
         .from('company_locations')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       return data as CompanyLocation[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useCreateLocation = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: CreateLocationData) => {
-      if (!profile?.company_id) throw new Error('No company ID');
+      if (!effectiveCompanyId) throw new Error('No company ID');
 
       // Check max 5 locations
       const { count } = await (supabase as any)
         .from('company_locations')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id);
+        .eq('company_id', effectiveCompanyId);
 
       if (count && count >= 5) {
         throw new Error('لا يمكن إضافة أكثر من 5 مواقع');
@@ -64,7 +64,7 @@ export const useCreateLocation = () => {
       const { data: result, error } = await (supabase as any)
         .from('company_locations')
         .insert({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           name: data.name,
           latitude: data.latitude,
           longitude: data.longitude,

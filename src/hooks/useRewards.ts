@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
@@ -160,7 +159,6 @@ export const DEFAULT_REWARD_EVENTS = [
 
 // Hook: Reward Rules
 export const useRewardRules = () => {
-  const { profile } = useAuth();
   const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
   
   return useQuery({
@@ -183,15 +181,15 @@ export const useRewardRules = () => {
 
 // Hook: Initialize Reward Rules
 export const useInitializeRewardRules = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async () => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       const rules = DEFAULT_REWARD_EVENTS.map(event => ({
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         ...event,
         is_enabled: true,
       }));
@@ -214,7 +212,7 @@ export const useInitializeRewardRules = () => {
 
 // Hook: Create Reward Rule
 export const useCreateRewardRule = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -228,10 +226,10 @@ export const useCreateRewardRule = () => {
       monthly_limit?: number;
       description?: string;
     }) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       const insertData: RewardRulesInsert = {
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         event_type: rule.event_type,
         event_name: rule.event_name,
         event_name_ar: rule.event_name_ar,
@@ -310,12 +308,12 @@ export const useDeleteRewardRule = () => {
 
 // Hook: Employee Wallets
 export const useEmployeeWallets = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['employee-wallets', profile?.company_id],
+    queryKey: ['employee-wallets', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('employee_wallets')
@@ -323,24 +321,24 @@ export const useEmployeeWallets = () => {
           *,
           current_level:reward_levels(*)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('total_points', { ascending: false });
       
       if (error) throw error;
       return data as EmployeeWallet[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Single Employee Wallet
 export const useEmployeeWallet = (employeeId?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['employee-wallet', employeeId],
+    queryKey: ['employee-wallet', employeeId, effectiveCompanyId],
     queryFn: async () => {
-      if (!employeeId) return null;
+      if (!employeeId || !effectiveCompanyId) return null;
       
       const { data, error } = await supabase
         .from('employee_wallets')
@@ -349,28 +347,29 @@ export const useEmployeeWallet = (employeeId?: string) => {
           current_level:reward_levels(*)
         `)
         .eq('employee_id', employeeId)
+        .eq('company_id', effectiveCompanyId)
         .maybeSingle();
       
       if (error) throw error;
       return data as EmployeeWallet | null;
     },
-    enabled: !!employeeId,
+    enabled: !!employeeId && !!effectiveCompanyId,
   });
 };
 
 // Hook: Points History
 export const usePointsHistory = (employeeId?: string, limit = 50) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['points-history', employeeId, limit],
+    queryKey: ['points-history', effectiveCompanyId, employeeId, limit],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       let query = supabase
         .from('points_history')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false })
         .limit(limit);
       
@@ -383,13 +382,14 @@ export const usePointsHistory = (employeeId?: string, limit = 50) => {
       if (error) throw error;
       return data as PointsHistory[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Add Manual Points
 export const useAddManualPoints = () => {
   const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -402,17 +402,17 @@ export const useAddManualPoints = () => {
       points: number; 
       description: string;
     }) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       const { data, error } = await supabase.rpc('award_points', {
         p_employee_id: employeeId,
-        p_company_id: profile.company_id,
+        p_company_id: effectiveCompanyId,
         p_points: points,
         p_event_type: 'manual_adjustment',
         p_source: 'admin',
         p_description: description,
-        p_added_by: profile.user_id,
-        p_added_by_name: profile.full_name,
+        p_added_by: profile?.user_id ?? null,
+        p_added_by_name: profile?.full_name ?? null,
       });
       
       if (error) throw error;
@@ -432,34 +432,34 @@ export const useAddManualPoints = () => {
 
 // Hook: Reward Levels
 export const useRewardLevels = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['reward-levels', profile?.company_id],
+    queryKey: ['reward-levels', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('reward_levels')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('level_order');
       
       if (error) throw error;
       return data as RewardLevel[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Create/Update Level
 export const useSaveRewardLevel = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (level: Partial<RewardLevel>) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       if (level.id) {
         const { error } = await supabase
@@ -480,7 +480,7 @@ export const useSaveRewardLevel = () => {
         if (error) throw error;
       } else {
         const insertData: RewardLevelsInsert = {
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           name: level.name || '',
           name_ar: level.name_ar,
           min_points: level.min_points || 0,
@@ -532,32 +532,34 @@ export const useDeleteRewardLevel = () => {
 
 // Hook: Badges
 export const useBadges = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['badges', profile?.company_id],
+    queryKey: ['badges', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('badges')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as Badge[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Employee Badges
 export const useEmployeeBadges = (employeeId?: string) => {
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
+
   return useQuery({
-    queryKey: ['employee-badges', employeeId],
+    queryKey: ['employee-badges', effectiveCompanyId, employeeId],
     queryFn: async () => {
-      if (!employeeId) return [];
+      if (!employeeId || !effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('employee_badges')
@@ -566,23 +568,24 @@ export const useEmployeeBadges = (employeeId?: string) => {
           badge:badges(*)
         `)
         .eq('employee_id', employeeId)
+        .eq('company_id', effectiveCompanyId)
         .order('earned_at', { ascending: false });
       
       if (error) throw error;
       return data as EmployeeBadge[];
     },
-    enabled: !!employeeId,
+    enabled: !!employeeId && !!effectiveCompanyId,
   });
 };
 
 // Hook: Save Badge
 export const useSaveBadge = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (badge: Partial<Badge>) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       if (badge.id) {
         const { error } = await supabase
@@ -603,7 +606,7 @@ export const useSaveBadge = () => {
         if (error) throw error;
       } else {
         const insertData: BadgesInsert = {
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           name: badge.name || '',
           name_ar: badge.name_ar,
           description: badge.description,

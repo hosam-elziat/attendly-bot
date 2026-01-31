@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 
 export interface Position {
@@ -54,12 +54,12 @@ export interface CreatePositionData {
 }
 
 export const usePositions = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['positions', profile?.company_id],
+    queryKey: ['positions', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       const { data, error } = await supabase
         .from('positions')
@@ -67,7 +67,7 @@ export const usePositions = () => {
           *,
           position_permissions (*)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('level', { ascending: true });
 
       if (error) throw error;
@@ -76,7 +76,7 @@ export const usePositions = () => {
       const { data: employees } = await supabase
         .from('employees')
         .select('position_id')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .not('position_id', 'is', null);
 
       const positionCounts: Record<string, number> = {};
@@ -86,10 +86,14 @@ export const usePositions = () => {
         }
       });
 
-      // Get reports_to relationships from junction table
-      const { data: reportsToData } = await supabase
-        .from('position_reports_to')
-        .select('position_id, reports_to_position_id');
+      // Get reports_to relationships from junction table (scoped to current positions)
+      const positionIds = (data || []).map((p: any) => p.id).filter(Boolean);
+      const { data: reportsToData } = positionIds.length
+        ? await supabase
+            .from('position_reports_to')
+            .select('position_id, reports_to_position_id')
+            .in('position_id', positionIds)
+        : { data: [] as any[] };
 
       const reportsToMap: Record<string, string[]> = {};
       reportsToData?.forEach(rel => {
@@ -105,23 +109,23 @@ export const usePositions = () => {
         reports_to_positions: reportsToMap[pos.id] || (pos.reports_to ? [pos.reports_to] : [])
       })) as PositionWithPermissions[];
     },
-    enabled: !!profile?.company_id
+    enabled: !!effectiveCompanyId
   });
 };
 
 export const useCreatePosition = () => {
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async (data: CreatePositionData) => {
-      if (!profile?.company_id) throw new Error('No company ID');
+      if (!effectiveCompanyId) throw new Error('No company ID');
 
       // Create position
       const { data: position, error: posError } = await supabase
         .from('positions')
         .insert({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           title: data.title,
           title_ar: data.title_ar,
           description: data.description,
