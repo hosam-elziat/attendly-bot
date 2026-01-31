@@ -1550,7 +1550,6 @@ serve(async (req) => {
               
               let salaryMsg = `💰 <b>تقرير أرباحك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
               salaryMsg += `⏱️ إجمالي ساعات العمل: ${totalWorkedHours.toFixed(1)} ساعة\n`
-              salaryMsg += `💵 سعر الساعة: ${hourlyRate.toLocaleString()} ${currency}\n`
               salaryMsg += `📊 إجمالي الحساب: ${Math.round(baseEarnings).toLocaleString()} ${currency}\n\n`
               
               if (manualBonuses > 0) {
