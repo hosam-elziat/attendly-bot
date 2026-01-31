@@ -38,7 +38,42 @@ serve(async (req) => {
       throw new Error(`API error: ${response.status}`);
     }
 
-    const holidays = await response.json();
+    // Get response text first to handle empty/truncated responses
+    const responseText = await response.text();
+    
+    if (!responseText || responseText.trim() === '') {
+      console.log('Empty response from holidays API');
+      return new Response(
+        JSON.stringify([]),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let holidays: any[];
+    try {
+      holidays = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse holidays response:', parseError);
+      // Try to repair truncated JSON array
+      const lastBrace = responseText.lastIndexOf('}');
+      if (lastBrace > 0) {
+        try {
+          const repaired = responseText.substring(0, lastBrace + 1) + ']';
+          holidays = JSON.parse(repaired);
+          console.log(`Recovered ${holidays.length} items from truncated response`);
+        } catch {
+          return new Response(
+            JSON.stringify([]),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else {
+        return new Response(
+          JSON.stringify([]),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
     
     // Filter holidays for current month
     const currentMonth = new Date().getMonth();
