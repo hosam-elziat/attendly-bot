@@ -60,6 +60,8 @@ const SuperAdminPlans = lazy(() => import("./pages/super-admin/SuperAdminPlans")
 const SuperAdminTelegramBots = lazy(() => import("./pages/super-admin/SuperAdminTelegramBots"));
 const SuperAdminBackups = lazy(() => import("./pages/super-admin/SuperAdminBackups"));
 const SuperAdminPhotoRequests = lazy(() => import("./pages/super-admin/SuperAdminPhotoRequests"));
+const SuperAdminFeatureFlags = lazy(() => import("./pages/super-admin/SuperAdminFeatureFlags"));
+const SuperAdminActivityLogs = lazy(() => import("./pages/super-admin/SuperAdminActivityLogs"));
 
 const queryClient = new QueryClient();
 
@@ -163,6 +165,12 @@ const App = () => (
                     } />
                     <Route path="/super-admin/photo-requests" element={
                       <SuperAdminProtectedRoute><SuperAdminPhotoRequests /></SuperAdminProtectedRoute>
+                    } />
+                    <Route path="/super-admin/feature-flags" element={
+                      <SuperAdminProtectedRoute><SuperAdminFeatureFlags /></SuperAdminProtectedRoute>
+                    } />
+                    <Route path="/super-admin/activity-logs" element={
+                      <SuperAdminProtectedRoute><SuperAdminActivityLogs /></SuperAdminProtectedRoute>
                     } />
                     
                     <Route path="*" element={<NotFound />} />
