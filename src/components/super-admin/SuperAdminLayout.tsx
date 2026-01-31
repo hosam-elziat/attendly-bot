@@ -39,6 +39,9 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
     { icon: Bot, label: 'بوتات التيليجرام', path: '/super-admin/telegram-bots' },
     { icon: ImageIcon, label: 'طلبات تغيير الصور', path: '/super-admin/photo-requests' },
     { icon: Database, label: 'النسخ الاحتياطي', path: '/super-admin/backups' },
+    { icon: Database, label: 'لقطات الشركات', path: '/super-admin/snapshots' },
+    { icon: LayoutDashboard, label: 'الإيرادات', path: '/super-admin/revenue' },
+    { icon: LayoutDashboard, label: 'أكواد الخصم', path: '/super-admin/discount-codes' },
     { icon: LayoutDashboard, label: 'سجلات النشاط', path: '/super-admin/activity-logs' },
   ];
 
