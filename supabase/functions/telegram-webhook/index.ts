@@ -1130,8 +1130,38 @@ serve(async (req) => {
               // Check if this is a night shift (attendance from yesterday)
               const isNightShift = attendanceDate !== today
               
-              // Calculate time difference from work end
-              const workEndTime = employee.work_end_time || companyDefaults.work_end_time
+              // ========== CHECK FOR EARLY LEAVE PERMISSION (FLEX-TIME) ==========
+              let earlyLeavePermissionMinutes = 0
+              const { data: earlyPermissionUsage } = await supabase
+                .from('inventory_usage_logs')
+                .select('effect_applied')
+                .eq('employee_id', employee.id)
+                .eq('used_for_date', attendanceDate)
+                .filter('effect_applied->>type', 'eq', 'early_leave')
+              
+              if (earlyPermissionUsage && earlyPermissionUsage.length > 0) {
+                earlyLeavePermissionMinutes = earlyPermissionUsage.reduce((sum: number, log: any) => {
+                  const minutes = log.effect_applied?.minutes || 60
+                  return sum + minutes
+                }, 0)
+              }
+              
+              // Max 2 hours (120 minutes) of early leave permission
+              const effectiveEarlyPermission = Math.min(earlyLeavePermissionMinutes, 120)
+              
+              // Calculate effective work end time (adjusted by permissions)
+              const originalWorkEndTime = employee.work_end_time || companyDefaults.work_end_time
+              let workEndTime = originalWorkEndTime
+              
+              if (effectiveEarlyPermission > 0 && originalWorkEndTime) {
+                const [origEndH, origEndM] = originalWorkEndTime.split(':').map(Number)
+                const newEndMinutes = (origEndH * 60 + origEndM) - effectiveEarlyPermission
+                const newEndH = Math.floor(newEndMinutes / 60)
+                const newEndM = newEndMinutes % 60
+                workEndTime = `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}:00`
+                console.log(`Early leave permission active: Original ${originalWorkEndTime}, Adjusted to ${workEndTime} (-${effectiveEarlyPermission} mins)`)
+              }
+              
               let earlyMinutes = 0
               
               // Freelancers are exempt from all time-based policies
@@ -1153,6 +1183,7 @@ serve(async (req) => {
               const earlyDepartureDeduction = companyPolicies?.early_departure_deduction ?? 0.5
               
               // Check if early departure requires confirmation (skip for freelancers)
+              // Note: earlyMinutes is now calculated based on ADJUSTED work end time
               if (earlyMinutes > earlyDepartureGrace && !isNightShift && !isFreelancer) {
                 // Need to ask for confirmation
                 const deductionDays = earlyDepartureDeduction
@@ -2076,15 +2107,46 @@ serve(async (req) => {
           
           const itemName = session.data.marketplace_item_name || 'ساعة تأخير'
           const localTime = getLocalTime(companyTimezone)
+          const todayDate = localTime.date
           
-          // Mark inventory item as used or record usage directly
+          // Check daily limit (max 2 hours = 120 minutes)
+          const { data: existingUsage } = await supabase
+            .from('inventory_usage_logs')
+            .select('effect_applied')
+            .eq('employee_id', employee.id)
+            .eq('used_for_date', todayDate)
+            .filter('effect_applied->>type', 'eq', 'late_permission')
+          
+          const totalUsedMinutes = (existingUsage || []).reduce((sum: number, log: any) => {
+            return sum + (log.effect_applied?.minutes || 60)
+          }, 0)
+          
+          if (totalUsedMinutes >= 120) {
+            await deleteSession()
+            await sendAndLogMessage(
+              `❌ <b>لقد وصلت للحد الأقصى!</b>\n\n` +
+              `⏰ استخدمت ${totalUsedMinutes} دقيقة تأخير اليوم\n` +
+              `📊 الحد الأقصى: ساعتين (120 دقيقة) يومياً`,
+              {
+                inline_keyboard: [
+                  [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+                  [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+                ]
+              }
+            )
+            break
+          }
+          
+          // Record usage
           await supabase.from('inventory_usage_logs').insert({
             inventory_id: session.data.inventory_id || null,
             employee_id: employee.id,
             company_id: companyId,
-            used_for_date: localTime.date,
+            used_for_date: todayDate,
             effect_applied: { type: 'late_permission', minutes: 60 },
-            notes: 'تم استخدام ساعة تأخير من النقاط'
+            notes: 'تم استخدام ساعة تأخير من النقاط',
+            manager_notified: true,
+            manager_notified_at: new Date().toISOString()
           })
           
           // Update inventory if from inventory
@@ -2094,27 +2156,95 @@ serve(async (req) => {
                 used_quantity: 1, 
                 is_fully_used: true,
                 used_at: new Date().toISOString(),
-                used_for_date: localTime.date
+                used_for_date: todayDate
               })
               .eq('id', session.data.inventory_id)
           }
           
-          // Notify manager
-          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, `استخدم ساعة تأخير ليوم ${localTime.date}`)
+          // Check if employee already checked in today - if so, remove late deduction
+          const { data: todayAttendanceLog } = await supabase
+            .from('attendance_logs')
+            .select('id, check_in_time, late_permission_minutes')
+            .eq('employee_id', employee.id)
+            .eq('date', todayDate)
+            .neq('status', 'absent')
+            .order('check_in_time', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          
+          let deductionRemoved = false
+          let removedDeductionAmount = 0
+          
+          if (todayAttendanceLog) {
+            // Update attendance record with new permission minutes
+            const newPermissionMinutes = (todayAttendanceLog.late_permission_minutes || 0) + 60
+            await supabase.from('attendance_logs')
+              .update({ late_permission_minutes: newPermissionMinutes })
+              .eq('id', todayAttendanceLog.id)
+            
+            // Find and remove any auto-generated late deduction for today
+            const { data: lateDeduction } = await supabase
+              .from('salary_adjustments')
+              .select('id, deduction, description')
+              .eq('employee_id', employee.id)
+              .eq('attendance_log_id', todayAttendanceLog.id)
+              .eq('is_auto_generated', true)
+              .ilike('description', '%خصم تأخير%')
+              .limit(1)
+              .maybeSingle()
+            
+            if (lateDeduction) {
+              // Delete the deduction
+              await supabase.from('salary_adjustments')
+                .delete()
+                .eq('id', lateDeduction.id)
+              
+              deductionRemoved = true
+              removedDeductionAmount = lateDeduction.deduction
+              console.log(`Removed late deduction ${lateDeduction.id} for employee ${employee.id} after permission usage`)
+            }
+          }
+          
+          // Notify manager with enhanced message
+          const detailsMsg = deductionRemoved 
+            ? `استخدم ساعة تأخير ليوم ${todayDate} - تم إلغاء خصم التأخير السابق`
+            : `استخدم ساعة تأخير ليوم ${todayDate}`
+          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, detailsMsg)
           
           await deleteSession()
-          await sendAndLogMessage(
-            `✅ <b>تم استخدام ساعة التأخير!</b>\n\n` +
-            `📅 التاريخ: ${localTime.date}\n` +
-            `⏰ تم إضافة ساعة تأخير مسموحة لحضورك اليوم\n\n` +
-            `📢 تم إبلاغ المدير`,
-            {
-              inline_keyboard: [
-                [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
-                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
-              ]
-            }
-          )
+          
+          // Build response message
+          let responseMsg = `✅ <b>تم استخدام ساعة التأخير!</b>\n\n` +
+            `📅 التاريخ: ${todayDate}\n` +
+            `⏰ تم إضافة ساعة تأخير مسموحة\n`
+          
+          if (deductionRemoved) {
+            responseMsg += `\n🎉 <b>تم إلغاء خصم التأخير السابق!</b>\n`
+          }
+          
+          if (todayAttendanceLog) {
+            responseMsg += `\n📝 سيتم تطبيق التأخير المسموح على سجل حضورك الحالي`
+          } else {
+            responseMsg += `\n📝 سيتم تطبيق التأخير المسموح عند تسجيل حضورك`
+          }
+          
+          responseMsg += `\n\n📢 تم إبلاغ المدير`
+          
+          await sendAndLogMessage(responseMsg, {
+            inline_keyboard: [
+              [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
+          
+          // Notify employee about deduction removal via separate message
+          if (deductionRemoved) {
+            await sendMessage(botToken, chatId,
+              `💰 <b>إشعار مالي</b>\n\n` +
+              `تم إلغاء خصم التأخير المترتب على حضورك اليوم\n` +
+              `بسبب استخدامك لساعة التأخير المدفوعة بالنقاط 🎉`
+            )
+          }
           break
         }
         
@@ -2124,15 +2254,46 @@ serve(async (req) => {
           
           const itemName = session.data.marketplace_item_name || 'ساعة إذن'
           const localTime = getLocalTime(companyTimezone)
+          const todayDate = localTime.date
+          
+          // Check daily limit (max 2 hours = 120 minutes)
+          const { data: existingEarlyUsage } = await supabase
+            .from('inventory_usage_logs')
+            .select('effect_applied')
+            .eq('employee_id', employee.id)
+            .eq('used_for_date', todayDate)
+            .filter('effect_applied->>type', 'eq', 'early_leave')
+          
+          const totalEarlyMinutes = (existingEarlyUsage || []).reduce((sum: number, log: any) => {
+            return sum + (log.effect_applied?.minutes || 60)
+          }, 0)
+          
+          if (totalEarlyMinutes >= 120) {
+            await deleteSession()
+            await sendAndLogMessage(
+              `❌ <b>لقد وصلت للحد الأقصى!</b>\n\n` +
+              `🚪 استخدمت ${totalEarlyMinutes} دقيقة إذن اليوم\n` +
+              `📊 الحد الأقصى: ساعتين (120 دقيقة) يومياً`,
+              {
+                inline_keyboard: [
+                  [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+                  [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+                ]
+              }
+            )
+            break
+          }
           
           // Record usage
           await supabase.from('inventory_usage_logs').insert({
             inventory_id: session.data.inventory_id || null,
             employee_id: employee.id,
             company_id: companyId,
-            used_for_date: localTime.date,
+            used_for_date: todayDate,
             effect_applied: { type: 'early_leave', minutes: 60 },
-            notes: 'تم استخدام ساعة إذن من النقاط'
+            notes: 'تم استخدام ساعة إذن من النقاط',
+            manager_notified: true,
+            manager_notified_at: new Date().toISOString()
           })
           
           // Update inventory if from inventory
@@ -2142,19 +2303,30 @@ serve(async (req) => {
                 used_quantity: 1, 
                 is_fully_used: true,
                 used_at: new Date().toISOString(),
-                used_for_date: localTime.date
+                used_for_date: todayDate
               })
               .eq('id', session.data.inventory_id)
           }
           
+          // Get employee work end time
+          const empWorkEndTime = employee.work_end_time || companyDefaults.work_end_time || '17:00:00'
+          const [endH, endM] = empWorkEndTime.split(':').map(Number)
+          const totalEarlyNow = totalEarlyMinutes + 60
+          const newEndMinutes = (endH * 60 + endM) - totalEarlyNow
+          const newEndH = Math.floor(newEndMinutes / 60)
+          const newEndM = newEndMinutes % 60
+          const newEndTime = `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}`
+          
           // Notify manager
-          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, `استخدم ساعة إذن ليوم ${localTime.date}`)
+          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, 
+            `استخدم ساعة إذن ليوم ${todayDate} - يمكنه الانصراف الساعة ${newEndTime} بدلاً من ${empWorkEndTime.substring(0, 5)}`)
           
           await deleteSession()
           await sendAndLogMessage(
             `✅ <b>تم استخدام ساعة الإذن!</b>\n\n` +
-            `📅 التاريخ: ${localTime.date}\n` +
-            `🚪 يمكنك الانصراف ساعة مبكراً اليوم\n\n` +
+            `📅 التاريخ: ${todayDate}\n` +
+            `🚪 يمكنك الانصراف الساعة <b>${newEndTime}</b> بدون خصم\n` +
+            `⏰ (بدلاً من ${empWorkEndTime.substring(0, 5)})\n\n` +
             `📢 تم إبلاغ المدير`,
             {
               inline_keyboard: [
@@ -5235,7 +5407,37 @@ async function processDirectCheckIn(
   let notes = ''
   let lateMessage = ''
   
-  const workStartTime = employee.work_start_time || companyDefaults.work_start_time
+  const originalWorkStartTime = employee.work_start_time || companyDefaults.work_start_time
+  
+  // ========== CHECK FOR LATE PERMISSION (FLEX-TIME) ==========
+  // Get permission minutes used today for late arrival
+  let latePermissionMinutes = 0
+  const { data: latePermissionUsage } = await supabase
+    .from('inventory_usage_logs')
+    .select('effect_applied')
+    .eq('employee_id', employee.id)
+    .eq('used_for_date', today)
+    .filter('effect_applied->>type', 'eq', 'late_permission')
+  
+  if (latePermissionUsage && latePermissionUsage.length > 0) {
+    latePermissionMinutes = latePermissionUsage.reduce((sum: number, log: any) => {
+      const minutes = log.effect_applied?.minutes || 60
+      return sum + minutes
+    }, 0)
+  }
+  
+  // Adjust work start time based on late permission (max 120 minutes = 2 hours)
+  const effectiveLatePermission = Math.min(latePermissionMinutes, 120)
+  let workStartTime = originalWorkStartTime
+  
+  if (effectiveLatePermission > 0) {
+    const [origH, origM] = originalWorkStartTime.split(':').map(Number)
+    const newStartMinutes = (origH * 60 + origM) + effectiveLatePermission
+    const newStartH = Math.floor(newStartMinutes / 60)
+    const newStartM = newStartMinutes % 60
+    workStartTime = `${String(newStartH).padStart(2, '0')}:${String(newStartM).padStart(2, '0')}:00`
+    console.log(`Late permission active: Original ${originalWorkStartTime}, Adjusted to ${workStartTime} (+${effectiveLatePermission} mins)`)
+  }
   
   // Create attendance log with location info if provided
   const insertData: any = {
@@ -5244,7 +5446,8 @@ async function processDirectCheckIn(
     date: today,
     check_in_time: nowUtc,
     status: 'checked_in',
-    notes: null
+    notes: null,
+    late_permission_minutes: effectiveLatePermission
   }
   
   // Add location tracking if available
@@ -5275,6 +5478,16 @@ async function processDirectCheckIn(
   
   // Freelancers are exempt from all time-based policies (late deductions)
   const isFreelancer = empDetails?.is_freelancer === true
+  
+  // Add flex-time message if permission was applied
+  let flexTimeMessage = ''
+  if (effectiveLatePermission > 0) {
+    const hours = Math.floor(effectiveLatePermission / 60)
+    const mins = effectiveLatePermission % 60
+    const timeStr = hours > 0 ? `${hours} ساعة${mins > 0 ? ` و ${mins} دقيقة` : ''}` : `${mins} دقيقة`
+    flexTimeMessage = `\n\n⏰ <b>تأخير مسموح:</b> ${timeStr}\n` +
+      `📝 تم تعديل موعد حضورك من ${originalWorkStartTime.substring(0, 5)} إلى ${workStartTime.substring(0, 5)}`
+  }
   
   if (workStartTime && checkInTime > workStartTime && !isFreelancer) {
     const [startH, startM] = workStartTime.split(':').map(Number)
@@ -5413,6 +5626,7 @@ async function processDirectCheckIn(
     `✅ تم تسجيل حضورك بنجاح!\n\n` +
     `📅 التاريخ: ${today}\n` +
     `⏰ الوقت: ${checkInTime}` +
+    flexTimeMessage +
     lateMessage +
     rewardMessage,
     getEmployeeKeyboard(managerPermissions)

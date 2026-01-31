@@ -89,8 +89,10 @@ export type Database = {
           company_id: string
           created_at: string
           date: string
+          early_leave_permission_minutes: number | null
           employee_id: string
           id: string
+          late_permission_minutes: number | null
           notes: string | null
           status: Database["public"]["Enums"]["attendance_status"] | null
           updated_at: string
@@ -104,8 +106,10 @@ export type Database = {
           company_id: string
           created_at?: string
           date?: string
+          early_leave_permission_minutes?: number | null
           employee_id: string
           id?: string
+          late_permission_minutes?: number | null
           notes?: string | null
           status?: Database["public"]["Enums"]["attendance_status"] | null
           updated_at?: string
@@ -119,8 +123,10 @@ export type Database = {
           company_id?: string
           created_at?: string
           date?: string
+          early_leave_permission_minutes?: number | null
           employee_id?: string
           id?: string
+          late_permission_minutes?: number | null
           notes?: string | null
           status?: Database["public"]["Enums"]["attendance_status"] | null
           updated_at?: string
@@ -893,6 +899,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      default_marketplace_items: {
+        Row: {
+          approval_required: boolean | null
+          created_at: string | null
+          description: string | null
+          description_ar: string | null
+          effect_type: string | null
+          effect_value: Json | null
+          id: string
+          is_active: boolean | null
+          is_premium: boolean | null
+          item_type: string | null
+          name: string
+          name_ar: string | null
+          points_price: number
+        }
+        Insert: {
+          approval_required?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          description_ar?: string | null
+          effect_type?: string | null
+          effect_value?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_premium?: boolean | null
+          item_type?: string | null
+          name: string
+          name_ar?: string | null
+          points_price: number
+        }
+        Update: {
+          approval_required?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          description_ar?: string | null
+          effect_type?: string | null
+          effect_value?: Json | null
+          id?: string
+          is_active?: boolean | null
+          is_premium?: boolean | null
+          item_type?: string | null
+          name?: string
+          name_ar?: string | null
+          points_price?: number
+        }
+        Relationships: []
       }
       deleted_records: {
         Row: {
@@ -3593,6 +3647,14 @@ export type Database = {
           p_company_id: string
           p_employee_id: string
           p_period_type?: string
+        }
+        Returns: number
+      }
+      get_permission_usage_today: {
+        Args: {
+          p_date: string
+          p_employee_id: string
+          p_permission_type: string
         }
         Returns: number
       }
