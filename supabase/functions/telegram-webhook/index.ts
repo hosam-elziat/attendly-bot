@@ -1488,11 +1488,14 @@ serve(async (req) => {
             // Get salary info
             const { data: empDetails } = await supabase
               .from('employees')
-              .select('base_salary, currency, work_start_time, work_end_time, weekend_days')
+              .select('base_salary, currency, work_start_time, work_end_time, weekend_days, is_freelancer, hourly_rate, break_duration_minutes')
               .eq('id', employee.id)
               .single()
             
             const baseSalary = empDetails?.base_salary || 0
+            const isFreelancer = empDetails?.is_freelancer === true
+            const hourlyRate = empDetails?.hourly_rate || 0
+            const breakMinutes = empDetails?.break_duration_minutes || 60
             // Use employee currency, fallback to company default currency
             const currency = empDetails?.currency || companyDefaults.currency
             
@@ -1508,7 +1511,7 @@ serve(async (req) => {
               .gte('date', monthStart.toISOString().split('T')[0])
               .lte('date', monthEnd.toISOString().split('T')[0])
             
-            // Get adjustments
+            // Get adjustments - separate auto-generated from manual
             const { data: adjustments } = await supabase
               .from('salary_adjustments')
               .select('*')
@@ -1516,47 +1519,92 @@ serve(async (req) => {
               .gte('month', monthStart.toISOString().split('T')[0])
               .lte('month', monthEnd.toISOString().split('T')[0])
             
-            const totalBonus = adjustments?.reduce((sum, a) => sum + (a.bonus || 0), 0) || 0
-            const totalDeduction = adjustments?.reduce((sum, a) => sum + (a.deduction || 0), 0) || 0
+            const workDays = monthAttendance?.filter(log => log.check_in_time && log.check_out_time).length || 0
             
-            // Calculate overtime (simplified - hours beyond 8 per day)
-            let overtimeHours = 0
-            const workStartTime = empDetails?.work_start_time || '09:00:00'
-            const workEndTime = empDetails?.work_end_time || '17:00:00'
-            
-            for (const log of monthAttendance || []) {
-              if (log.check_in_time && log.check_out_time) {
-                const checkIn = new Date(log.check_in_time)
-                const checkOut = new Date(log.check_out_time)
-                const hoursWorked = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)
-                if (hoursWorked > 8) {
-                  overtimeHours += hoursWorked - 8
+            if (isFreelancer) {
+              // ========== FREELANCER SALARY REPORT ==========
+              // Calculate total worked hours from attendance
+              let totalWorkedMinutes = 0
+              for (const log of monthAttendance || []) {
+                if (log.check_in_time && log.check_out_time) {
+                  const checkIn = new Date(log.check_in_time)
+                  const checkOut = new Date(log.check_out_time)
+                  const workedMinutes = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60) - breakMinutes
+                  totalWorkedMinutes += Math.max(0, workedMinutes)
                 }
               }
+              const totalWorkedHours = totalWorkedMinutes / 60
+              
+              // Calculate base earnings from hours
+              const baseEarnings = totalWorkedHours * hourlyRate
+              
+              // Get manual bonuses (exclude auto-generated earnings bonuses)
+              const manualBonuses = adjustments?.filter(a => !a.is_auto_generated && (a.bonus || 0) > 0)
+                .reduce((sum, a) => sum + (a.bonus || 0), 0) || 0
+              
+              // Get all deductions
+              const totalDeduction = adjustments?.reduce((sum, a) => sum + (a.deduction || 0), 0) || 0
+              
+              // Net = base earnings + manual bonuses - deductions
+              const netSalary = baseEarnings + manualBonuses - totalDeduction
+              
+              let salaryMsg = `💰 <b>تقرير أرباحك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
+              salaryMsg += `⏱️ إجمالي ساعات العمل: ${totalWorkedHours.toFixed(1)} ساعة\n`
+              salaryMsg += `💵 سعر الساعة: ${hourlyRate.toLocaleString()} ${currency}\n`
+              salaryMsg += `📊 إجمالي الحساب: ${Math.round(baseEarnings).toLocaleString()} ${currency}\n\n`
+              
+              if (manualBonuses > 0) {
+                salaryMsg += `🎁 مكافآت مباشرة: +${manualBonuses.toLocaleString()} ${currency}\n`
+              }
+              if (totalDeduction > 0) {
+                salaryMsg += `📉 خصومات: -${totalDeduction.toLocaleString()} ${currency}\n`
+              }
+              
+              salaryMsg += `\n💵 <b>المجموع الكلي: ${Math.round(netSalary).toLocaleString()} ${currency}</b>\n`
+              salaryMsg += `\n📅 أيام العمل: ${workDays} يوم`
+              
+              await sendAndLogMessage(salaryMsg, getEmployeeKeyboard(managerPermissions))
+            } else {
+              // ========== REGULAR EMPLOYEE SALARY REPORT ==========
+              const totalBonus = adjustments?.reduce((sum, a) => sum + (a.bonus || 0), 0) || 0
+              const totalDeduction = adjustments?.reduce((sum, a) => sum + (a.deduction || 0), 0) || 0
+              
+              // Calculate overtime (simplified - hours beyond 8 per day)
+              let overtimeHours = 0
+              
+              for (const log of monthAttendance || []) {
+                if (log.check_in_time && log.check_out_time) {
+                  const checkIn = new Date(log.check_in_time)
+                  const checkOut = new Date(log.check_out_time)
+                  const hoursWorked = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)
+                  if (hoursWorked > 8) {
+                    overtimeHours += hoursWorked - 8
+                  }
+                }
+              }
+              
+              // Calculate overtime amount (hourly rate * 2 for overtime)
+              const calcHourlyRate = baseSalary / 30 / 8
+              const overtimeAmount = Math.round(overtimeHours * calcHourlyRate * 2)
+              
+              const netSalary = baseSalary + totalBonus + overtimeAmount - totalDeduction
+              
+              let salaryMsg = `💰 <b>تقرير راتبك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
+              salaryMsg += `📊 الراتب الأساسي: ${baseSalary.toLocaleString()} ${currency}\n`
+              if (overtimeAmount > 0) {
+                salaryMsg += `⏰ الوقت الإضافي (${overtimeHours.toFixed(1)} ساعة): +${overtimeAmount.toLocaleString()} ${currency}\n`
+              }
+              if (totalBonus > 0) {
+                salaryMsg += `🎉 المكافآت: +${totalBonus.toLocaleString()} ${currency}\n`
+              }
+              if (totalDeduction > 0) {
+                salaryMsg += `📉 الخصومات: -${totalDeduction.toLocaleString()} ${currency}\n`
+              }
+              salaryMsg += `\n💵 <b>الإجمالي: ${netSalary.toLocaleString()} ${currency}</b>\n`
+              salaryMsg += `\n📅 أيام العمل: ${workDays} يوم`
+              
+              await sendAndLogMessage(salaryMsg, getEmployeeKeyboard(managerPermissions))
             }
-            
-            // Calculate overtime amount (hourly rate * 2 for overtime)
-            const hourlyRate = baseSalary / 30 / 8
-            const overtimeAmount = Math.round(overtimeHours * hourlyRate * 2)
-            
-            const workDays = monthAttendance?.length || 0
-            const netSalary = baseSalary + totalBonus + overtimeAmount - totalDeduction
-            
-            let salaryMsg = `💰 <b>تقرير راتبك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
-            salaryMsg += `📊 الراتب الأساسي: ${baseSalary.toLocaleString()} ${currency}\n`
-            if (overtimeAmount > 0) {
-              salaryMsg += `⏰ الوقت الإضافي (${overtimeHours.toFixed(1)} ساعة): +${overtimeAmount.toLocaleString()} ${currency}\n`
-            }
-            if (totalBonus > 0) {
-              salaryMsg += `🎉 المكافآت: +${totalBonus.toLocaleString()} ${currency}\n`
-            }
-            if (totalDeduction > 0) {
-              salaryMsg += `📉 الخصومات: -${totalDeduction.toLocaleString()} ${currency}\n`
-            }
-            salaryMsg += `\n💵 <b>الإجمالي: ${netSalary.toLocaleString()} ${currency}</b>\n`
-            salaryMsg += `\n📅 أيام العمل: ${workDays} يوم`
-            
-            await sendAndLogMessage(salaryMsg, getEmployeeKeyboard(managerPermissions))
           }
           break
 
