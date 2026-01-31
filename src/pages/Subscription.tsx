@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { CreditCard, Users, Calendar, Crown, Loader2, Check, Star, Zap } from 'lucide-react';
 import { format } from 'date-fns';
@@ -41,6 +42,7 @@ interface PlanInfo {
 
 const Subscription = () => {
   const { profile, session, loading: authLoading } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const { language } = useLanguage();
 
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -91,7 +93,7 @@ const Subscription = () => {
       // Wait for auth hydration so new accounts have profile/company_id ready.
       if (authLoading) return;
 
-      if (!profile?.company_id) {
+      if (!effectiveCompanyId) {
         if (isMounted) {
           setSubscription(null);
           setEmployeeCount(0);
@@ -107,12 +109,12 @@ const Subscription = () => {
           supabase
             .from('subscriptions')
             .select('status, plan_name, max_employees, current_period_end, current_period_start, billing_cycle, plan_id')
-            .eq('company_id', profile.company_id)
+            .eq('company_id', effectiveCompanyId)
             .maybeSingle(),
           supabase
             .from('employees')
             .select('id', { count: 'exact' })
-            .eq('company_id', profile.company_id)
+            .eq('company_id', effectiveCompanyId)
             .eq('is_active', true),
         ]);
 
@@ -132,12 +134,12 @@ const Subscription = () => {
     return () => {
       isMounted = false;
     };
-  }, [authLoading, profile?.company_id]);
+  }, [authLoading, effectiveCompanyId]);
 
   const handleUpgrade = async (planId: string, planName: string, plan: PlanInfo) => {
     setUpgrading(planId);
     try {
-      if (!profile?.company_id) return;
+      if (!effectiveCompanyId) return;
       
       // Calculate 3 months from now
       const now = new Date();
@@ -147,7 +149,7 @@ const Subscription = () => {
       const { error } = await supabase
         .from('subscriptions')
         .upsert({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           plan_id: planId,
           plan_name: planName,
           status: 'trial',
@@ -165,7 +167,7 @@ const Subscription = () => {
       const { data: newSub } = await supabase
         .from('subscriptions')
         .select('status, plan_name, max_employees, current_period_end, current_period_start, billing_cycle, plan_id')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .single();
       
       if (newSub) setSubscription(newSub);

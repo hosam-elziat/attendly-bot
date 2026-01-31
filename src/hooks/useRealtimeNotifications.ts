@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -8,7 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 const NOTIFICATION_SOUND_URL = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleS0DDH+21u2rXxkLM4zL8N+OJwAAaLbW9aSEIQAAdKjB4seKKQAAeJuq2seVOwAAg4+Z0MykcAAAi4GL0NSxgAAAk3qB0Ni/kAAAm3N50eHLnwAAomp1zeXSpgAAqGJxzejXrQAArFltzOncswAAslNpyurgtQAAt0xly+vkvQAAu0ZiyOzowQAAvkBfxuzsxAAAwDpbxO7wyAAAwy5WwfDyzAAAxi1TvvH2zwAAySZQu/L6zwAAzSFNufT9zwAAzx1LtvX+zgAA0RpJs/b+zQAA0xhHsfb+ywAA1RZFr/b9yQAA1hVDrfb8xgAA1xRBq/b6xAAA2BM/qfb4wQAA2RI9p/b2vgAA2RA7pvb0uwAA2g86pPbysAAA2w44ovbwrAAA2ww2oPbupwAA3As1nvbspAAA3Ao0nPbqoAAA3Qkzmfbonw';
 
 export function useRealtimeNotifications() {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -26,7 +26,7 @@ export function useRealtimeNotifications() {
   }, []);
 
   useEffect(() => {
-    if (!profile?.company_id) return;
+    if (!effectiveCompanyId) return;
 
     // Subscribe to join requests
     const joinRequestsChannel = supabase
@@ -37,7 +37,7 @@ export function useRealtimeNotifications() {
           event: 'INSERT',
           schema: 'public',
           table: 'join_requests',
-          filter: `company_id=eq.${profile.company_id}`,
+          filter: `company_id=eq.${effectiveCompanyId}`,
         },
         (payload) => {
           playNotificationSound();
@@ -65,7 +65,7 @@ export function useRealtimeNotifications() {
           event: 'INSERT',
           schema: 'public',
           table: 'leave_requests',
-          filter: `company_id=eq.${profile.company_id}`,
+          filter: `company_id=eq.${effectiveCompanyId}`,
         },
         (payload) => {
           playNotificationSound();
@@ -93,7 +93,7 @@ export function useRealtimeNotifications() {
           event: 'INSERT',
           schema: 'public',
           table: 'attendance_logs',
-          filter: `company_id=eq.${profile.company_id}`,
+          filter: `company_id=eq.${effectiveCompanyId}`,
         },
         (payload) => {
           playNotificationSound();
@@ -108,7 +108,7 @@ export function useRealtimeNotifications() {
           event: 'UPDATE',
           schema: 'public',
           table: 'attendance_logs',
-          filter: `company_id=eq.${profile.company_id}`,
+          filter: `company_id=eq.${effectiveCompanyId}`,
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ['attendance'] });
@@ -123,28 +123,28 @@ export function useRealtimeNotifications() {
       supabase.removeChannel(leaveRequestsChannel);
       supabase.removeChannel(attendanceChannel);
     };
-  }, [profile?.company_id, playNotificationSound, queryClient]);
+  }, [effectiveCompanyId, playNotificationSound, queryClient]);
 }
 
 // Hook to get pending counts for dashboard
 export function usePendingCounts() {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return {
-    queryKey: ['pending-counts', profile?.company_id],
+    queryKey: ['pending-counts', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return { joinRequests: 0, leaveRequests: 0 };
+      if (!effectiveCompanyId) return { joinRequests: 0, leaveRequests: 0 };
 
       const [joinRes, leaveRes] = await Promise.all([
         supabase
           .from('join_requests')
           .select('*', { count: 'exact', head: true })
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('status', 'pending'),
         supabase
           .from('leave_requests')
           .select('*', { count: 'exact', head: true })
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('status', 'pending'),
       ]);
 
@@ -153,6 +153,6 @@ export function usePendingCounts() {
         leaveRequests: leaveRes.count || 0,
       };
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   };
 }

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from '@/hooks/use-toast';
 
 export interface ApprovedHoliday {
@@ -23,17 +24,17 @@ export interface ApprovedHoliday {
 }
 
 export const useApprovedHolidays = (year?: number, month?: number) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['approved-holidays', profile?.company_id, year, month],
+    queryKey: ['approved-holidays', effectiveCompanyId, year, month],
     queryFn: async (): Promise<ApprovedHoliday[]> => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       let query = supabase
         .from('approved_holidays')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('holiday_date', { ascending: true });
 
       if (year) {
@@ -52,7 +53,7 @@ export const useApprovedHolidays = (year?: number, month?: number) => {
 
       return (data || []) as ApprovedHoliday[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
@@ -153,17 +154,17 @@ export const useRejectHoliday = () => {
 
 export const useSyncPublicHolidays = () => {
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async (holidays: { date: string; name: string; localName: string }[]) => {
-      if (!profile?.company_id) throw new Error('No company ID');
+      if (!effectiveCompanyId) throw new Error('No company ID');
 
       const year = new Date().getFullYear();
       const month = new Date().getMonth();
 
       const holidaysToInsert = holidays.map((h) => ({
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         holiday_date: h.date,
         holiday_name: h.name,
         holiday_name_local: h.localName,

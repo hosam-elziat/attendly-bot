@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +45,7 @@ interface EmployeeWithSalary {
 
 const Salaries = () => {
   const { t, language, direction } = useLanguage();
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const [employees, setEmployees] = useState<EmployeeWithSalary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -57,7 +57,7 @@ const Salaries = () => {
   const { data: adjustments = [], isLoading: adjustmentsLoading, refetch: refetchAdjustments } = useSalaryAdjustments(selectedMonth);
 
   const fetchSalaryData = async () => {
-    if (!profile?.company_id) return;
+    if (!effectiveCompanyId) return;
 
     setLoading(true);
     try {
@@ -68,7 +68,7 @@ const Salaries = () => {
       const { data: employeesData, error: empError } = await supabase
         .from('employees')
         .select('id, full_name, base_salary, currency, is_freelancer, hourly_rate')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', true);
 
       if (empError) throw empError;
@@ -77,7 +77,7 @@ const Salaries = () => {
       const { data: adjustmentsData, error: adjError } = await supabase
         .from('salary_adjustments')
         .select('employee_id, bonus, deduction')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .gte('month', monthStr)
         .lt('month', format(new Date(new Date(monthStr).setMonth(new Date(monthStr).getMonth() + 1)), 'yyyy-MM-dd'));
 
@@ -87,7 +87,7 @@ const Salaries = () => {
       const { data: attendance, error: attError } = await supabase
         .from('attendance_logs')
         .select('employee_id, date')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .gte('date', monthStr)
         .lt('date', format(new Date(new Date(monthStr).setMonth(new Date(monthStr).getMonth() + 1)), 'yyyy-MM-dd'));
 
@@ -128,7 +128,7 @@ const Salaries = () => {
   useEffect(() => {
     fetchSalaryData();
     refetchAdjustments();
-  }, [profile?.company_id, selectedMonth]);
+  }, [effectiveCompanyId, selectedMonth]);
 
   // For freelancers: net salary = total_bonus - total_deduction (no base salary)
   // For regular: net salary = base_salary + total_bonus - total_deduction
