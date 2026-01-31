@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 
 export interface PublicHoliday {
   date: string;
@@ -13,21 +13,21 @@ export interface PublicHoliday {
 }
 
 export const usePublicHolidays = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   // First get the company's country code
   const { data: company } = useQuery({
-    queryKey: ['company-country', profile?.company_id],
+    queryKey: ['company-country', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return null;
+      if (!effectiveCompanyId) return null;
       const { data } = await supabase
         .from('companies')
         .select('country_code')
-        .eq('id', profile.company_id)
+        .eq('id', effectiveCompanyId)
         .single();
       return data;
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 
   return useQuery({

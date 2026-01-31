@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 
 export interface JoinRequestReviewer {
@@ -12,28 +12,28 @@ export interface JoinRequestReviewer {
 }
 
 export const useJoinRequestReviewers = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['join-request-reviewers', profile?.company_id],
+    queryKey: ['join-request-reviewers', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('join_request_reviewers')
         .select('*')
-        .eq('company_id', profile.company_id);
+        .eq('company_id', effectiveCompanyId);
 
       if (error) throw error;
       return data as JoinRequestReviewer[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useAddJoinRequestReviewer = () => {
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async ({ 
@@ -43,12 +43,12 @@ export const useAddJoinRequestReviewer = () => {
       reviewerType: 'position' | 'employee'; 
       reviewerId: string;
     }) => {
-      if (!profile?.company_id) throw new Error('No company ID');
+      if (!effectiveCompanyId) throw new Error('No company ID');
 
       const { data, error } = await supabase
         .from('join_request_reviewers')
         .insert({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           reviewer_type: reviewerType,
           reviewer_id: reviewerId,
         })

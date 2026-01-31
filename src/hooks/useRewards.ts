@@ -652,3 +652,86 @@ export const useDeleteBadge = () => {
     },
   });
 };
+
+// Hook: Rewards Stats
+export const useRewardsStats = () => {
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
+
+  return useQuery({
+    queryKey: ['rewards-stats', effectiveCompanyId],
+    queryFn: async () => {
+      if (!effectiveCompanyId) return null;
+
+      // Get total points distributed
+      const { data: wallets } = await supabase
+        .from('employee_wallets')
+        .select('total_points, earned_points, spent_points')
+        .eq('company_id', effectiveCompanyId);
+
+      // Get active employees count
+      const { count: activeEmployees } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', effectiveCompanyId)
+        .eq('is_active', true);
+
+      // Get pending orders count
+      const { count: pendingOrders } = await supabase
+        .from('marketplace_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', effectiveCompanyId)
+        .eq('status', 'pending');
+
+      const totalEarned = wallets?.reduce((sum, w) => sum + (w.earned_points || 0), 0) || 0;
+      const totalSpent = wallets?.reduce((sum, w) => sum + (w.spent_points || 0), 0) || 0;
+
+      return {
+        totalPointsDistributed: totalEarned,
+        totalPointsSpent: totalSpent,
+        activeEmployees: activeEmployees || 0,
+        pendingOrders: pendingOrders || 0,
+      };
+    },
+    enabled: !!effectiveCompanyId,
+  });
+};
+
+// Hook: Rewards Leaderboard
+export const useRewardsLeaderboard = (periodType: string = 'monthly', limit: number = 10) => {
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
+
+  return useQuery({
+    queryKey: ['rewards-leaderboard', effectiveCompanyId, periodType, limit],
+    queryFn: async () => {
+      if (!effectiveCompanyId) return [];
+
+      const { data, error } = await supabase
+        .from('employee_wallets')
+        .select(`
+          employee_id,
+          total_points,
+          earned_points,
+          employees (
+            id,
+            full_name,
+            department
+          )
+        `)
+        .eq('company_id', effectiveCompanyId)
+        .order('total_points', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      
+      return (data || []).map((item, index) => ({
+        rank: index + 1,
+        employee_id: item.employee_id,
+        full_name: (item.employees as any)?.full_name || 'Unknown',
+        department: (item.employees as any)?.department,
+        total_points: item.total_points || 0,
+        earned_points: item.earned_points || 0,
+      }));
+    },
+    enabled: !!effectiveCompanyId,
+  });
+};

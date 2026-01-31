@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 
 export interface PendingAttendance {
@@ -37,12 +38,12 @@ export interface PendingAttendance {
 }
 
 export const usePendingAttendance = (status?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['pending-attendance', profile?.company_id, status],
+    queryKey: ['pending-attendance', effectiveCompanyId, status],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       let query = supabase
         .from('pending_attendance')
@@ -53,7 +54,7 @@ export const usePendingAttendance = (status?: string) => {
             email
           )
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
 
       if (status) {
@@ -65,28 +66,28 @@ export const usePendingAttendance = (status?: string) => {
       if (error) throw error;
       return data as PendingAttendance[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const usePendingAttendanceCount = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['pending-attendance-count', profile?.company_id],
+    queryKey: ['pending-attendance-count', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return 0;
+      if (!effectiveCompanyId) return 0;
       
       const { count, error } = await supabase
         .from('pending_attendance')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('status', 'pending');
 
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
@@ -110,7 +111,7 @@ export const useApprovePendingAttendance = () => {
           status: 'approved',
           approved_time: approved_time || new Date().toISOString(),
           reviewed_at: new Date().toISOString(),
-          reviewed_by: profile?.user_id,
+          reviewed_by: (profile as any)?.user_id,
           notes,
         })
         .eq('id', id)
@@ -150,7 +151,7 @@ export const useRejectPendingAttendance = () => {
           status: 'rejected',
           rejection_reason,
           reviewed_at: new Date().toISOString(),
-          reviewed_by: profile?.user_id,
+          reviewed_by: (profile as any)?.user_id,
         })
         .eq('id', id)
         .select()

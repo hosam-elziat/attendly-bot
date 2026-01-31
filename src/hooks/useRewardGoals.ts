@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 
 export interface RewardGoal {
@@ -58,12 +59,12 @@ export interface GoalAchievement {
 }
 
 export const useRewardGoals = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['reward-goals', profile?.company_id],
+    queryKey: ['reward-goals', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       const { data, error } = await supabase
         .from('reward_goals')
@@ -72,23 +73,23 @@ export const useRewardGoals = () => {
           winner:employees!reward_goals_winner_id_fkey(id, full_name),
           reward_item:marketplace_items(id, name, name_ar)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as RewardGoal[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useActiveGoals = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['active-goals', profile?.company_id],
+    queryKey: ['active-goals', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       const { data, error } = await supabase
         .from('reward_goals')
@@ -97,24 +98,24 @@ export const useActiveGoals = () => {
           winner:employees!reward_goals_winner_id_fkey(id, full_name),
           reward_item:marketplace_items(id, name, name_ar)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as RewardGoal[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useGoalAchievements = (goalId?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
     queryKey: ['goal-achievements', goalId],
     queryFn: async () => {
-      if (!profile?.company_id || !goalId) return [];
+      if (!effectiveCompanyId || !goalId) return [];
 
       const { data, error } = await supabase
         .from('goal_achievements')
@@ -128,17 +129,18 @@ export const useGoalAchievements = (goalId?: string) => {
       if (error) throw error;
       return data as GoalAchievement[];
     },
-    enabled: !!profile?.company_id && !!goalId,
+    enabled: !!effectiveCompanyId && !!goalId,
   });
 };
 
 export const useCreateGoal = () => {
   const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (goal: Partial<RewardGoal>) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
 
       const insertData = {
         name: goal.name || '',
@@ -156,8 +158,8 @@ export const useCreateGoal = () => {
         reward_description: goal.reward_description,
         reward_description_ar: goal.reward_description_ar,
         is_active: goal.is_active ?? true,
-        company_id: profile.company_id,
-        created_by: profile.user_id,
+        company_id: effectiveCompanyId,
+        created_by: profile?.user_id,
       };
 
       const { data, error } = await supabase
@@ -230,12 +232,12 @@ export const useDeleteGoal = () => {
 };
 
 export const useAnnounceGoal = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (goalId: string) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
 
       // First update the goal as announced
       const { data: goal, error: updateError } = await supabase
@@ -252,7 +254,7 @@ export const useAnnounceGoal = () => {
 
       // Call edge function to announce via Telegram
       const { error: announceError } = await supabase.functions.invoke('announce-goal', {
-        body: { goal_id: goalId, company_id: profile.company_id }
+        body: { goal_id: goalId, company_id: effectiveCompanyId }
       });
 
       if (announceError) {

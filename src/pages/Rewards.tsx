@@ -23,8 +23,7 @@ import {
   Power,
   Target
 } from 'lucide-react';
-import { useRewardsStats, useRewardsLeaderboard } from '@/hooks/useMarketplace';
-import { useRewardRules, useInitializeRewardRules } from '@/hooks/useRewards';
+import { useRewardRules, useInitializeRewardRules, useRewardsStats, useRewardsLeaderboard } from '@/hooks/useRewards';
 import { useCompany, useToggleRewardsSystem } from '@/hooks/useCompany';
 import RewardsRulesTab from '@/components/rewards/RewardsRulesTab';
 import RewardsLevelsTab from '@/components/rewards/RewardsLevelsTab';
@@ -144,7 +143,7 @@ const Rewards = () => {
                     {isArabic ? 'إجمالي النقاط' : 'Total Points'}
                   </p>
                   <p className="text-2xl font-bold text-amber-600">
-                    {stats?.totalPointsIssued?.toLocaleString() || 0}
+                    {stats?.totalPointsDistributed?.toLocaleString() || 0}
                   </p>
                 </div>
                 <Star className="w-8 h-8 text-amber-500" />
@@ -160,7 +159,7 @@ const Rewards = () => {
                     {isArabic ? 'المحافظ النشطة' : 'Active Wallets'}
                   </p>
                   <p className="text-2xl font-bold text-purple-600">
-                    {stats?.activeWallets || 0}
+                    {stats?.activeEmployees || 0}
                   </p>
                 </div>
                 <Users className="w-8 h-8 text-purple-500" />
@@ -176,7 +175,7 @@ const Rewards = () => {
                     {isArabic ? 'إجمالي الطلبات' : 'Total Orders'}
                   </p>
                   <p className="text-2xl font-bold text-blue-600">
-                    {stats?.totalOrders || 0}
+                    {stats?.pendingOrders || 0}
                   </p>
                 </div>
                 <ShoppingBag className="w-8 h-8 text-blue-500" />

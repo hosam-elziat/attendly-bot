@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -169,45 +170,52 @@ export const generateChangeDescription = (
 };
 
 export const useAuditLogs = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['audit-logs', profile?.company_id],
+    queryKey: ['audit-logs', effectiveCompanyId],
     queryFn: async () => {
+      if (!effectiveCompanyId) return [];
+      
       const { data, error } = await supabase
         .from('audit_logs')
         .select('*')
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false })
         .limit(200);
 
       if (error) throw error;
       return data as AuditLog[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useDeletedRecords = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['deleted-records', profile?.company_id],
+    queryKey: ['deleted-records', effectiveCompanyId],
     queryFn: async () => {
+      if (!effectiveCompanyId) return [];
+      
       const { data, error } = await supabase
         .from('deleted_records')
         .select('*')
+        .eq('company_id', effectiveCompanyId)
         .eq('is_restored', false)
         .order('deleted_at', { ascending: false });
 
       if (error) throw error;
       return data as DeletedRecord[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useLogAction = () => {
-  const { profile, user } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess, superAdminInfo } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -226,15 +234,20 @@ export const useLogAction = () => {
       newData?: Record<string, unknown> | null;
       description?: string;
     }) => {
-      if (!profile?.company_id || !user?.id) throw new Error('Not authenticated');
+      if (!effectiveCompanyId || !user?.id) throw new Error('Not authenticated');
 
       // Auto-generate description if not provided
-      const autoDescription = description || generateChangeDescription(action, tableName, oldData, newData);
+      let autoDescription = description || generateChangeDescription(action, tableName, oldData, newData);
+      
+      // Add Super Admin prefix if applicable
+      if (isSuperAdminAccess && superAdminInfo) {
+        autoDescription = `[Super Admin: ${superAdminInfo.adminName}] ${autoDescription}`;
+      }
 
       const { error } = await supabase.from('audit_logs').insert({
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         user_id: user.id,
-        user_email: user.email || null,
+        user_email: isSuperAdminAccess ? superAdminInfo?.adminEmail : user.email || null,
         table_name: tableName,
         record_id: recordId,
         action,
@@ -252,13 +265,14 @@ export const useLogAction = () => {
 };
 
 export const useRestoreRecord = () => {
-  const { profile, user } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   const logAction = useLogAction();
 
   return useMutation({
     mutationFn: async (deletedRecord: DeletedRecord) => {
-      if (!profile?.company_id || !user?.id) throw new Error('Not authenticated');
+      if (!effectiveCompanyId || !user?.id) throw new Error('Not authenticated');
 
       const { table_name, record_data, record_id } = deletedRecord;
 
@@ -322,7 +336,8 @@ export const useRestoreRecord = () => {
 };
 
 export const useSoftDelete = () => {
-  const { profile, user } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   const logAction = useLogAction();
 
@@ -336,11 +351,11 @@ export const useSoftDelete = () => {
       recordId: string;
       recordData: Record<string, unknown>;
     }) => {
-      if (!profile?.company_id || !user?.id) throw new Error('Not authenticated');
+      if (!effectiveCompanyId || !user?.id) throw new Error('Not authenticated');
 
       // Save to deleted_records
       const { error: saveError } = await supabase.from('deleted_records').insert({
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         deleted_by: user.id,
         table_name: tableName,
         record_id: recordId,
