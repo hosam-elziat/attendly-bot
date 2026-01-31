@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useViewAsCompany } from '@/contexts/ViewAsCompanyContext';
+import { useSuperAdmin } from '@/contexts/SuperAdminContext';
 import { useAttendanceStats } from '@/hooks/useAttendance';
 import { useAdvancedStats, COUNTRIES } from '@/hooks/useAdvancedStats';
 import { useRealtimeNotifications, usePendingCounts } from '@/hooks/useRealtimeNotifications';
@@ -24,7 +26,8 @@ import {
   Percent,
   Flag,
   UserPlus,
-  CalendarCheck
+  CalendarCheck,
+  Building2
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
@@ -37,10 +40,15 @@ import HolidayApprovalCard from '@/components/dashboard/HolidayApprovalCard';
 const Dashboard = () => {
   const { t, language } = useLanguage();
   const { profile } = useAuth();
+  const { isViewingAsCompany, viewingCompany } = useViewAsCompany();
+  const { isSuperAdmin, teamMember } = useSuperAdmin();
   const navigate = useNavigate();
   const { data: stats, isLoading } = useAttendanceStats();
   const { data: advancedStats, isLoading: advancedLoading } = useAdvancedStats();
   const [absentDialogOpen, setAbsentDialogOpen] = useState(false);
+  
+  // Check if Super Admin is viewing a company
+  const isSuperAdminMode = isSuperAdmin && isViewingAsCompany;
   
   // Enable realtime notifications
   useRealtimeNotifications();
@@ -48,7 +56,10 @@ const Dashboard = () => {
   // Get pending counts for quick actions
   const { data: pendingCounts } = useQuery(usePendingCounts());
 
-  const firstName = profile?.full_name?.split(' ')[0] || 'هناك';
+  // Get display name based on mode
+  const firstName = isSuperAdminMode 
+    ? teamMember?.full_name?.split(' ')[0] || 'Super Admin'
+    : profile?.full_name?.split(' ')[0] || 'هناك';
 
   const formatMinutes = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -86,6 +97,24 @@ const Dashboard = () => {
   return (
     <DashboardLayout>
       <div className="space-y-4 sm:space-y-8">
+        {/* Super Admin Company Info */}
+        {isSuperAdminMode && viewingCompany && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3"
+          >
+            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">أنت تشاهد بيانات شركة</p>
+              <h2 className="text-lg font-bold text-foreground">{viewingCompany.name}</h2>
+            </div>
+          </motion.div>
+        )}
+
         {/* Header - Mobile optimized */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -93,10 +122,13 @@ const Dashboard = () => {
           transition={{ duration: 0.4 }}
         >
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">
-            {t('dashboard.welcome')}, {firstName} 👋
+            {isSuperAdminMode ? `مرحباً، ${firstName}` : `${t('dashboard.welcome')}, ${firstName}`} 👋
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5 sm:mt-1">
-            {t('dashboard.whatsHappening')}
+            {isSuperAdminMode 
+              ? `أنت تتحكم في شركة ${viewingCompany?.name} بصلاحيات Super Admin`
+              : t('dashboard.whatsHappening')
+            }
           </p>
         </motion.div>
 

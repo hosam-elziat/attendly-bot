@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 
 export interface AttendanceLog {
   id: string;
@@ -20,12 +21,13 @@ export interface AttendanceLog {
 
 export const useAttendance = (date?: string) => {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
   const today = date || new Date().toISOString().split('T')[0];
 
   return useQuery({
-    queryKey: ['attendance', profile?.company_id, today],
+    queryKey: ['attendance', effectiveCompanyId, today, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('attendance_logs')
@@ -36,38 +38,39 @@ export const useAttendance = (date?: string) => {
             email
           )
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('date', today)
         .order('check_in_time', { ascending: false });
 
       if (error) throw error;
       return data as AttendanceLog[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useAttendanceStats = () => {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
   const today = new Date().toISOString().split('T')[0];
 
   return useQuery({
-    queryKey: ['attendance-stats', profile?.company_id, today],
+    queryKey: ['attendance-stats', effectiveCompanyId, today, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id) return null;
+      if (!effectiveCompanyId) return null;
       
       // Get total employees
       const { count: totalEmployees } = await supabase
         .from('employees')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', true);
 
       // Get today's attendance - count all who checked in today (excluding absent)
       const { data: attendance } = await supabase
         .from('attendance_logs')
         .select('status')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('date', today);
 
       // Filter out absent employees from the count
@@ -84,7 +87,7 @@ export const useAttendanceStats = () => {
       const { count: pendingLeaves } = await supabase
         .from('leave_requests')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('status', 'pending');
 
       return {
@@ -97,6 +100,6 @@ export const useAttendanceStats = () => {
         totalCheckedInToday, // New field: total who checked in today (doesn't decrease on checkout)
       };
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };

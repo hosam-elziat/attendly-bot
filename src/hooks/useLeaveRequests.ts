@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { useLogAction } from './useAuditLogs';
@@ -36,11 +37,12 @@ const LeaveStatusUpdateSchema = z.object({
 
 export const useLeaveRequests = () => {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['leave-requests', profile?.company_id],
+    queryKey: ['leave-requests', effectiveCompanyId, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('leave_requests')
@@ -51,13 +53,13 @@ export const useLeaveRequests = () => {
             email
           )
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as LeaveRequest[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 

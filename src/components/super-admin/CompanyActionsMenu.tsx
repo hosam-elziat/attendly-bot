@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useSuperAdmin } from '@/contexts/SuperAdminContext';
+import { useViewAsCompany } from '@/contexts/ViewAsCompanyContext';
 import { useSuperAdminActivityLog } from '@/hooks/useSuperAdminActivityLog';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
@@ -30,8 +31,8 @@ import {
   CheckCircle,
   Trash2,
   RotateCcw,
-  Key,
-  LogOut,
+  LogIn,
+  Building2,
 } from 'lucide-react';
 
 interface Company {
@@ -49,7 +50,9 @@ interface CompanyActionsMenuProps {
 }
 
 const CompanyActionsMenu = ({ company, onViewDetails, onRefresh }: CompanyActionsMenuProps) => {
+  const navigate = useNavigate();
   const { isSuperAdmin, teamMember } = useSuperAdmin();
+  const { enterCompanyMode } = useViewAsCompany();
   const { logActivity } = useSuperAdminActivityLog();
   
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
@@ -57,6 +60,19 @@ const CompanyActionsMenu = ({ company, onViewDetails, onRefresh }: CompanyAction
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleEnterCompany = async () => {
+    if (!isSuperAdmin) return;
+    
+    try {
+      await enterCompanyMode(company.id);
+      toast.success(`تم الدخول إلى شركة ${company.name}`);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error entering company mode:', error);
+      toast.error('فشل في الدخول إلى الشركة');
+    }
+  };
 
   const handleSuspend = async () => {
     if (!isSuperAdmin) return;
@@ -232,6 +248,20 @@ const CompanyActionsMenu = ({ company, onViewDetails, onRefresh }: CompanyAction
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700">
+          {/* Enter Company Mode - Primary Action */}
+          {isSuperAdmin && !company.is_deleted && (
+            <>
+              <DropdownMenuItem 
+                onClick={handleEnterCompany} 
+                className="text-primary hover:bg-slate-800 gap-2 font-medium"
+              >
+                <LogIn className="w-4 h-4" />
+                دخول الشركة
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-slate-700" />
+            </>
+          )}
+
           <DropdownMenuItem onClick={onViewDetails} className="text-white hover:bg-slate-800 gap-2">
             <Eye className="w-4 h-4" />
             عرض التفاصيل

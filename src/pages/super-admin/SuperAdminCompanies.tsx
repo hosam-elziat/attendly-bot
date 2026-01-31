@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useSuperAdmin } from '@/contexts/SuperAdminContext';
+import { useViewAsCompany } from '@/contexts/ViewAsCompanyContext';
 import { useSuperAdminActivityLog } from '@/hooks/useSuperAdminActivityLog';
 import SuperAdminLayout from '@/components/super-admin/SuperAdminLayout';
 import CompanyActionsMenu from '@/components/super-admin/CompanyActionsMenu';
@@ -54,7 +56,8 @@ import {
   Filter,
   Trash2,
   Ban,
-  CheckCircle
+  CheckCircle,
+  LogIn
 } from 'lucide-react';
 
 interface Company {
@@ -132,7 +135,9 @@ interface CompanyDetails {
 type StatusFilter = 'all' | 'active' | 'suspended' | 'deleted' | 'trial' | 'expired';
 
 const SuperAdminCompanies = () => {
+  const navigate = useNavigate();
   const { isSuperAdmin } = useSuperAdmin();
+  const { enterCompanyMode } = useViewAsCompany();
   const { logActivity } = useSuperAdminActivityLog();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +147,19 @@ const SuperAdminCompanies = () => {
   const [selectedCompany, setSelectedCompany] = useState<CompanyDetails | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
+
+  const handleEnterCompany = async (company: Company) => {
+    if (!isSuperAdmin || company.is_deleted) return;
+    
+    try {
+      await enterCompanyMode(company.id);
+      toast.success(`تم الدخول إلى شركة ${company.name}`);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error entering company mode:', error);
+      toast.error('فشل في الدخول إلى الشركة');
+    }
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -551,11 +569,23 @@ const SuperAdminCompanies = () => {
                         }
                       </TableCell>
                       <TableCell>
-                        <CompanyActionsMenu
-                          company={company}
-                          onViewDetails={() => viewCompanyDetails(company)}
-                          onRefresh={fetchCompanies}
-                        />
+                        <div className="flex items-center gap-2">
+                          {!company.is_deleted && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleEnterCompany(company)}
+                              className="bg-primary hover:bg-primary/90 gap-1.5 text-xs h-8"
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              دخول
+                            </Button>
+                          )}
+                          <CompanyActionsMenu
+                            company={company}
+                            onViewDetails={() => viewCompanyDetails(company)}
+                            onRefresh={fetchCompanies}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

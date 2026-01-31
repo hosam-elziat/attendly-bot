@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -160,22 +161,23 @@ export const DEFAULT_REWARD_EVENTS = [
 // Hook: Reward Rules
 export const useRewardRules = () => {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['reward-rules', profile?.company_id],
+    queryKey: ['reward-rules', effectiveCompanyId, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('reward_rules')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('event_type');
       
       if (error) throw error;
       return data as RewardRule[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 

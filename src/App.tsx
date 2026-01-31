@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SuperAdminProvider } from "@/contexts/SuperAdminContext";
+import { ViewAsCompanyProvider } from "@/contexts/ViewAsCompanyContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SuperAdminProtectedRoute from "@/components/super-admin/SuperAdminProtectedRoute";
 import { Loader2 } from "lucide-react";
@@ -84,13 +85,14 @@ const App = () => (
       <LanguageProvider>
         <AuthProvider>
           <SuperAdminProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <RouteCleanup>
-                  <Suspense fallback={<PageLoader />}>
-                    <Routes>
+            <ViewAsCompanyProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <RouteCleanup>
+                    <Suspense fallback={<PageLoader />}>
+                      <Routes>
                       <Route path="/" element={<Landing />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -185,17 +187,18 @@ const App = () => (
                       <SuperAdminProtectedRoute><SuperAdminDiscountCodes /></SuperAdminProtectedRoute>
                     } />
                     
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </Suspense>
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
                 </RouteCleanup>
               </BrowserRouter>
             </TooltipProvider>
-          </SuperAdminProvider>
-        </AuthProvider>
-      </LanguageProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+          </ViewAsCompanyProvider>
+        </SuperAdminProvider>
+      </AuthProvider>
+    </LanguageProvider>
+  </ThemeProvider>
+</QueryClientProvider>
 );
 
 export default App;
