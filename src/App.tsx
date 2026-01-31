@@ -62,6 +62,9 @@ const SuperAdminBackups = lazy(() => import("./pages/super-admin/SuperAdminBacku
 const SuperAdminPhotoRequests = lazy(() => import("./pages/super-admin/SuperAdminPhotoRequests"));
 const SuperAdminFeatureFlags = lazy(() => import("./pages/super-admin/SuperAdminFeatureFlags"));
 const SuperAdminActivityLogs = lazy(() => import("./pages/super-admin/SuperAdminActivityLogs"));
+const SuperAdminRevenue = lazy(() => import("./pages/super-admin/SuperAdminRevenue"));
+const SuperAdminSnapshots = lazy(() => import("./pages/super-admin/SuperAdminSnapshots"));
+const SuperAdminDiscountCodes = lazy(() => import("./pages/super-admin/SuperAdminDiscountCodes"));
 
 const queryClient = new QueryClient();
 
@@ -171,6 +174,15 @@ const App = () => (
                     } />
                     <Route path="/super-admin/activity-logs" element={
                       <SuperAdminProtectedRoute><SuperAdminActivityLogs /></SuperAdminProtectedRoute>
+                    } />
+                    <Route path="/super-admin/revenue" element={
+                      <SuperAdminProtectedRoute><SuperAdminRevenue /></SuperAdminProtectedRoute>
+                    } />
+                    <Route path="/super-admin/snapshots" element={
+                      <SuperAdminProtectedRoute><SuperAdminSnapshots /></SuperAdminProtectedRoute>
+                    } />
+                    <Route path="/super-admin/discount-codes" element={
+                      <SuperAdminProtectedRoute><SuperAdminDiscountCodes /></SuperAdminProtectedRoute>
                     } />
                     
                     <Route path="*" element={<NotFound />} />
