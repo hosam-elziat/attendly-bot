@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 export interface SalaryAdjustment {
@@ -26,11 +27,12 @@ export interface SalaryAdjustment {
 // Hook to get all adjustments for a company in a specific month
 export function useSalaryAdjustments(month?: string) {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['salary-adjustments', profile?.company_id, month],
+    queryKey: ['salary-adjustments', effectiveCompanyId, month, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       let query = supabase
         .from('salary_adjustments')
@@ -52,7 +54,7 @@ export function useSalaryAdjustments(month?: string) {
             full_name
           )
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
 
       if (month) {
@@ -73,18 +75,19 @@ export function useSalaryAdjustments(month?: string) {
 
       return (data || []) as SalaryAdjustment[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 }
 
 // Hook to get adjustments for a specific employee
 export function useEmployeeAdjustments(employeeId?: string, month?: string) {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['employee-adjustments', employeeId, month],
+    queryKey: ['employee-adjustments', employeeId, month, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id || !employeeId) return [];
+      if (!effectiveCompanyId || !employeeId) return [];
 
       let query = supabase
         .from('salary_adjustments')
@@ -103,7 +106,7 @@ export function useEmployeeAdjustments(employeeId?: string, month?: string) {
           attendance_log_id,
           is_auto_generated
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('employee_id', employeeId)
         .order('created_at', { ascending: false });
 
@@ -125,6 +128,6 @@ export function useEmployeeAdjustments(employeeId?: string, month?: string) {
 
       return (data || []) as SalaryAdjustment[];
     },
-    enabled: !!profile?.company_id && !!employeeId,
+    enabled: !!effectiveCompanyId && !!employeeId,
   });
 }

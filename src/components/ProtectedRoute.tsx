@@ -1,5 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdmin } from '@/contexts/SuperAdminContext';
+import { useViewAsCompany } from '@/contexts/ViewAsCompanyContext';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -7,8 +9,12 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { isSuperAdmin, loading: superAdminLoading, teamMember } = useSuperAdmin();
+  const { isViewingAsCompany } = useViewAsCompany();
   const location = useLocation();
+
+  const loading = authLoading || superAdminLoading;
 
   if (loading) {
     return (
@@ -18,6 +24,12 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
+  // Allow Super Admin viewing a company to access company routes
+  if (isSuperAdmin && isViewingAsCompany && teamMember) {
+    return <>{children}</>;
+  }
+
+  // Regular user authentication check
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }

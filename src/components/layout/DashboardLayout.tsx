@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useViewAsCompany } from '@/contexts/ViewAsCompanyContext';
+import { useSuperAdmin } from '@/contexts/SuperAdminContext';
+import SuperAdminBanner from '@/components/super-admin/SuperAdminBanner';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -36,9 +39,14 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { t, direction, language, setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { profile, signOut } = useAuth();
+  const { isViewingAsCompany, viewingCompany } = useViewAsCompany();
+  const { isSuperAdmin } = useSuperAdmin();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Check if Super Admin is viewing a company
+  const isSuperAdminMode = isSuperAdmin && isViewingAsCompany;
 
   const navItems = [
     { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/dashboard' },
@@ -69,7 +77,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     .toUpperCase() || 'U';
 
   return (
-    <div className="min-h-screen bg-background" dir={direction}>
+    <div className={cn("min-h-screen bg-background", isSuperAdminMode && "pt-12")} dir={direction}>
+      {/* Super Admin Banner */}
+      <SuperAdminBanner />
       {/* Mobile Bottom Navigation - Enhanced */}
       <nav className={cn(
         "fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border lg:hidden",

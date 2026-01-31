@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import { EmployeeSchema } from '@/lib/validations';
 import { z } from 'zod';
@@ -69,33 +70,35 @@ export interface CreateEmployeeData {
 
 export const useEmployees = () => {
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['employees', profile?.company_id],
+    queryKey: ['employees', effectiveCompanyId, isSuperAdminAccess],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as Employee[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 export const useCreateEmployee = () => {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
   const logAction = useLogAction();
 
   return useMutation({
     mutationFn: async (employeeData: CreateEmployeeData) => {
-      if (!profile?.company_id) throw new Error('No company found');
+      if (!effectiveCompanyId) throw new Error('No company found');
 
       // Validate input with zod
       const validationResult = EmployeeSchema.safeParse({
@@ -115,7 +118,7 @@ export const useCreateEmployee = () => {
         const { data: existingEmail } = await supabase
           .from('employees')
           .select('id')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('email', validatedData.email)
           .maybeSingle();
 
@@ -129,7 +132,7 @@ export const useCreateEmployee = () => {
         const { data: existingPhone } = await supabase
           .from('employees')
           .select('id')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('phone', employeeData.phone)
           .maybeSingle();
 
@@ -143,7 +146,7 @@ export const useCreateEmployee = () => {
         const { data: existingNationalId } = await supabase
           .from('employees')
           .select('id')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('national_id', employeeData.national_id)
           .maybeSingle();
 
@@ -159,7 +162,7 @@ export const useCreateEmployee = () => {
         department: validatedData.department || null,
         salary_type: validatedData.salary_type,
         base_salary: validatedData.base_salary,
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         work_start_time: validatedData.work_start_time 
           ? (validatedData.work_start_time.length === 5 ? validatedData.work_start_time + ':00' : validatedData.work_start_time)
           : '09:00:00',
@@ -188,13 +191,15 @@ export const useCreateEmployee = () => {
 
       if (error) throw error;
 
-      // Log the action
-      await logAction.mutateAsync({
-        tableName: 'employees',
-        recordId: data.id,
-        action: 'insert',
-        newData: data,
-      });
+      // Log the action (only for regular users, not Super Admin viewing)
+      if (!isSuperAdminAccess) {
+        await logAction.mutateAsync({
+          tableName: 'employees',
+          recordId: data.id,
+          action: 'insert',
+          newData: data,
+        });
+      }
 
       return data;
     },
@@ -211,8 +216,7 @@ export const useCreateEmployee = () => {
 export const useUpdateEmployee = () => {
   const queryClient = useQueryClient();
   const logAction = useLogAction();
-
-  const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
   
   return useMutation({
     mutationFn: async ({ id, oldData, ...data }: Partial<Employee> & { id: string; oldData?: Employee }) => {
@@ -226,11 +230,11 @@ export const useUpdateEmployee = () => {
       }
 
       // Check for duplicate email when updating
-      if (data.email && profile?.company_id) {
+      if (data.email && effectiveCompanyId) {
         const { data: existingEmail } = await supabase
           .from('employees')
           .select('id')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('email', data.email)
           .neq('id', id)
           .maybeSingle();
@@ -241,11 +245,11 @@ export const useUpdateEmployee = () => {
       }
 
       // Check for duplicate phone when updating
-      if (data.phone && profile?.company_id) {
+      if (data.phone && effectiveCompanyId) {
         const { data: existingPhone } = await supabase
           .from('employees')
           .select('id')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('phone', data.phone)
           .neq('id', id)
           .maybeSingle();
@@ -256,11 +260,11 @@ export const useUpdateEmployee = () => {
       }
 
       // Check for duplicate national_id when updating
-      if (data.national_id && profile?.company_id) {
+      if (data.national_id && effectiveCompanyId) {
         const { data: existingNationalId } = await supabase
           .from('employees')
           .select('id')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('national_id', data.national_id)
           .neq('id', id)
           .maybeSingle();
@@ -279,14 +283,16 @@ export const useUpdateEmployee = () => {
 
       if (error) throw error;
 
-      // Log the action with old and new data
-      await logAction.mutateAsync({
-        tableName: 'employees',
-        recordId: id,
-        action: 'update',
-        oldData: oldData ? JSON.parse(JSON.stringify(oldData)) : null,
-        newData: JSON.parse(JSON.stringify(result)),
-      });
+      // Log the action with old and new data (only for regular users)
+      if (!isSuperAdminAccess) {
+        await logAction.mutateAsync({
+          tableName: 'employees',
+          recordId: id,
+          action: 'update',
+          oldData: oldData ? JSON.parse(JSON.stringify(oldData)) : null,
+          newData: JSON.parse(JSON.stringify(result)),
+        });
+      }
 
       return result;
     },
