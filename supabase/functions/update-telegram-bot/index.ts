@@ -55,20 +55,58 @@ serve(async (req) => {
       );
     }
 
-    const { data: profile } = await supabaseAnon
-      .from('profiles')
-      .select('company_id')
+    // Check if user is a Super Admin (SaaS team member)
+    const { data: saasTeamMember } = await supabaseAdmin
+      .from('saas_team')
+      .select('id, role')
       .eq('user_id', user.id)
-      .single();
+      .eq('is_active', true)
+      .maybeSingle();
 
-    if (!profile?.company_id) {
-      return new Response(
-        JSON.stringify({ error: 'Company not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const isSuperAdmin = !!saasTeamMember;
+
+    // Get company_id from request body for Super Admin, otherwise use profile
+    let companyId: string | null = null;
+
+    // First, peek at the request to get company_id if Super Admin
+    const clonedReq = req.clone();
+    const reqContentType = req.headers.get('content-type') || '';
+    
+    if (isSuperAdmin) {
+      try {
+        if (reqContentType.includes('multipart/form-data')) {
+          const formData = await clonedReq.formData();
+          companyId = (formData.get('company_id') as string) || null;
+        } else {
+          const bodyText = await clonedReq.text();
+          if (bodyText) {
+            const body = JSON.parse(bodyText);
+            companyId = body?.company_id || null;
+          }
+        }
+      } catch (e) {
+        console.log('Could not parse company_id from request');
+      }
     }
 
-    const companyId = profile.company_id;
+    // If not Super Admin or no company_id provided, use user's profile
+    if (!companyId) {
+      const { data: profile } = await supabaseAnon
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.company_id) {
+        return new Response(
+          JSON.stringify({ error: 'Company not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      companyId = profile.company_id;
+    }
+
+    console.log('Processing request for company:', companyId, 'isSuperAdmin:', isSuperAdmin);
 
     // Get company and check if bot is connected
     const { data: company } = await supabaseAnon

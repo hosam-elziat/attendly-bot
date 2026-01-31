@@ -4,6 +4,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompany } from '@/hooks/useCompany';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ const TelegramBot = () => {
   const [pendingPhotoRequest, setPendingPhotoRequest] = useState<any>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const { profile } = useAuth();
+  const { effectiveCompanyId, isSuperAdminAccess } = useSuperAdminCompanyAccess();
 
   const NAME_COOLDOWN_STORAGE_KEY = 'telegram_bot_name_cooldown_until';
 
@@ -252,7 +254,10 @@ const TelegramBot = () => {
         headers: {
           Authorization: `Bearer ${sessionData.session.access_token}`,
         },
-        body: { action: 'update_name' },
+        body: { 
+          action: 'update_name',
+          ...(isSuperAdminAccess && effectiveCompanyId ? { company_id: effectiveCompanyId } : {})
+        },
       });
 
       if (error) {
@@ -305,7 +310,10 @@ const TelegramBot = () => {
         headers: {
           Authorization: `Bearer ${sessionData.session.access_token}`,
         },
-        body: { action: 'set_webhook' },
+        body: { 
+          action: 'set_webhook',
+          ...(isSuperAdminAccess && effectiveCompanyId ? { company_id: effectiveCompanyId } : {})
+        },
       });
 
       if (error) {
