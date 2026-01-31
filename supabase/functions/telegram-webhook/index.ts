@@ -391,6 +391,11 @@ interface SessionData {
   secret_message_recipient_type?: 'employee' | 'manager' | 'team';
   secret_message_recipient_id?: string;
   secret_message_anonymous?: boolean;
+  // Inventory session data
+  order_id?: string;
+  item_effect_type?: string;
+  item_effect_value?: any;
+  inventory_id?: string;
 }
 
 serve(async (req) => {
@@ -1582,6 +1587,7 @@ serve(async (req) => {
           await sendAndLogMessage(rewardsMsg, {
             inline_keyboard: [
               [{ text: '🛒 استبدل نقاطك', callback_data: 'rewards_marketplace' }],
+              [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
               [{ text: '🧾 السجل', callback_data: 'rewards_history' }],
               [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
             ]
@@ -1713,6 +1719,46 @@ serve(async (req) => {
           break
         }
         
+        case 'my_inventory': {
+          // Get employee's inventory items (not fully used)
+          const { data: inventory } = await supabase
+            .from('employee_inventory')
+            .select('*')
+            .eq('employee_id', employee.id)
+            .eq('is_fully_used', false)
+            .order('purchased_at', { ascending: false })
+          
+          let inventoryMsg = `🎒 <b>مقتنياتي</b>\n\n`
+          
+          if (!inventory || inventory.length === 0) {
+            inventoryMsg += `📭 لا توجد مقتنيات حالياً\n\n`
+            inventoryMsg += `يمكنك شراء منتجات من المتجر وحفظها هنا لاستخدامها لاحقاً`
+            await sendAndLogMessage(inventoryMsg, {
+              inline_keyboard: [
+                [{ text: '🛒 المتجر', callback_data: 'rewards_marketplace' }],
+                [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            })
+            break
+          }
+          
+          inventoryMsg += `لديك ${inventory.length} منتج(ات):\n\n`
+          
+          const inventoryButtons = inventory.slice(0, 8).map((inv: any) => {
+            const emoji = getItemEmoji(inv.item_type)
+            const remaining = inv.quantity - inv.used_quantity
+            const label = `${emoji} ${inv.item_name_ar || inv.item_name} (${remaining})`
+            return [{ text: label, callback_data: `use_inv_${inv.id}` }]
+          })
+          
+          inventoryButtons.push([{ text: '⭐ نقاطي', callback_data: 'my_rewards' }])
+          inventoryButtons.push([{ text: '🔙 رجوع', callback_data: 'back_to_main' }])
+          
+          await sendAndLogMessage(inventoryMsg, { inline_keyboard: inventoryButtons })
+          break
+        }
+        
         case 'confirm_buy': {
           const session = await getSession()
           if (!session?.data.marketplace_item_id) {
@@ -1724,14 +1770,20 @@ serve(async (req) => {
           const itemPrice = session.data.marketplace_item_price || 0
           const itemName = session.data.marketplace_item_name || ''
           
-          // Get item details for approval check
+          // Get item details for use-flow check
           const { data: purchaseItem } = await supabase
             .from('marketplace_items')
-            .select('approval_required')
+            .select('*')
             .eq('id', itemId)
             .single()
           
-          // Deduct points
+          if (!purchaseItem) {
+            await sendAndLogMessage('❌ المنتج غير موجود', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
+          
+          // Deduct points first
           const { error: deductError } = await supabase.rpc('award_points', {
             p_employee_id: employee.id,
             p_company_id: companyId,
@@ -1749,8 +1801,8 @@ serve(async (req) => {
           }
           
           // Create order
-          const orderStatus = purchaseItem?.approval_required ? 'pending' : 'approved'
-          await supabase
+          const orderStatus = purchaseItem.approval_required ? 'pending' : 'approved'
+          const { data: orderData } = await supabase
             .from('marketplace_orders')
             .insert({
               employee_id: employee.id,
@@ -1759,22 +1811,414 @@ serve(async (req) => {
               points_spent: itemPrice,
               status: orderStatus
             })
+            .select('id')
+            .single()
+          
+          // Check if this is a usable item (leave, late permission, early leave, etc.)
+          const usableItemTypes = ['leave_day', 'late_permission', 'early_leave', 'benefit']
+          const isUsableItem = usableItemTypes.includes(purchaseItem.item_type || '') || 
+                               purchaseItem.effect_type === 'leave_day' ||
+                               purchaseItem.effect_type === 'late_permission' ||
+                               purchaseItem.effect_type === 'early_leave'
+          
+          if (isUsableItem && orderStatus === 'approved') {
+            // Ask: use now or save for later?
+            await setSession('use_or_save', {
+              ...session.data,
+              order_id: orderData?.id,
+              item_effect_type: purchaseItem.effect_type,
+              item_effect_value: purchaseItem.effect_value
+            })
+            
+            await sendAndLogMessage(
+              `✅ <b>تم الشراء بنجاح!</b>\n\n` +
+              `📦 المنتج: ${itemName}\n` +
+              `💰 تم خصم: ${itemPrice}⭐\n\n` +
+              `⏰ هل تريد استخدامه الآن أم حفظه للاستخدام لاحقاً؟`,
+              {
+                inline_keyboard: [
+                  [{ text: '✅ استخدمه الآن', callback_data: 'use_item_now' }],
+                  [{ text: '📦 احفظه لاحقاً', callback_data: 'save_item_later' }],
+                ]
+              }
+            )
+          } else {
+            // Not a usable item or needs approval - just confirm
+            await deleteSession()
+            
+            const statusMsg2 = orderStatus === 'approved' 
+              ? '✅ تمت الموافقة تلقائيًا' 
+              : '⏳ في انتظار موافقة الإدارة'
+            
+            await sendAndLogMessage(
+              `🎉 <b>تم تسجيل الطلب</b>\n\n` +
+              `${statusMsg2}\n` +
+              `📦 المنتج: ${itemName}\n` +
+              `💰 تم خصم: ${itemPrice}⭐`,
+              {
+                inline_keyboard: [
+                  [{ text: '🛒 استبدل تاني', callback_data: 'rewards_marketplace' }],
+                  [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+                  [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+                ]
+              }
+            )
+          }
+          break
+        }
+        
+        case 'use_item_now': {
+          const session = await getSession()
+          if (!session?.data.marketplace_item_id) {
+            await sendAndLogMessage('❌ انتهت الجلسة', getEmployeeKeyboard(managerPermissions))
+            break
+          }
+          
+          const effectType = session.data.item_effect_type || 'benefit'
+          const itemName = session.data.marketplace_item_name || ''
+          
+          // Based on effect type, show appropriate flow
+          if (effectType === 'leave_day' || session.data.marketplace_item_name?.includes('إجازة') || session.data.marketplace_item_name?.includes('اجازة')) {
+            // Leave day - ask for date
+            await setSession('inventory_use_leave_date', session.data)
+            await sendAndLogMessage(
+              `📅 <b>استخدام يوم إجازة</b>\n\n` +
+              `اختر تاريخ الإجازة:`,
+              {
+                inline_keyboard: [
+                  [{ text: '📅 اليوم', callback_data: 'inv_leave_today' }],
+                  [{ text: '📅 غداً', callback_data: 'inv_leave_tomorrow' }],
+                  [{ text: '📆 يوم آخر', callback_data: 'inv_leave_other' }],
+                  [{ text: '❌ إلغاء', callback_data: 'cancel_use_item' }]
+                ]
+              }
+            )
+          } else if (effectType === 'late_permission' || session.data.marketplace_item_name?.includes('تأخير')) {
+            // Late permission - use today
+            await setSession('inventory_use_late', session.data)
+            await sendAndLogMessage(
+              `⏰ <b>استخدام ساعة تأخير</b>\n\n` +
+              `سيتم تطبيق إذن التأخير على حضورك اليوم.\n\n` +
+              `هل تريد المتابعة؟`,
+              {
+                inline_keyboard: [
+                  [{ text: '✅ نعم، استخدمه', callback_data: 'confirm_use_late' }],
+                  [{ text: '❌ إلغاء', callback_data: 'cancel_use_item' }]
+                ]
+              }
+            )
+          } else if (effectType === 'early_leave' || session.data.marketplace_item_name?.includes('إذن') || session.data.marketplace_item_name?.includes('اذن')) {
+            // Early leave - use today
+            await setSession('inventory_use_early', session.data)
+            await sendAndLogMessage(
+              `🚪 <b>استخدام ساعة إذن</b>\n\n` +
+              `سيتم تطبيق ساعة الإذن على انصرافك اليوم.\n\n` +
+              `هل تريد المتابعة؟`,
+              {
+                inline_keyboard: [
+                  [{ text: '✅ نعم، استخدمه', callback_data: 'confirm_use_early' }],
+                  [{ text: '❌ إلغاء', callback_data: 'cancel_use_item' }]
+                ]
+              }
+            )
+          } else {
+            // Generic benefit - just mark as used
+            await sendAndLogMessage(
+              `✅ <b>تم استخدام المنتج!</b>\n\n` +
+              `📦 ${itemName}\n\n` +
+              `سيتم إبلاغ المدير بذلك.`,
+              {
+                inline_keyboard: [
+                  [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+                  [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+                ]
+              }
+            )
+            
+            // Notify manager
+            await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName)
+            await deleteSession()
+          }
+          break
+        }
+        
+        case 'save_item_later': {
+          const session = await getSession()
+          if (!session?.data.marketplace_item_id) {
+            await sendAndLogMessage('❌ انتهت الجلسة', getEmployeeKeyboard(managerPermissions))
+            break
+          }
+          
+          const itemId = session.data.marketplace_item_id
+          const itemName = session.data.marketplace_item_name || ''
+          const itemPrice = session.data.marketplace_item_price || 0
+          const orderId = session.data.order_id
+          
+          // Get item details
+          const { data: saveItem } = await supabase
+            .from('marketplace_items')
+            .select('*')
+            .eq('id', itemId)
+            .single()
+          
+          // Add to inventory
+          await supabase.from('employee_inventory').insert({
+            employee_id: employee.id,
+            company_id: companyId,
+            item_id: itemId,
+            order_id: orderId,
+            item_name: saveItem?.name || itemName,
+            item_name_ar: saveItem?.name_ar || itemName,
+            item_type: saveItem?.item_type || 'benefit',
+            effect_type: saveItem?.effect_type,
+            effect_value: saveItem?.effect_value,
+            points_paid: itemPrice,
+            quantity: 1,
+            used_quantity: 0
+          })
           
           await deleteSession()
           
-          const statusMsg2 = orderStatus === 'approved' 
-            ? '✅ تمت الموافقة تلقائيًا' 
-            : '⏳ في انتظار موافقة الإدارة'
-          
           await sendAndLogMessage(
-            `🎉 <b>تم تسجيل الطلب</b>\n\n` +
-            `${statusMsg2}\n` +
-            `📦 المنتج: ${itemName}\n` +
-            `💰 تم خصم: ${itemPrice}⭐`,
+            `✅ <b>تم حفظ المنتج في مقتنياتك!</b>\n\n` +
+            `📦 ${itemName}\n\n` +
+            `يمكنك استخدامه في أي وقت من قسم "مقتنياتي" ⬅️`,
             {
               inline_keyboard: [
+                [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
                 [{ text: '🛒 استبدل تاني', callback_data: 'rewards_marketplace' }],
-                [{ text: '⭐ نقاطي', callback_data: 'my_rewards' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'cancel_use_item': {
+          const session = await getSession()
+          if (session?.data.marketplace_item_id) {
+            // Save to inventory instead
+            const itemId = session.data.marketplace_item_id
+            const itemName = session.data.marketplace_item_name || ''
+            const itemPrice = session.data.marketplace_item_price || 0
+            const orderId = session.data.order_id
+            
+            const { data: saveItem } = await supabase
+              .from('marketplace_items')
+              .select('*')
+              .eq('id', itemId)
+              .single()
+            
+            await supabase.from('employee_inventory').insert({
+              employee_id: employee.id,
+              company_id: companyId,
+              item_id: itemId,
+              order_id: orderId,
+              item_name: saveItem?.name || itemName,
+              item_name_ar: saveItem?.name_ar || itemName,
+              item_type: saveItem?.item_type || 'benefit',
+              effect_type: saveItem?.effect_type,
+              effect_value: saveItem?.effect_value,
+              points_paid: itemPrice,
+              quantity: 1,
+              used_quantity: 0
+            })
+          }
+          
+          await deleteSession()
+          await sendAndLogMessage('✅ تم حفظ المنتج في مقتنياتك', {
+            inline_keyboard: [
+              [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
+          break
+        }
+        
+        case 'inv_leave_today':
+        case 'inv_leave_tomorrow': {
+          const session = await getSession()
+          if (!session) break
+          
+          const localTime = getLocalTime(companyTimezone)
+          const targetDate = callbackData === 'inv_leave_today' 
+            ? localTime.date 
+            : (() => {
+                const d = new Date(localTime.date)
+                d.setDate(d.getDate() + 1)
+                return d.toISOString().split('T')[0]
+              })()
+          
+          // Process leave from inventory/purchase
+          await processInventoryLeave(
+            supabase, botToken, chatId, employee, companyId, 
+            session.data, targetDate, managerPermissions, sendAndLogMessage, deleteSession
+          )
+          break
+        }
+        
+        case 'inv_leave_other': {
+          const session = await getSession()
+          if (!session) break
+          
+          await setSession('inventory_leave_date_input', session.data)
+          await sendAndLogMessage(
+            `📆 أرسل تاريخ الإجازة بالصيغة:\n` +
+            `YYYY-MM-DD\n\n` +
+            `مثال: 2025-02-15`
+          )
+          break
+        }
+        
+        case 'confirm_use_late': {
+          const session = await getSession()
+          if (!session) break
+          
+          const itemName = session.data.marketplace_item_name || 'ساعة تأخير'
+          const localTime = getLocalTime(companyTimezone)
+          
+          // Mark inventory item as used or record usage directly
+          await supabase.from('inventory_usage_logs').insert({
+            inventory_id: session.data.inventory_id || null,
+            employee_id: employee.id,
+            company_id: companyId,
+            used_for_date: localTime.date,
+            effect_applied: { type: 'late_permission', minutes: 60 },
+            notes: 'تم استخدام ساعة تأخير من النقاط'
+          })
+          
+          // Update inventory if from inventory
+          if (session.data.inventory_id) {
+            await supabase.from('employee_inventory')
+              .update({ 
+                used_quantity: 1, 
+                is_fully_used: true,
+                used_at: new Date().toISOString(),
+                used_for_date: localTime.date
+              })
+              .eq('id', session.data.inventory_id)
+          }
+          
+          // Notify manager
+          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, `استخدم ساعة تأخير ليوم ${localTime.date}`)
+          
+          await deleteSession()
+          await sendAndLogMessage(
+            `✅ <b>تم استخدام ساعة التأخير!</b>\n\n` +
+            `📅 التاريخ: ${localTime.date}\n` +
+            `⏰ تم إضافة ساعة تأخير مسموحة لحضورك اليوم\n\n` +
+            `📢 تم إبلاغ المدير`,
+            {
+              inline_keyboard: [
+                [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'confirm_use_early': {
+          const session = await getSession()
+          if (!session) break
+          
+          const itemName = session.data.marketplace_item_name || 'ساعة إذن'
+          const localTime = getLocalTime(companyTimezone)
+          
+          // Record usage
+          await supabase.from('inventory_usage_logs').insert({
+            inventory_id: session.data.inventory_id || null,
+            employee_id: employee.id,
+            company_id: companyId,
+            used_for_date: localTime.date,
+            effect_applied: { type: 'early_leave', minutes: 60 },
+            notes: 'تم استخدام ساعة إذن من النقاط'
+          })
+          
+          // Update inventory if from inventory
+          if (session.data.inventory_id) {
+            await supabase.from('employee_inventory')
+              .update({ 
+                used_quantity: 1, 
+                is_fully_used: true,
+                used_at: new Date().toISOString(),
+                used_for_date: localTime.date
+              })
+              .eq('id', session.data.inventory_id)
+          }
+          
+          // Notify manager
+          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, `استخدم ساعة إذن ليوم ${localTime.date}`)
+          
+          await deleteSession()
+          await sendAndLogMessage(
+            `✅ <b>تم استخدام ساعة الإذن!</b>\n\n` +
+            `📅 التاريخ: ${localTime.date}\n` +
+            `🚪 يمكنك الانصراف ساعة مبكراً اليوم\n\n` +
+            `📢 تم إبلاغ المدير`,
+            {
+              inline_keyboard: [
+                [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'cancel_inv_use': {
+          await deleteSession()
+          await sendAndLogMessage('❌ تم إلغاء الاستخدام', {
+            inline_keyboard: [
+              [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+              [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+            ]
+          })
+          break
+        }
+        
+        case 'confirm_generic_use': {
+          const session = await getSession()
+          if (!session?.data.inventory_id) {
+            await sendAndLogMessage('❌ انتهت الجلسة', getEmployeeKeyboard(managerPermissions))
+            break
+          }
+          
+          const inventoryId = session.data.inventory_id
+          const itemName = session.data.marketplace_item_name || 'منتج'
+          const localTime = getLocalTime(companyTimezone)
+          
+          // Mark as used
+          await supabase.from('employee_inventory')
+            .update({ 
+              used_quantity: 1, 
+              is_fully_used: true,
+              used_at: new Date().toISOString(),
+              used_for_date: localTime.date
+            })
+            .eq('id', inventoryId)
+          
+          // Log usage
+          await supabase.from('inventory_usage_logs').insert({
+            inventory_id: inventoryId,
+            employee_id: employee.id,
+            company_id: companyId,
+            used_for_date: localTime.date,
+            effect_applied: { type: 'generic' },
+            notes: `تم استخدام: ${itemName}`
+          })
+          
+          // Notify manager
+          await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName)
+          
+          await deleteSession()
+          await sendAndLogMessage(
+            `✅ <b>تم استخدام المنتج!</b>\n\n` +
+            `📦 ${itemName}\n\n` +
+            `📢 تم إبلاغ المدير`,
+            {
+              inline_keyboard: [
+                [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
                 [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
               ]
             }
@@ -2662,6 +3106,93 @@ serve(async (req) => {
               }
             )
           }
+          // Handle use item from inventory
+          else if (callbackData.startsWith('use_inv_')) {
+            const inventoryId = callbackData.replace('use_inv_', '')
+            
+            // Get inventory item
+            const { data: invItem } = await supabase
+              .from('employee_inventory')
+              .select('*')
+              .eq('id', inventoryId)
+              .eq('employee_id', employee.id)
+              .eq('is_fully_used', false)
+              .single()
+            
+            if (!invItem) {
+              await sendAndLogMessage('❌ المنتج غير موجود أو تم استخدامه', {
+                inline_keyboard: [
+                  [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+                  [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+                ]
+              })
+              break
+            }
+            
+            const itemName = invItem.item_name_ar || invItem.item_name
+            const effectType = invItem.effect_type || invItem.item_type
+            
+            // Set session with inventory details
+            await setSession('inventory_use_item', {
+              inventory_id: inventoryId,
+              marketplace_item_id: invItem.item_id,
+              marketplace_item_name: itemName,
+              item_effect_type: effectType,
+              item_effect_value: invItem.effect_value
+            })
+            
+            // Based on effect type, show appropriate flow
+            if (effectType === 'leave_day' || itemName.includes('إجازة') || itemName.includes('اجازة')) {
+              await sendAndLogMessage(
+                `📅 <b>استخدام: ${itemName}</b>\n\n` +
+                `اختر تاريخ الإجازة:`,
+                {
+                  inline_keyboard: [
+                    [{ text: '📅 اليوم', callback_data: 'inv_leave_today' }],
+                    [{ text: '📅 غداً', callback_data: 'inv_leave_tomorrow' }],
+                    [{ text: '📆 يوم آخر', callback_data: 'inv_leave_other' }],
+                    [{ text: '❌ إلغاء', callback_data: 'cancel_inv_use' }]
+                  ]
+                }
+              )
+            } else if (effectType === 'late_permission' || itemName.includes('تأخير')) {
+              await sendAndLogMessage(
+                `⏰ <b>استخدام: ${itemName}</b>\n\n` +
+                `سيتم تطبيق إذن التأخير على حضورك اليوم.\n\n` +
+                `هل تريد المتابعة؟`,
+                {
+                  inline_keyboard: [
+                    [{ text: '✅ نعم، استخدمه', callback_data: 'confirm_use_late' }],
+                    [{ text: '❌ إلغاء', callback_data: 'cancel_inv_use' }]
+                  ]
+                }
+              )
+            } else if (effectType === 'early_leave' || itemName.includes('إذن') || itemName.includes('اذن') || itemName.includes('انصراف')) {
+              await sendAndLogMessage(
+                `🚪 <b>استخدام: ${itemName}</b>\n\n` +
+                `سيتم تطبيق ساعة الإذن على انصرافك اليوم.\n\n` +
+                `هل تريد المتابعة؟`,
+                {
+                  inline_keyboard: [
+                    [{ text: '✅ نعم، استخدمه', callback_data: 'confirm_use_early' }],
+                    [{ text: '❌ إلغاء', callback_data: 'cancel_inv_use' }]
+                  ]
+                }
+              )
+            } else {
+              // Generic - just confirm
+              await sendAndLogMessage(
+                `📦 <b>استخدام: ${itemName}</b>\n\n` +
+                `هل تريد استخدام هذا المنتج؟`,
+                {
+                  inline_keyboard: [
+                    [{ text: '✅ نعم، استخدمه', callback_data: 'confirm_generic_use' }],
+                    [{ text: '❌ إلغاء', callback_data: 'cancel_inv_use' }]
+                  ]
+                }
+              )
+            }
+          }
           break
       }
 
@@ -3082,6 +3613,25 @@ serve(async (req) => {
           await setSession('leave_reason', { ...session.data, leave_date: text })
           await sendMessage(botToken, chatId, 
             `📝 أرسل سبب الإجازة:`
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+        
+        case 'inventory_leave_date_input': {
+          // Handle date input for inventory leave
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+          if (!dateRegex.test(text)) {
+            await sendMessage(botToken, chatId,
+              '❌ صيغة التاريخ غير صحيحة\n\n' +
+              'الصيغة الصحيحة: YYYY-MM-DD\n' +
+              'مثال: 2025-02-15'
+            )
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          await processInventoryLeave(
+            supabase, botToken, chatId, employee, companyId,
+            session.data, text, managerPermissions, sendAndLogMessage, deleteSession
           )
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
@@ -3583,6 +4133,131 @@ async function notifyManagersLeaveRequest(
     }
   } catch (error) {
     console.error('Error notifying managers about leave request:', error)
+  }
+}
+
+// Notify managers when an employee uses an inventory item
+async function notifyManagersItemUsed(
+  supabase: any,
+  botToken: string,
+  employeeId: string,
+  employeeName: string,
+  companyId: string,
+  itemName: string,
+  details?: string
+) {
+  try {
+    const { data: managers, error } = await supabase
+      .rpc('get_employee_managers', { emp_id: employeeId })
+    
+    if (error) {
+      console.error('Error getting managers for item usage:', error)
+      return
+    }
+    
+    if (!managers || managers.length === 0) {
+      console.log('No managers found for employee:', employeeId)
+      return
+    }
+    
+    const message = `🎒 <b>استخدام منتج من المقتنيات</b>\n\n` +
+      `👤 الموظف: ${employeeName}\n` +
+      `📦 المنتج: ${itemName}\n` +
+      (details ? `📝 التفاصيل: ${details}\n` : '') +
+      `🕐 الوقت: ${new Date().toLocaleString('ar-EG')}`
+    
+    for (const manager of managers) {
+      if (manager.manager_telegram_chat_id) {
+        await sendMessage(botToken, parseInt(manager.manager_telegram_chat_id), message)
+        console.log(`Notified manager ${manager.manager_name} about ${employeeName}'s item usage`)
+      }
+    }
+  } catch (error) {
+    console.error('Error notifying managers about item usage:', error)
+  }
+}
+
+// Process leave from inventory purchase
+async function processInventoryLeave(
+  supabase: any,
+  botToken: string,
+  chatId: number,
+  employee: any,
+  companyId: string,
+  sessionData: any,
+  targetDate: string,
+  managerPermissions: any,
+  sendAndLogMessage: (text: string, keyboard?: any) => Promise<void>,
+  deleteSession: () => Promise<void>
+) {
+  try {
+    const itemName = sessionData.marketplace_item_name || 'يوم إجازة'
+    const inventoryId = sessionData.inventory_id
+    
+    // Create leave request (auto-approved since paid with points)
+    const { error: leaveError } = await supabase.from('leave_requests').insert({
+      employee_id: employee.id,
+      company_id: companyId,
+      leave_type: 'regular',
+      start_date: targetDate,
+      end_date: targetDate,
+      days: 1,
+      reason: `إجازة مدفوعة بالنقاط - ${itemName}`,
+      status: 'approved',
+      reviewed_at: new Date().toISOString()
+    })
+    
+    if (leaveError) {
+      console.error('Error creating leave from inventory:', leaveError)
+      await sendAndLogMessage('❌ حدث خطأ أثناء تسجيل الإجازة', { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'back_to_main' }]] })
+      await deleteSession()
+      return
+    }
+    
+    // Record usage in logs
+    await supabase.from('inventory_usage_logs').insert({
+      inventory_id: inventoryId || null,
+      employee_id: employee.id,
+      company_id: companyId,
+      used_for_date: targetDate,
+      effect_applied: { type: 'leave_day', date: targetDate },
+      notes: 'يوم إجازة مدفوع بالنقاط',
+      manager_notified: true,
+      manager_notified_at: new Date().toISOString()
+    })
+    
+    // Update inventory if from inventory
+    if (inventoryId) {
+      await supabase.from('employee_inventory')
+        .update({ 
+          used_quantity: 1, 
+          is_fully_used: true,
+          used_at: new Date().toISOString(),
+          used_for_date: targetDate
+        })
+        .eq('id', inventoryId)
+    }
+    
+    // Notify manager
+    await notifyManagersItemUsed(supabase, botToken, employee.id, employee.full_name, companyId, itemName, `طلب إجازة يوم ${targetDate}`)
+    
+    await deleteSession()
+    await sendAndLogMessage(
+      `✅ <b>تم تسجيل الإجازة بنجاح!</b>\n\n` +
+      `📅 التاريخ: ${targetDate}\n` +
+      `📦 المنتج المستخدم: ${itemName}\n\n` +
+      `📢 تم إبلاغ المدير`,
+      {
+        inline_keyboard: [
+          [{ text: '🎒 مقتنياتي', callback_data: 'my_inventory' }],
+          [{ text: '🔙 رجوع', callback_data: 'back_to_main' }]
+        ]
+      }
+    )
+  } catch (error) {
+    console.error('Error processing inventory leave:', error)
+    await sendAndLogMessage('❌ حدث خطأ', { inline_keyboard: [[{ text: '🔙 رجوع', callback_data: 'back_to_main' }]] })
+    await deleteSession()
   }
 }
 
