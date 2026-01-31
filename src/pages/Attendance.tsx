@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { useAttendance, useAttendanceStats } from '@/hooks/useAttendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +39,6 @@ import AddAttendanceDialog from '@/components/attendance/AddAttendanceDialog';
 import CreateScheduledLeaveDialog from '@/components/attendance/CreateScheduledLeaveDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { exportAttendanceReport } from '@/lib/exportUtils';
 
 import {
@@ -53,6 +54,7 @@ import {
 const Attendance = () => {
   const { t, language } = useLanguage();
   const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   const { data: stats } = useAttendanceStats();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -73,9 +75,9 @@ const Attendance = () => {
   // Fetch all attendance based on date filter
   // For "today" filter, also include yesterday's records that are still active (night shifts)
   const { data: attendance = [], isLoading } = useQuery({
-    queryKey: ['attendance-all', profile?.company_id, dateFilter],
+    queryKey: ['attendance-all', effectiveCompanyId, dateFilter],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       let startDate: Date;
       let endDate: Date = today;
@@ -112,7 +114,7 @@ const Attendance = () => {
                 name
               )
             `)
-            .eq('company_id', profile.company_id)
+            .eq('company_id', effectiveCompanyId)
             .eq('date', todayStr)
             .order('check_in_time', { ascending: false }),
           supabase
@@ -127,7 +129,7 @@ const Attendance = () => {
                 name
               )
             `)
-            .eq('company_id', profile.company_id)
+            .eq('company_id', effectiveCompanyId)
             .eq('date', yesterdayStr)
             .in('status', ['checked_in', 'on_break'])
             .order('check_in_time', { ascending: false }),
@@ -157,7 +159,7 @@ const Attendance = () => {
             name
           )
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .gte('date', format(startDate, 'yyyy-MM-dd'))
         .lte('date', format(endDate, 'yyyy-MM-dd'))
         .order('date', { ascending: false })
@@ -166,7 +168,7 @@ const Attendance = () => {
       if (error) throw error;
       return data;
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 
   // Filter by status and search
@@ -240,11 +242,11 @@ const Attendance = () => {
 
       // 3) Save to deleted_records (so we can restore later)
       const { error: deletedRecordError } = await supabase.from('deleted_records').insert({
-        company_id: profile.company_id,
+        company_id: effectiveCompanyId,
         table_name: 'attendance_logs',
         record_id: idToDelete,
         record_data: recordToDelete,
-        deleted_by: profile.user_id,
+        deleted_by: profile?.user_id || '',
       });
 
       if (deletedRecordError) throw deletedRecordError;
@@ -262,7 +264,7 @@ const Attendance = () => {
       }
 
       // 5) Immediately remove from UI cache (even before refetch)
-      queryClient.setQueryData(['attendance-all', profile.company_id, dateFilter], (old: any) => {
+      queryClient.setQueryData(['attendance-all', effectiveCompanyId, dateFilter], (old: any) => {
         if (!Array.isArray(old)) return old;
         return old.filter((r) => r?.id !== idToDelete);
       });

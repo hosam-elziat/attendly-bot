@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { useCompany } from './useCompany';
 import { startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, differenceInMinutes, subMonths } from 'date-fns';
 
@@ -37,7 +37,7 @@ export const useEmployeeSalaryStats = (
     hourly_rate?: number | null;
   }
 ) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const { data: company } = useCompany();
 
   // Calculate date range
@@ -58,42 +58,42 @@ export const useEmployeeSalaryStats = (
 
   // Fetch attendance for this employee in period
   const { data: attendanceLogs = [] } = useQuery({
-    queryKey: ['employee-attendance-salary', employeeId, period],
+    queryKey: ['employee-attendance-salary', employeeId, period, effectiveCompanyId],
     queryFn: async () => {
-      if (!employeeId || !profile?.company_id) return [];
+      if (!employeeId || !effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('attendance_logs')
         .select('*')
         .eq('employee_id', employeeId)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .gte('date', dateRange.start.toISOString().split('T')[0])
         .lte('date', dateRange.end.toISOString().split('T')[0]);
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!employeeId && !!profile?.company_id,
+    enabled: !!employeeId && !!effectiveCompanyId,
   });
 
   // Fetch salary adjustments
   const { data: adjustments = [] } = useQuery({
-    queryKey: ['employee-adjustments', employeeId, period],
+    queryKey: ['employee-adjustments', employeeId, period, effectiveCompanyId],
     queryFn: async () => {
-      if (!employeeId || !profile?.company_id) return [];
+      if (!employeeId || !effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('salary_adjustments')
         .select('*')
         .eq('employee_id', employeeId)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .gte('month', dateRange.start.toISOString().split('T')[0])
         .lte('month', dateRange.end.toISOString().split('T')[0]);
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!employeeId && !!profile?.company_id,
+    enabled: !!employeeId && !!effectiveCompanyId,
   });
 
   const stats = useMemo<EmployeeSalaryStats>(() => {

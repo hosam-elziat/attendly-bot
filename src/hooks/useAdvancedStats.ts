@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { startOfMonth, endOfMonth, format, eachDayOfInterval, isWeekend, differenceInMinutes, parseISO } from 'date-fns';
 
 export interface AdvancedStats {
@@ -16,21 +16,21 @@ export interface AdvancedStats {
 }
 
 export const useAdvancedStats = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const now = new Date();
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
 
   return useQuery({
-    queryKey: ['advanced-stats', profile?.company_id, format(monthStart, 'yyyy-MM')],
+    queryKey: ['advanced-stats', effectiveCompanyId, format(monthStart, 'yyyy-MM')],
     queryFn: async (): Promise<AdvancedStats | null> => {
-      if (!profile?.company_id) return null;
+      if (!effectiveCompanyId) return null;
 
       // Get company settings
       const { data: company } = await supabase
         .from('companies')
         .select('work_start_time, work_end_time, overtime_multiplier')
-        .eq('id', profile.company_id)
+        .eq('id', effectiveCompanyId)
         .single();
 
       const overtimeMultiplier = (company as any)?.overtime_multiplier || 2;
@@ -41,7 +41,7 @@ export const useAdvancedStats = () => {
       const { data: employees } = await supabase
         .from('employees')
         .select('id, full_name, weekend_days')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', true);
 
       if (!employees || employees.length === 0) {
@@ -62,7 +62,7 @@ export const useAdvancedStats = () => {
       const { data: attendanceLogs } = await supabase
         .from('attendance_logs')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .gte('date', format(monthStart, 'yyyy-MM-dd'))
         .lte('date', format(monthEnd, 'yyyy-MM-dd'));
 
@@ -172,7 +172,7 @@ export const useAdvancedStats = () => {
         overtimeMultiplier,
       };
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
