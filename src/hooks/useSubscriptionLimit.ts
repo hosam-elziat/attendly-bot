@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { useEmployees } from './useEmployees';
 
 interface SubscriptionPlan {
@@ -27,24 +27,24 @@ interface SubscriptionData {
 }
 
 export const useSubscriptionLimit = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const { data: employees = [] } = useEmployees();
 
   const { data: subscription } = useQuery({
-    queryKey: ['subscription', profile?.company_id],
+    queryKey: ['subscription', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return null;
+      if (!effectiveCompanyId) return null;
       
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .single();
 
       if (error) return null;
       return data as SubscriptionData;
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 
   const { data: plans = [] } = useQuery({

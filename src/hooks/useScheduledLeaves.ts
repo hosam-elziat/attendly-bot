@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -22,17 +22,17 @@ export interface ScheduledLeave {
 }
 
 export const useScheduledLeaves = (date?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['scheduled-leaves', profile?.company_id, date],
+    queryKey: ['scheduled-leaves', effectiveCompanyId, date],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       let query = supabase
         .from('scheduled_leaves')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('leave_date', { ascending: false });
 
       if (date) {
@@ -44,7 +44,7 @@ export const useScheduledLeaves = (date?: string) => {
       if (error) throw error;
       return data as ScheduledLeave[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
@@ -88,18 +88,18 @@ export const useDeleteScheduledLeave = () => {
 
 // Check if an employee has a scheduled leave for a specific date
 export const useCheckScheduledLeave = (employeeId: string, positionId: string | null, date: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['check-scheduled-leave', profile?.company_id, employeeId, positionId, date],
+    queryKey: ['check-scheduled-leave', effectiveCompanyId, employeeId, positionId, date],
     queryFn: async () => {
-      if (!profile?.company_id) return null;
+      if (!effectiveCompanyId) return null;
 
       // Check for company-wide leaves
       const { data: companyLeaves } = await supabase
         .from('scheduled_leaves')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('target_type', 'company')
         .lte('leave_date', date)
         .or(`end_date.gte.${date},end_date.is.null`);
@@ -113,7 +113,7 @@ export const useCheckScheduledLeave = (employeeId: string, positionId: string | 
         const { data: positionLeaves } = await supabase
           .from('scheduled_leaves')
           .select('*')
-          .eq('company_id', profile.company_id)
+          .eq('company_id', effectiveCompanyId)
           .eq('target_type', 'position')
           .eq('target_id', positionId)
           .lte('leave_date', date)
@@ -128,7 +128,7 @@ export const useCheckScheduledLeave = (employeeId: string, positionId: string | 
       const { data: employeeLeaves } = await supabase
         .from('scheduled_leaves')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('target_type', 'employee')
         .eq('target_id', employeeId)
         .lte('leave_date', date)
@@ -140,6 +140,6 @@ export const useCheckScheduledLeave = (employeeId: string, positionId: string | 
 
       return null;
     },
-    enabled: !!profile?.company_id && !!employeeId && !!date,
+    enabled: !!effectiveCompanyId && !!employeeId && !!date,
   });
 };

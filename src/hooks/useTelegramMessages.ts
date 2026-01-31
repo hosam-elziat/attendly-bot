@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 
 export interface TelegramMessage {
   id: string;
@@ -27,28 +27,29 @@ export interface EmployeeWithLastMessage {
 }
 
 export const useTelegramMessages = (employeeId?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   const messagesQuery = useQuery({
-    queryKey: ['telegram-messages', employeeId],
+    queryKey: ['telegram-messages', employeeId, effectiveCompanyId],
     queryFn: async () => {
-      if (!employeeId) return [];
+      if (!employeeId || !effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('telegram_messages')
         .select('*')
         .eq('employee_id', employeeId)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       return data as TelegramMessage[];
     },
-    enabled: !!employeeId && !!profile?.company_id,
+    enabled: !!employeeId && !!effectiveCompanyId,
   });
 
   // Subscribe to realtime updates
   useEffect(() => {
-    if (!employeeId || !profile?.company_id) return;
+    if (!employeeId || !effectiveCompanyId) return;
 
     const channel = supabase
       .channel(`telegram-messages-${employeeId}`)
@@ -69,24 +70,24 @@ export const useTelegramMessages = (employeeId?: string) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [employeeId, profile?.company_id]);
+  }, [employeeId, effectiveCompanyId]);
 
   return messagesQuery;
 };
 
 export const useEmployeesWithMessages = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['employees-with-messages', profile?.company_id],
+    queryKey: ['employees-with-messages', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       // Get all employees with telegram_chat_id
       const { data: employees, error: empError } = await supabase
         .from('employees')
         .select('id, full_name, telegram_chat_id, department, position_id')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .not('telegram_chat_id', 'is', null)
         .eq('is_active', true);
 
@@ -99,6 +100,7 @@ export const useEmployeesWithMessages = () => {
             .from('telegram_messages')
             .select('*')
             .eq('employee_id', emp.id)
+            .eq('company_id', effectiveCompanyId)
             .order('created_at', { ascending: false })
             .limit(1);
 
@@ -117,6 +119,6 @@ export const useEmployeesWithMessages = () => {
         return new Date(b.last_message.created_at).getTime() - new Date(a.last_message.created_at).getTime();
       });
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };

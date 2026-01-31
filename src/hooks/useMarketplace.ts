@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -63,35 +64,35 @@ export interface MarketplaceOrder {
 
 // Hook: Marketplace Categories
 export const useMarketplaceCategories = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['marketplace-categories', profile?.company_id],
+    queryKey: ['marketplace-categories', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('marketplace_categories')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', true)
         .order('sort_order');
       
       if (error) throw error;
       return data as MarketplaceCategory[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Save Category
 export const useSaveMarketplaceCategory = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (category: Partial<MarketplaceCategory>) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       if (category.id) {
         const { error } = await supabase
@@ -108,7 +109,7 @@ export const useSaveMarketplaceCategory = () => {
         if (error) throw error;
       } else {
         const insertData: MarketplaceCategoriesInsert = {
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           name: category.name || '',
           name_ar: category.name_ar,
           icon: category.icon,
@@ -157,12 +158,12 @@ export const useDeleteMarketplaceCategory = () => {
 
 // Hook: Marketplace Items
 export const useMarketplaceItems = (categoryId?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['marketplace-items', profile?.company_id, categoryId],
+    queryKey: ['marketplace-items', effectiveCompanyId, categoryId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       let query = supabase
         .from('marketplace_items')
@@ -170,7 +171,7 @@ export const useMarketplaceItems = (categoryId?: string) => {
           *,
           category:marketplace_categories(*)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
       
       if (categoryId) {
@@ -182,18 +183,18 @@ export const useMarketplaceItems = (categoryId?: string) => {
       if (error) throw error;
       return data as MarketplaceItem[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Active Marketplace Items (for employees)
 export const useActiveMarketplaceItems = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['active-marketplace-items', profile?.company_id],
+    queryKey: ['active-marketplace-items', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       const { data, error } = await supabase
         .from('marketplace_items')
@@ -201,25 +202,25 @@ export const useActiveMarketplaceItems = () => {
           *,
           category:marketplace_categories(*)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', true)
         .order('points_price');
       
       if (error) throw error;
       return data as MarketplaceItem[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
 // Hook: Save Item
 export const useSaveMarketplaceItem = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (item: Partial<MarketplaceItem>) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       if (item.id) {
         const { error } = await supabase
@@ -233,7 +234,7 @@ export const useSaveMarketplaceItem = () => {
         if (error) throw error;
       } else {
         const insertData: MarketplaceItemsInsert = {
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           name: item.name || '',
           name_ar: item.name_ar,
           description: item.description,
@@ -294,12 +295,12 @@ export const useDeleteMarketplaceItem = () => {
 
 // Hook: Marketplace Orders
 export const useMarketplaceOrders = (status?: string) => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   
   return useQuery({
-    queryKey: ['marketplace-orders', profile?.company_id, status],
+    queryKey: ['marketplace-orders', effectiveCompanyId, status],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
       
       let query = supabase
         .from('marketplace_orders')
@@ -308,7 +309,7 @@ export const useMarketplaceOrders = (status?: string) => {
           item:marketplace_items(*),
           employee:employees(id, full_name, email)
         `)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
       
       if (status) {
@@ -320,7 +321,7 @@ export const useMarketplaceOrders = (status?: string) => {
       if (error) throw error;
       return data as MarketplaceOrder[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 };
 
@@ -349,7 +350,7 @@ export const useEmployeeOrders = (employeeId?: string) => {
 
 // Hook: Create Order (Purchase)
 export const useCreateOrder = () => {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
   const queryClient = useQueryClient();
   
   return useMutation({
@@ -362,7 +363,7 @@ export const useCreateOrder = () => {
       employeeId: string;
       orderData?: Record<string, any>;
     }) => {
-      if (!profile?.company_id) throw new Error('No company');
+      if (!effectiveCompanyId) throw new Error('No company');
       
       // Get item details
       const { data: item, error: itemError } = await supabase
@@ -393,7 +394,7 @@ export const useCreateOrder = () => {
         .from('marketplace_orders')
         .insert({
           employee_id: employeeId,
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           item_id: itemId,
           points_spent: item.points_price,
           status: item.approval_required ? 'pending' : 'approved',
@@ -405,7 +406,7 @@ export const useCreateOrder = () => {
       // Deduct points
       await supabase.rpc('award_points', {
         p_employee_id: employeeId,
-        p_company_id: profile.company_id,
+        p_company_id: effectiveCompanyId,
         p_points: -item.points_price,
         p_event_type: 'marketplace_purchase',
         p_source: 'marketplace',
@@ -512,87 +513,10 @@ export const useConsumeOrder = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace-orders'] });
       queryClient.invalidateQueries({ queryKey: ['employee-orders'] });
-      toast.success('تم استهلاك الطلب');
+      toast.success('تم تسجيل الاستهلاك');
     },
     onError: (error: any) => {
-      toast.error('فشل: ' + error.message);
+      toast.error('فشل في تسجيل الاستهلاك: ' + error.message);
     },
-  });
-};
-
-// Hook: Rewards Leaderboard
-export const useRewardsLeaderboard = (periodType: 'daily' | 'weekly' | 'monthly' | 'all_time' = 'monthly', limit = 10) => {
-  const { profile } = useAuth();
-  
-  return useQuery({
-    queryKey: ['rewards-leaderboard', profile?.company_id, periodType, limit],
-    queryFn: async () => {
-      if (!profile?.company_id) return [];
-      
-      // For simplicity, we'll query wallets directly ordered by points
-      // In production, you'd use the leaderboard cache table
-      const { data, error } = await supabase
-        .from('employee_wallets')
-        .select(`
-          *,
-          employee:employees(id, full_name, email, department),
-          current_level:reward_levels(*)
-        `)
-        .eq('company_id', profile.company_id)
-        .order('total_points', { ascending: false })
-        .limit(limit);
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!profile?.company_id,
-  });
-};
-
-// Hook: Rewards Stats
-export const useRewardsStats = () => {
-  const { profile } = useAuth();
-  
-  return useQuery({
-    queryKey: ['rewards-stats', profile?.company_id],
-    queryFn: async () => {
-      if (!profile?.company_id) return null;
-      
-      // Get total points issued
-      const { data: pointsData } = await supabase
-        .from('points_history')
-        .select('points')
-        .eq('company_id', profile.company_id)
-        .gt('points', 0);
-      
-      const totalPointsIssued = pointsData?.reduce((sum, p) => sum + p.points, 0) || 0;
-      
-      // Get pending orders count
-      const { count: pendingOrders } = await supabase
-        .from('marketplace_orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id)
-        .eq('status', 'pending');
-      
-      // Get total orders
-      const { count: totalOrders } = await supabase
-        .from('marketplace_orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id);
-      
-      // Get active employees with wallets
-      const { count: activeWallets } = await supabase
-        .from('employee_wallets')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', profile.company_id);
-      
-      return {
-        totalPointsIssued,
-        pendingOrders: pendingOrders || 0,
-        totalOrders: totalOrders || 0,
-        activeWallets: activeWallets || 0,
-      };
-    },
-    enabled: !!profile?.company_id,
   });
 };

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCompanyAccess } from './useSuperAdminCompanyAccess';
 import { toast } from 'sonner';
 
 export interface JoinRequest {
@@ -56,29 +57,30 @@ async function sendJoinRequestNotification(
 }
 
 export function useJoinRequests() {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useQuery({
-    queryKey: ['join-requests', profile?.company_id],
+    queryKey: ['join-requests', effectiveCompanyId],
     queryFn: async () => {
-      if (!profile?.company_id) return [];
+      if (!effectiveCompanyId) return [];
 
       const { data, error } = await supabase
         .from('join_requests')
         .select('*')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as JoinRequest[];
     },
-    enabled: !!profile?.company_id,
+    enabled: !!effectiveCompanyId,
   });
 }
 
 export function useApproveJoinRequest() {
   const queryClient = useQueryClient();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async ({ requestId, employeeData }: { 
@@ -96,20 +98,20 @@ export function useApproveJoinRequest() {
         weekend_days?: string[] | null;
       }
     }) => {
-      if (!profile?.company_id) throw new Error('No company found');
+      if (!effectiveCompanyId) throw new Error('No company found');
 
       // Get company default settings
       const { data: company } = await supabase
         .from('companies')
         .select('default_currency, default_weekend_days, work_start_time, work_end_time')
-        .eq('id', profile.company_id)
+        .eq('id', effectiveCompanyId)
         .single();
 
       // Create employee with work schedule and default currency
       const { error: employeeError } = await supabase
         .from('employees')
         .insert({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           full_name: employeeData.full_name,
           email: employeeData.email,
           phone: employeeData.phone || null,
@@ -156,7 +158,8 @@ export function useApproveJoinRequest() {
 
 export function useRejectJoinRequest() {
   const queryClient = useQueryClient();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async ({ requestId, reason, telegram_chat_id }: { 
@@ -177,7 +180,7 @@ export function useRejectJoinRequest() {
       if (error) throw error;
 
       // Send Telegram notification via secure edge function
-      if (telegram_chat_id && profile?.company_id) {
+      if (telegram_chat_id && effectiveCompanyId) {
         await sendJoinRequestNotification('rejected', telegram_chat_id, undefined, reason);
       }
 
@@ -196,18 +199,18 @@ export function useRejectJoinRequest() {
 
 // Hook to check for deleted employee when processing join request
 export function useCheckDeletedEmployee() {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async (telegram_chat_id: string) => {
-      if (!profile?.company_id) throw new Error('No company found');
+      if (!effectiveCompanyId) throw new Error('No company found');
 
       // Get all deleted employees and filter client-side for JSON field match
       const { data, error } = await supabase
         .from('deleted_records')
         .select('id, record_id, record_data, deleted_at')
         .eq('table_name', 'employees')
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_restored', false)
         .order('deleted_at', { ascending: false });
 
@@ -226,17 +229,17 @@ export function useCheckDeletedEmployee() {
 
 // Hook to check for inactive employee when processing join request
 export function useCheckInactiveEmployee() {
-  const { profile } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async (telegram_chat_id: string) => {
-      if (!profile?.company_id) throw new Error('No company found');
+      if (!effectiveCompanyId) throw new Error('No company found');
 
       const { data, error } = await supabase
         .from('employees')
         .select('id, full_name, email, phone, department, telegram_chat_id, is_active')
         .eq('telegram_chat_id', telegram_chat_id)
-        .eq('company_id', profile.company_id)
+        .eq('company_id', effectiveCompanyId)
         .eq('is_active', false)
         .single();
 
@@ -250,7 +253,8 @@ export function useCheckInactiveEmployee() {
 // Hook to reactivate an inactive employee
 export function useReactivateEmployee() {
   const queryClient = useQueryClient();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async ({ 
@@ -262,7 +266,7 @@ export function useReactivateEmployee() {
       joinRequestId: string;
       telegram_chat_id: string;
     }) => {
-      if (!profile?.company_id) throw new Error('No company found');
+      if (!effectiveCompanyId) throw new Error('No company found');
 
       // Reactivate the employee
       const { data: employee, error: updateError } = await supabase
@@ -309,7 +313,8 @@ export function useReactivateEmployee() {
 // Hook to restore a deleted employee
 export function useRestoreDeletedEmployee() {
   const queryClient = useQueryClient();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const { effectiveCompanyId } = useSuperAdminCompanyAccess();
 
   return useMutation({
     mutationFn: async ({ 
@@ -321,7 +326,7 @@ export function useRestoreDeletedEmployee() {
       joinRequestId: string;
       telegram_chat_id: string;
     }) => {
-      if (!profile?.company_id) throw new Error('No company found');
+      if (!effectiveCompanyId) throw new Error('No company found');
 
       // Get the deleted record
       const { data: deletedRecord, error: fetchError } = await supabase
