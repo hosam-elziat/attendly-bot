@@ -59,6 +59,11 @@ const EmployeeVerificationForm = ({
   value,
   onChange 
 }: EmployeeVerificationFormProps) => {
+
+  const approverOptions = employees.filter((e) => e.id !== employee.id);
+  const safeApproverId = value.approverId && approverOptions.some((e) => e.id === value.approverId)
+    ? value.approverId
+    : 'none';
   
   const companyLevel = company?.attendance_verification_level || 1;
   const companyLevel3Mode = company?.level3_verification_mode || 'location_only';
@@ -216,13 +221,13 @@ const EmployeeVerificationForm = ({
                   </RadioGroup>
 
                   {value.approverType === 'specific_person' && (
-                    <Select value={value.approverId ?? 'none'} onValueChange={(v) => onChange({ ...value, approverId: v === 'none' ? null : v })}>
+                    <Select value={safeApproverId} onValueChange={(v) => onChange({ ...value, approverId: v === 'none' ? null : v })}>
                       <SelectTrigger className="mt-2">
                         <SelectValue placeholder="اختر موظف..." />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">-- اختر موظف --</SelectItem>
-                        {employees.filter(e => e.id !== employee.id).map((emp) => (
+                        {approverOptions.map((emp) => (
                           <SelectItem key={emp.id} value={emp.id}>
                             {emp.full_name}
                           </SelectItem>

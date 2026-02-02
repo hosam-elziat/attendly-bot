@@ -1031,13 +1031,13 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     full_name: employee.full_name,
     email: employee.email,
     department: employee.department || '',
-    salary_type: employee.salary_type || 'monthly',
+    salary_type: employee.salary_type === 'daily' ? 'daily' : 'monthly',
     base_salary: Number(employee.base_salary) || 0,
     work_start_time: employee.work_start_time?.slice(0, 5) || '09:00',
     work_end_time: employee.work_end_time?.slice(0, 5) || '17:00',
-    break_duration_minutes: employee.break_duration_minutes || 60,
-    weekend_days: employee.weekend_days || ['friday', 'saturday'],
-    is_active: employee.is_active,
+    break_duration_minutes: employee.break_duration_minutes ?? 60,
+    weekend_days: employee.weekend_days ?? ['friday', 'saturday'],
+    is_active: employee.is_active ?? true,
     phone: employee.phone || '',
     national_id: employee.national_id || '',
     address: employee.address || '',
@@ -1045,10 +1045,23 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
     currency: employee.currency || defaultCurrency,
     notes: employee.notes || '',
     telegram_chat_id: employee.telegram_chat_id || '',
-    position_id: employee.position_id || '',
-    is_freelancer: employee.is_freelancer || false,
+    position_id: employee.position_id ?? '',
+    is_freelancer: employee.is_freelancer ?? false,
     hourly_rate: employee.hourly_rate || 0,
   });
+
+  // Radix Select can crash into an update loop if it receives a value that doesn't exist in its items.
+  const safeCurrency = useMemo(() => {
+    const desired = (formData.currency || defaultCurrency || 'SAR').trim();
+    return CURRENCIES.some((c) => c.code === desired) ? desired : 'SAR';
+  }, [formData.currency, defaultCurrency]);
+
+  const safePositionId = useMemo(() => {
+    if (formData.position_id && positions.some((p) => p.id === formData.position_id)) {
+      return formData.position_id;
+    }
+    return 'none';
+  }, [formData.position_id, positions]);
 
   // Verification settings state
   const parseLevel3Requirements = (mode: string | null): string[] => {
@@ -1214,7 +1227,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
         <div className="space-y-2">
           <Label>{language === 'ar' ? 'المنصب' : 'Position'}</Label>
           <Select 
-            value={formData.position_id || 'none'} 
+            value={safePositionId} 
             onValueChange={(value) => setFormData(prev => ({ ...prev, position_id: value === 'none' ? '' : value }))}
           >
             <SelectTrigger>
@@ -1407,7 +1420,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               <div className="space-y-2">
                 <Label>{t('employees.currency')}</Label>
                 <Select 
-                  value={formData.currency} 
+                  value={safeCurrency} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
                 >
                   <SelectTrigger>
@@ -1451,7 +1464,7 @@ const EditEmployeeForm = ({ employee, defaultCurrency, onClose, onSubmit, isLoad
               <div className="space-y-2">
                 <Label>{t('employees.currency')}</Label>
                 <Select 
-                  value={formData.currency} 
+                  value={safeCurrency} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
                 >
                   <SelectTrigger>
