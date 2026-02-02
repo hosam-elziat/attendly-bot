@@ -2445,6 +2445,66 @@ export type Database = {
           },
         ]
       }
+      permission_requests: {
+        Row: {
+          company_id: string
+          created_at: string
+          employee_id: string
+          id: string
+          minutes: number
+          permission_type: string
+          reason: string | null
+          request_date: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          minutes?: number
+          permission_type: string
+          reason?: string | null
+          request_date?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          minutes?: number
+          permission_type?: string
+          reason?: string | null
+          request_date?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permission_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "permission_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_features: {
         Row: {
           created_at: string | null

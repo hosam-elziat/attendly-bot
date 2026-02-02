@@ -1471,20 +1471,28 @@ serve(async (req) => {
         // Removed old default case - consolidated below
 
         case 'my_salary':
-          // Check if it's the last day of the month
+          // Show message that current month is not available, with button to view last month
           const currentDate = new Date()
-          const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
-          const isLastDay = currentDate.getDate() === lastDayOfMonth
           
-          if (!isLastDay) {
-            await sendAndLogMessage(
-              `⏳ <b>المرتب غير متاح حالياً</b>\n\n` +
-              `يمكنك الاطلاع على تقرير مرتبك في آخر يوم من الشهر فقط.\n\n` +
-              `📅 اليوم الحالي: ${currentDate.getDate()}\n` +
-              `📅 آخر يوم في الشهر: ${lastDayOfMonth}`,
-              getEmployeeKeyboard()
-            )
-          } else {
+          await sendAndLogMessage(
+            `📊 <b>تقرير المرتب</b>\n\n` +
+            `⚠️ مرتب الشهر الحالي (${currentDate.toLocaleString('ar-EG', { month: 'long' })}) غير متاح حالياً.\n\n` +
+            `📅 سيكون متاحاً في نهاية الشهر.\n\n` +
+            `يمكنك الاطلاع على مرتب الشهر السابق بالضغط على الزر أدناه:`,
+            {
+              inline_keyboard: [
+                [{ text: '📜 عرض مرتب الشهر السابق', callback_data: 'view_last_month_salary' }],
+                [{ text: '🔙 رجوع', callback_data: 'back_to_menu' }]
+              ]
+            }
+          )
+          break
+        
+        case 'view_last_month_salary': {
+            // Get last month's salary data
+            const lastMonthDate = new Date()
+            lastMonthDate.setMonth(lastMonthDate.getMonth() - 1)
+            
             // Get salary info
             const { data: empDetails } = await supabase
               .from('employees')
@@ -1499,9 +1507,9 @@ serve(async (req) => {
             // Use employee currency, fallback to company default currency
             const currency = empDetails?.currency || companyDefaults.currency
             
-            // Get this month's data
-            const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+            // Get last month's data
+            const monthStart = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth(), 1)
+            const monthEnd = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0)
             
             // Get attendance for overtime calculation
             const { data: monthAttendance } = await supabase
@@ -1548,7 +1556,7 @@ serve(async (req) => {
               // Net = base earnings + manual bonuses - deductions
               const netSalary = baseEarnings + manualBonuses - totalDeduction
               
-              let salaryMsg = `💰 <b>تقرير أرباحك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
+              let salaryMsg = `💰 <b>تقرير أرباحك - ${lastMonthDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
               salaryMsg += `⏱️ إجمالي ساعات العمل: ${totalWorkedHours.toFixed(1)} ساعة\n`
               salaryMsg += `📊 إجمالي الحساب: ${Math.round(baseEarnings).toLocaleString()} ${currency}\n\n`
               
@@ -1588,7 +1596,7 @@ serve(async (req) => {
               
               const netSalary = baseSalary + totalBonus + overtimeAmount - totalDeduction
               
-              let salaryMsg = `💰 <b>تقرير راتبك - ${currentDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
+              let salaryMsg = `💰 <b>تقرير راتبك - ${lastMonthDate.toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}</b>\n\n`
               salaryMsg += `📊 الراتب الأساسي: ${baseSalary.toLocaleString()} ${currency}\n`
               if (overtimeAmount > 0) {
                 salaryMsg += `⏰ الوقت الإضافي (${overtimeHours.toFixed(1)} ساعة): +${overtimeAmount.toLocaleString()} ${currency}\n`
