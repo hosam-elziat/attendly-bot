@@ -1451,7 +1451,7 @@ serve(async (req) => {
               company_id: companyId,
               permission_type: permType,
               request_date: permDate,
-              requested_minutes: minutes,
+              minutes: minutes,
               status: 'pending'
             })
             .select()
