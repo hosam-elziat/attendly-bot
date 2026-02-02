@@ -41,6 +41,11 @@ interface EmployeeWithSalary {
   work_days: number;
   is_freelancer: boolean;
   hourly_rate: number | null;
+  // For freelancers: calculated from attendance hours
+  worked_hours: number;
+  hourly_earnings: number;
+  // Manual bonuses only (excluding auto-generated)
+  manual_bonus: number;
 }
 
 const Salaries = () => {
@@ -73,20 +78,20 @@ const Salaries = () => {
 
       if (empError) throw empError;
 
-      // Fetch salary adjustments for the month
+      // Fetch salary adjustments for the month (including is_auto_generated flag)
       const { data: adjustmentsData, error: adjError } = await supabase
         .from('salary_adjustments')
-        .select('employee_id, bonus, deduction')
+        .select('employee_id, bonus, deduction, is_auto_generated')
         .eq('company_id', effectiveCompanyId)
         .gte('month', monthStr)
         .lt('month', format(new Date(new Date(monthStr).setMonth(new Date(monthStr).getMonth() + 1)), 'yyyy-MM-dd'));
 
       if (adjError) throw adjError;
 
-      // Fetch attendance for work days count
+      // Fetch attendance for work days count AND hours calculation
       const { data: attendance, error: attError } = await supabase
         .from('attendance_logs')
-        .select('employee_id, date')
+        .select('employee_id, date, check_in_time, check_out_time')
         .eq('company_id', effectiveCompanyId)
         .gte('date', monthStr)
         .lt('date', format(new Date(new Date(monthStr).setMonth(new Date(monthStr).getMonth() + 1)), 'yyyy-MM-dd'));
@@ -96,13 +101,34 @@ const Salaries = () => {
       // Aggregate data per employee
       const employeeSalaries = (employeesData || []).map(emp => {
         const empAdjustments = (adjustmentsData || []).filter(a => a.employee_id === emp.id);
+        const isFreelancer = (emp as any).is_freelancer === true;
+        const hourlyRate = (emp as any).hourly_rate || 0;
+        
+        // For freelancers: separate manual bonuses from auto-generated
+        // Manual bonuses = bonuses that are NOT auto-generated
+        const manualBonus = empAdjustments
+          .filter(a => !a.is_auto_generated && (a.bonus || 0) > 0)
+          .reduce((sum, a) => sum + (a.bonus || 0), 0);
+        
+        // Total bonus still includes everything for display purposes
         const totalBonus = empAdjustments.reduce((sum, a) => sum + (a.bonus || 0), 0);
         const totalDeduction = empAdjustments.reduce((sum, a) => sum + (a.deduction || 0), 0);
         
-        const workDays = new Set((attendance || [])
-          .filter(a => a.employee_id === emp.id)
-          .map(a => a.date)
-        ).size;
+        // Calculate worked hours from attendance
+        let workedMinutes = 0;
+        const empAttendance = (attendance || []).filter(a => a.employee_id === emp.id);
+        for (const log of empAttendance) {
+          if (log.check_in_time && log.check_out_time) {
+            const checkIn = new Date(log.check_in_time);
+            const checkOut = new Date(log.check_out_time);
+            const mins = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60) - 60; // subtract 1hr break
+            workedMinutes += Math.max(0, mins);
+          }
+        }
+        const workedHours = workedMinutes / 60;
+        const hourlyEarnings = workedHours * hourlyRate;
+        
+        const workDays = new Set(empAttendance.map(a => a.date)).size;
 
         return {
           id: emp.id,
@@ -112,8 +138,11 @@ const Salaries = () => {
           total_bonus: totalBonus,
           total_deduction: totalDeduction,
           work_days: workDays,
-          is_freelancer: (emp as any).is_freelancer === true,
-          hourly_rate: (emp as any).hourly_rate,
+          is_freelancer: isFreelancer,
+          hourly_rate: hourlyRate,
+          worked_hours: Math.round(workedHours * 10) / 10,
+          hourly_earnings: Math.round(hourlyEarnings * 100) / 100,
+          manual_bonus: manualBonus,
         };
       });
 
@@ -130,15 +159,22 @@ const Salaries = () => {
     refetchAdjustments();
   }, [effectiveCompanyId, selectedMonth]);
 
-  // For freelancers: net salary = total_bonus - total_deduction (no base salary)
+  // For freelancers: net salary = hourly_earnings + manual_bonus - deductions
   // For regular: net salary = base_salary + total_bonus - total_deduction
   const totalPayroll = employees.reduce((sum, e) => {
     if (e.is_freelancer) {
-      return sum + (e.total_bonus - e.total_deduction);
+      // Freelancer: hourly earnings (from attendance) + manual bonuses - deductions
+      return sum + (e.hourly_earnings + e.manual_bonus - e.total_deduction);
     }
     return sum + ((e.base_salary || 0) + e.total_bonus - e.total_deduction);
   }, 0);
-  const totalBonuses = employees.reduce((sum, e) => sum + e.total_bonus, 0);
+  // For stats: show manual bonuses for freelancers, total for regular
+  const totalBonuses = employees.reduce((sum, e) => {
+    if (e.is_freelancer) {
+      return sum + e.manual_bonus;
+    }
+    return sum + e.total_bonus;
+  }, 0);
   const totalDeductions = employees.reduce((sum, e) => sum + e.total_deduction, 0);
 
   const handleEditClick = (employee: EmployeeWithSalary) => {
@@ -339,9 +375,9 @@ const Salaries = () => {
                     {/* Mobile Cards View */}
                     <div className="block sm:hidden p-3 space-y-3">
                       {employees.map((employee) => {
-                        // Freelancer: net = bonus - deduction (no base salary)
+                        // Freelancer: net = hourly_earnings + manual_bonus - deduction
                         const netSalary = employee.is_freelancer 
-                          ? (employee.total_bonus - employee.total_deduction)
+                          ? (employee.hourly_earnings + employee.manual_bonus - employee.total_deduction)
                           : ((employee.base_salary || 0) + employee.total_bonus - employee.total_deduction);
                         return (
                           <Card key={employee.id}>
@@ -379,23 +415,39 @@ const Salaries = () => {
                                 <div>
                                   <p className="text-muted-foreground">
                                     {employee.is_freelancer 
-                                      ? (language === 'ar' ? 'سعر الساعة' : 'Hourly Rate')
+                                      ? (language === 'ar' ? 'ساعات العمل' : 'Hours')
                                       : t('salaries.baseSalary')}
                                   </p>
                                   <p className="font-medium">
                                     {employee.is_freelancer 
-                                      ? `${(employee.hourly_rate || 0).toLocaleString()} ${employee.currency || 'EGP'}/س`
+                                      ? `${employee.worked_hours} ${language === 'ar' ? 'ساعة' : 'hrs'}`
                                       : `${(employee.base_salary || 0).toLocaleString()}`}
                                   </p>
                                 </div>
                                 <div>
                                   <p className="text-muted-foreground">
                                     {employee.is_freelancer 
-                                      ? (language === 'ar' ? 'المستحقات' : 'Earnings')
+                                      ? (language === 'ar' ? 'المرتب' : 'Earnings')
                                       : t('salaries.bonus')}
                                   </p>
-                                  <p className={employee.total_bonus > 0 ? 'text-success font-medium' : 'text-muted-foreground'}>
-                                    {employee.total_bonus > 0 ? `+${employee.total_bonus.toFixed(2)}` : '0'}
+                                  <p className={employee.is_freelancer ? 'font-medium' : (employee.total_bonus > 0 ? 'text-success font-medium' : 'text-muted-foreground')}>
+                                    {employee.is_freelancer 
+                                      ? `${employee.hourly_earnings.toLocaleString()}`
+                                      : (employee.total_bonus > 0 ? `+${employee.total_bonus.toFixed(2)}` : '0')}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">
+                                    {employee.is_freelancer 
+                                      ? (language === 'ar' ? 'مكافآت' : 'Bonus')
+                                      : t('salaries.deductions')}
+                                  </p>
+                                  <p className={employee.is_freelancer 
+                                    ? (employee.manual_bonus > 0 ? 'text-success font-medium' : 'text-muted-foreground')
+                                    : (employee.total_deduction > 0 ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+                                    {employee.is_freelancer 
+                                      ? (employee.manual_bonus > 0 ? `+${employee.manual_bonus}` : '0')
+                                      : (employee.total_deduction > 0 ? `-${employee.total_deduction}` : '0')}
                                   </p>
                                 </div>
                                 <div>
@@ -446,9 +498,9 @@ const Salaries = () => {
                       </TableHeader>
                       <TableBody>
                         {employees.map((employee) => {
-                          // Freelancer: net = bonus - deduction (no base salary)
+                          // Freelancer: net = hourly_earnings + manual_bonus - deduction
                           const netSalary = employee.is_freelancer 
-                            ? (employee.total_bonus - employee.total_deduction)
+                            ? (employee.hourly_earnings + employee.manual_bonus - employee.total_deduction)
                             : ((employee.base_salary || 0) + employee.total_bonus - employee.total_deduction);
                           return (
                             <TableRow key={employee.id}>
@@ -476,20 +528,34 @@ const Salaries = () => {
                                   </TableCell>
                                   <TableCell className="text-right text-muted-foreground">
                                     {employee.is_freelancer 
-                                      ? `${(employee.hourly_rate || 0).toLocaleString()} ${employee.currency || 'EGP'}/س`
+                                      ? `${employee.worked_hours} ساعة = ${employee.hourly_earnings.toLocaleString()} ${employee.currency || 'EGP'}`
                                       : `${(employee.base_salary || 0).toLocaleString()} ${employee.currency || 'EGP'}`}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                    {employee.total_bonus > 0 ? (
-                                      <span className="text-success flex items-center justify-end gap-1">
-                                        <TrendingUp className="w-3 h-3" />
-                                        +{employee.total_bonus.toFixed(2)}
-                                      </span>
+                                    {employee.is_freelancer ? (
+                                      employee.manual_bonus > 0 ? (
+                                        <span className="text-success flex items-center justify-end gap-1">
+                                          <TrendingUp className="w-3 h-3" />
+                                          +{employee.manual_bonus.toFixed(2)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground flex items-center justify-end gap-1">
+                                          <Minus className="w-3 h-3" />
+                                          0
+                                        </span>
+                                      )
                                     ) : (
-                                      <span className="text-muted-foreground flex items-center justify-end gap-1">
-                                        <Minus className="w-3 h-3" />
-                                        0
-                                      </span>
+                                      employee.total_bonus > 0 ? (
+                                        <span className="text-success flex items-center justify-end gap-1">
+                                          <TrendingUp className="w-3 h-3" />
+                                          +{employee.total_bonus.toFixed(2)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground flex items-center justify-end gap-1">
+                                          <Minus className="w-3 h-3" />
+                                          0
+                                        </span>
+                                      )
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right">
@@ -544,20 +610,34 @@ const Salaries = () => {
                                   </TableCell>
                                   <TableCell className="text-muted-foreground">
                                     {employee.is_freelancer 
-                                      ? `${(employee.hourly_rate || 0).toLocaleString()} ${employee.currency || 'EGP'}/hr`
+                                      ? `${employee.worked_hours} hrs = ${employee.hourly_earnings.toLocaleString()} ${employee.currency || 'EGP'}`
                                       : `${(employee.base_salary || 0).toLocaleString()} ${employee.currency || 'EGP'}`}
                                   </TableCell>
                                   <TableCell>
-                                    {employee.total_bonus > 0 ? (
-                                      <span className="text-success flex items-center gap-1">
-                                        <TrendingUp className="w-3 h-3" />
-                                        +{employee.total_bonus.toFixed(2)}
-                                      </span>
+                                    {employee.is_freelancer ? (
+                                      employee.manual_bonus > 0 ? (
+                                        <span className="text-success flex items-center gap-1">
+                                          <TrendingUp className="w-3 h-3" />
+                                          +{employee.manual_bonus.toFixed(2)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground flex items-center gap-1">
+                                          <Minus className="w-3 h-3" />
+                                          0
+                                        </span>
+                                      )
                                     ) : (
-                                      <span className="text-muted-foreground flex items-center gap-1">
-                                        <Minus className="w-3 h-3" />
-                                        0
-                                      </span>
+                                      employee.total_bonus > 0 ? (
+                                        <span className="text-success flex items-center gap-1">
+                                          <TrendingUp className="w-3 h-3" />
+                                          +{employee.total_bonus.toFixed(2)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground flex items-center gap-1">
+                                          <Minus className="w-3 h-3" />
+                                          0
+                                        </span>
+                                      )
                                     )}
                                   </TableCell>
                                   <TableCell>
