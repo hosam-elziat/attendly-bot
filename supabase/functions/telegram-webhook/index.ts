@@ -1377,12 +1377,53 @@ serve(async (req) => {
           const localTime = getLocalTime(companyTimezone)
           const today = localTime.date
           
+          // Check if employee already has a permission request for today (any type)
+          const { data: existingPermToday } = await supabase
+            .from('permission_requests')
+            .select('id, permission_type, minutes, status')
+            .eq('employee_id', employee.id)
+            .eq('request_date', today)
+            .in('status', ['pending', 'approved'])
+            .maybeSingle()
+          
+          if (existingPermToday) {
+            const existingType = existingPermToday.permission_type === 'late_arrival' ? 'تأخير' : 'انصراف مبكر'
+            const statusText = existingPermToday.status === 'approved' ? 'تمت الموافقة عليه' : 'قيد الانتظار'
+            await sendAndLogMessage(
+              `❌ <b>لديك طلب إذن مسبق لهذا اليوم</b>\n\n` +
+              `📋 نوع الإذن: ${existingType}\n` +
+              `⏱️ المدة: ${existingPermToday.minutes} دقيقة\n` +
+              `📊 الحالة: ${statusText}\n\n` +
+              `⚠️ يُسمح بطلب إذن واحد فقط في اليوم`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            break
+          }
+          
+          // Check if employee has flex-time permission from rewards (to show as option)
+          const { data: flexTimeInventory } = await supabase
+            .from('employee_inventory')
+            .select('id, effect_value')
+            .eq('employee_id', employee.id)
+            .eq('company_id', companyId)
+            .eq('effect_type', 'flex_time')
+            .eq('is_fully_used', false)
+            .limit(1)
+            .maybeSingle()
+          
+          const hasFlexTime = !!flexTimeInventory
+          
           await setSession('permission_late_minutes', { permission_type: 'late_arrival', permission_date: today })
+          
+          const flexTimeNote = hasFlexTime 
+            ? `\n\n💡 <i>لديك ساعة إذن من المقتنيات - يمكنك استخدامها من قائمة "مقتنياتي"</i>`
+            : ''
+          
           await sendAndLogMessage(
             `⏰ <b>طلب إذن تأخير</b>\n\n` +
             `📅 التاريخ: ${today}\n` +
             `🕐 موعد العمل: ${employee.work_start_time || companyDefaults.work_start_time}\n\n` +
-            `كم دقيقة تريد التأخير؟`,
+            `كم دقيقة تريد التأخير؟${flexTimeNote}`,
             {
               inline_keyboard: [
                 [
@@ -1404,6 +1445,29 @@ serve(async (req) => {
           // Request early departure permission
           const localTime = getLocalTime(companyTimezone)
           const today = localTime.date
+          
+          // Check if employee already has a permission request for today (any type)
+          const { data: existingPermToday } = await supabase
+            .from('permission_requests')
+            .select('id, permission_type, minutes, status')
+            .eq('employee_id', employee.id)
+            .eq('request_date', today)
+            .in('status', ['pending', 'approved'])
+            .maybeSingle()
+          
+          if (existingPermToday) {
+            const existingType = existingPermToday.permission_type === 'late_arrival' ? 'تأخير' : 'انصراف مبكر'
+            const statusText = existingPermToday.status === 'approved' ? 'تمت الموافقة عليه' : 'قيد الانتظار'
+            await sendAndLogMessage(
+              `❌ <b>لديك طلب إذن مسبق لهذا اليوم</b>\n\n` +
+              `📋 نوع الإذن: ${existingType}\n` +
+              `⏱️ المدة: ${existingPermToday.minutes} دقيقة\n` +
+              `📊 الحالة: ${statusText}\n\n` +
+              `⚠️ يُسمح بطلب إذن واحد فقط في اليوم`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            break
+          }
           
           await setSession('permission_early_minutes', { permission_type: 'early_departure', permission_date: today })
           await sendAndLogMessage(
@@ -1442,6 +1506,24 @@ serve(async (req) => {
           const permType = session.data.permission_type as 'late_arrival' | 'early_departure'
           const permDate = session.data.permission_date || getLocalTime(companyTimezone).date
           const permTypeText = permType === 'late_arrival' ? 'إذن تأخير' : 'إذن انصراف مبكر'
+          
+          // Double-check for existing permission request for this date
+          const { data: existingPerm } = await supabase
+            .from('permission_requests')
+            .select('id')
+            .eq('employee_id', employee.id)
+            .eq('request_date', permDate)
+            .in('status', ['pending', 'approved'])
+            .maybeSingle()
+          
+          if (existingPerm) {
+            await deleteSession()
+            await sendAndLogMessage(
+              `❌ لديك طلب إذن مسبق لهذا اليوم\n⚠️ يُسمح بطلب إذن واحد فقط في اليوم`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            break
+          }
           
           // Insert permission request
           const { data: permRequest, error: permError } = await supabase
@@ -5785,9 +5867,27 @@ async function processDirectCheckIn(
   
   const originalWorkStartTime = employee.work_start_time || companyDefaults.work_start_time
   
-  // ========== CHECK FOR LATE PERMISSION (FLEX-TIME) ==========
-  // Get permission minutes used today for late arrival
+  // ========== CHECK FOR LATE PERMISSION FROM MULTIPLE SOURCES ==========
   let latePermissionMinutes = 0
+  let permissionSource = ''
+  
+  // Source 1: Approved permission_requests for late arrival today
+  const { data: approvedPermRequest } = await supabase
+    .from('permission_requests')
+    .select('minutes')
+    .eq('employee_id', employee.id)
+    .eq('request_date', today)
+    .eq('permission_type', 'late_arrival')
+    .eq('status', 'approved')
+    .maybeSingle()
+  
+  if (approvedPermRequest) {
+    latePermissionMinutes = approvedPermRequest.minutes || 0
+    permissionSource = 'إذن تأخير معتمد'
+    console.log(`Approved permission request found: ${latePermissionMinutes} mins`)
+  }
+  
+  // Source 2: Flex-time from rewards/inventory (stacks with permission request)
   const { data: latePermissionUsage } = await supabase
     .from('inventory_usage_logs')
     .select('effect_applied')
@@ -5796,13 +5896,17 @@ async function processDirectCheckIn(
     .filter('effect_applied->>type', 'eq', 'late_permission')
   
   if (latePermissionUsage && latePermissionUsage.length > 0) {
-    latePermissionMinutes = latePermissionUsage.reduce((sum: number, log: any) => {
+    const flexMinutes = latePermissionUsage.reduce((sum: number, log: any) => {
       const minutes = log.effect_applied?.minutes || 60
       return sum + minutes
     }, 0)
+    latePermissionMinutes += flexMinutes
+    if (flexMinutes > 0) {
+      permissionSource = permissionSource ? `${permissionSource} + ساعة إذن من النقاط` : 'ساعة إذن من النقاط'
+    }
   }
   
-  // Adjust work start time based on late permission (max 120 minutes = 2 hours)
+  // Adjust work start time based on total late permission (max 120 minutes = 2 hours)
   const effectiveLatePermission = Math.min(latePermissionMinutes, 120)
   let workStartTime = originalWorkStartTime
   
@@ -5812,7 +5916,7 @@ async function processDirectCheckIn(
     const newStartH = Math.floor(newStartMinutes / 60)
     const newStartM = newStartMinutes % 60
     workStartTime = `${String(newStartH).padStart(2, '0')}:${String(newStartM).padStart(2, '0')}:00`
-    console.log(`Late permission active: Original ${originalWorkStartTime}, Adjusted to ${workStartTime} (+${effectiveLatePermission} mins)`)
+    console.log(`Late permission active: Original ${originalWorkStartTime}, Adjusted to ${workStartTime} (+${effectiveLatePermission} mins from ${permissionSource})`)
   }
   
   // Create attendance log with location info if provided
@@ -5862,7 +5966,8 @@ async function processDirectCheckIn(
     const mins = effectiveLatePermission % 60
     const timeStr = hours > 0 ? `${hours} ساعة${mins > 0 ? ` و ${mins} دقيقة` : ''}` : `${mins} دقيقة`
     flexTimeMessage = `\n\n⏰ <b>تأخير مسموح:</b> ${timeStr}\n` +
-      `📝 تم تعديل موعد حضورك من ${originalWorkStartTime.substring(0, 5)} إلى ${workStartTime.substring(0, 5)}`
+      `📝 تم تعديل موعد حضورك من ${originalWorkStartTime.substring(0, 5)} إلى ${workStartTime.substring(0, 5)}` +
+      (permissionSource ? `\n✅ المصدر: ${permissionSource}` : '')
   }
   
   if (workStartTime && checkInTime > workStartTime && !isFreelancer) {
