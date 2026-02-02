@@ -1531,7 +1531,7 @@ serve(async (req) => {
           
           if (attendanceLog) {
             if (permReq.permission_type === 'late_arrival') {
-              const newLateMinutes = (attendanceLog.late_permission_minutes || 0) + permReq.requested_minutes
+              const newLateMinutes = (attendanceLog.late_permission_minutes || 0) + permReq.minutes
               await supabase.from('attendance_logs')
                 .update({ late_permission_minutes: newLateMinutes })
                 .eq('id', attendanceLog.id)
@@ -1543,7 +1543,7 @@ serve(async (req) => {
                 .eq('is_auto_generated', true)
                 .ilike('description', '%خصم تأخير%')
             } else {
-              const newEarlyMinutes = (attendanceLog.early_leave_permission_minutes || 0) + permReq.requested_minutes
+              const newEarlyMinutes = (attendanceLog.early_leave_permission_minutes || 0) + permReq.minutes
               await supabase.from('attendance_logs')
                 .update({ early_leave_permission_minutes: newEarlyMinutes })
                 .eq('id', attendanceLog.id)
@@ -1559,7 +1559,7 @@ serve(async (req) => {
               `✅ <b>تمت الموافقة على طلبك!</b>\n\n` +
               `📋 ${permTypeText}\n` +
               `📅 التاريخ: ${permReq.request_date}\n` +
-              `⏱️ المدة: ${permReq.requested_minutes} دقيقة\n\n` +
+              `⏱️ المدة: ${permReq.minutes} دقيقة\n\n` +
               `👤 الموافق: ${employee.full_name}`
             )
           }
@@ -1568,7 +1568,7 @@ serve(async (req) => {
             `✅ تمت الموافقة على ${permTypeText}\n` +
             `👤 ${empData?.full_name}\n` +
             `📅 ${permReq.request_date}\n` +
-            `⏱️ ${permReq.requested_minutes} دقيقة`
+            `⏱️ ${permReq.minutes} دقيقة`
           )
           break
         }
@@ -1618,7 +1618,7 @@ serve(async (req) => {
               `❌ <b>تم رفض طلبك</b>\n\n` +
               `📋 ${permTypeText}\n` +
               `📅 التاريخ: ${permReq.request_date}\n` +
-              `⏱️ المدة: ${permReq.requested_minutes} دقيقة\n\n` +
+              `⏱️ المدة: ${permReq.minutes} دقيقة\n\n` +
               `👤 الرافض: ${employee.full_name}`
             )
           }
