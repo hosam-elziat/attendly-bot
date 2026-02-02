@@ -16,6 +16,10 @@ const SelectTrigger = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
+    // Important: SelectTrigger renders a <button>. Inside forms the default type is "submit",
+    // which can accidentally submit the form and cause rapid mount/unmount cycles (and in some cases
+    // "Maximum update depth" loops with Radix refs). Default to a safe button type.
+    type={(props as any).type ?? "button"}
     className={cn(
       "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 appearance-none touch-manipulation",
       className,
