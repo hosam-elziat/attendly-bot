@@ -365,6 +365,10 @@ interface SessionData {
   leave_type?: 'emergency' | 'regular';
   leave_date?: string;
   leave_reason?: string;
+  // Permission request session data
+  permission_type?: 'late_arrival' | 'early_departure';
+  permission_date?: string;
+  permission_minutes?: number;
   // Manager action session data
   target_employee_id?: string;
   target_employee_name?: string;
@@ -1351,20 +1355,281 @@ serve(async (req) => {
           // Start leave request flow - ask for leave type
           await setSession('leave_type_choice', {})
           await sendAndLogMessage(
-            `📝 <b>طلب إجازة</b>\n\n` +
+            `📝 <b>طلب إجازة أو إذن</b>\n\n` +
             `📊 رصيدك الحالي:\n` +
             `• إجازات طارئة: ${employee.emergency_leave_balance ?? companyDefaults.emergency_leave_days} يوم\n` +
             `• إجازات اعتيادية: ${employee.leave_balance ?? companyDefaults.annual_leave_days} يوم\n\n` +
-            `اختر نوع الإجازة:`,
+            `اختر نوع الطلب:`,
             {
               inline_keyboard: [
                 [{ text: '🚨 إجازة طارئة', callback_data: 'leave_emergency' }],
                 [{ text: '📅 إجازة اعتيادية', callback_data: 'leave_regular' }],
+                [{ text: '⏰ إذن تأخير', callback_data: 'permission_late' }],
+                [{ text: '🚪 إذن انصراف مبكر', callback_data: 'permission_early' }],
                 [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
               ]
             }
           )
           break
+        
+        case 'permission_late': {
+          // Request late arrival permission
+          const localTime = getLocalTime(companyTimezone)
+          const today = localTime.date
+          
+          await setSession('permission_late_minutes', { permission_type: 'late_arrival', permission_date: today })
+          await sendAndLogMessage(
+            `⏰ <b>طلب إذن تأخير</b>\n\n` +
+            `📅 التاريخ: ${today}\n` +
+            `🕐 موعد العمل: ${employee.work_start_time || companyDefaults.work_start_time}\n\n` +
+            `كم دقيقة تريد التأخير؟`,
+            {
+              inline_keyboard: [
+                [
+                  { text: '30 دقيقة', callback_data: 'perm_minutes_30' },
+                  { text: '60 دقيقة', callback_data: 'perm_minutes_60' }
+                ],
+                [
+                  { text: '90 دقيقة', callback_data: 'perm_minutes_90' },
+                  { text: '120 دقيقة', callback_data: 'perm_minutes_120' }
+                ],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'permission_early': {
+          // Request early departure permission
+          const localTime = getLocalTime(companyTimezone)
+          const today = localTime.date
+          
+          await setSession('permission_early_minutes', { permission_type: 'early_departure', permission_date: today })
+          await sendAndLogMessage(
+            `🚪 <b>طلب إذن انصراف مبكر</b>\n\n` +
+            `📅 التاريخ: ${today}\n` +
+            `🕐 موعد الانصراف: ${employee.work_end_time || companyDefaults.work_end_time}\n\n` +
+            `كم دقيقة تريد الانصراف قبل الموعد؟`,
+            {
+              inline_keyboard: [
+                [
+                  { text: '30 دقيقة', callback_data: 'perm_minutes_30' },
+                  { text: '60 دقيقة', callback_data: 'perm_minutes_60' }
+                ],
+                [
+                  { text: '90 دقيقة', callback_data: 'perm_minutes_90' },
+                  { text: '120 دقيقة', callback_data: 'perm_minutes_120' }
+                ],
+                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
+              ]
+            }
+          )
+          break
+        }
+        
+        case 'perm_minutes_30':
+        case 'perm_minutes_60':
+        case 'perm_minutes_90':
+        case 'perm_minutes_120': {
+          const session = await getSession()
+          if (!session?.data.permission_type) {
+            await sendAndLogMessage('❌ انتهت الجلسة', getEmployeeKeyboard(managerPermissions))
+            break
+          }
+          
+          const minutes = parseInt(callbackData.replace('perm_minutes_', ''))
+          const permType = session.data.permission_type as 'late_arrival' | 'early_departure'
+          const permDate = session.data.permission_date || getLocalTime(companyTimezone).date
+          const permTypeText = permType === 'late_arrival' ? 'إذن تأخير' : 'إذن انصراف مبكر'
+          
+          // Insert permission request
+          const { data: permRequest, error: permError } = await supabase
+            .from('permission_requests')
+            .insert({
+              employee_id: employee.id,
+              company_id: companyId,
+              permission_type: permType,
+              request_date: permDate,
+              requested_minutes: minutes,
+              status: 'pending'
+            })
+            .select()
+            .single()
+          
+          if (permError) {
+            console.error('Failed to create permission request:', permError)
+            await sendAndLogMessage('❌ حدث خطأ أثناء إرسال الطلب', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            break
+          }
+          
+          // Notify managers
+          await notifyManagersPermissionRequest(
+            supabase, botToken, employee.id, employee.full_name, companyId,
+            permType, permDate, minutes, permRequest.id
+          )
+          
+          await deleteSession()
+          await sendAndLogMessage(
+            `✅ <b>تم إرسال طلبك للمدير</b>\n\n` +
+            `📋 ${permTypeText}\n` +
+            `📅 التاريخ: ${permDate}\n` +
+            `⏱️ المدة: ${minutes} دقيقة\n\n` +
+            `⏳ في انتظار موافقة المدير...`,
+            getEmployeeKeyboard(managerPermissions)
+          )
+          break
+        }
+        
+        // Manager approval/rejection for permission requests
+        case callbackData.match(/^approve_perm_(.+)$/)?.input: {
+          const permId = callbackData.replace('approve_perm_', '')
+          
+          // Check if this manager can approve
+          if (!managerPermissions?.can_approve_leaves) {
+            await sendAndLogMessage('❌ ليس لديك صلاحية الموافقة على الأذونات')
+            break
+          }
+          
+          // Get permission request
+          const { data: permReq } = await supabase
+            .from('permission_requests')
+            .select('*, employees(full_name, telegram_chat_id, work_start_time, work_end_time)')
+            .eq('id', permId)
+            .single()
+          
+          if (!permReq) {
+            await sendAndLogMessage('❌ لم يتم العثور على الطلب')
+            break
+          }
+          
+          if (permReq.status !== 'pending') {
+            await sendAndLogMessage('⚠️ تم التعامل مع هذا الطلب مسبقاً')
+            break
+          }
+          
+          // Approve the request
+          await supabase
+            .from('permission_requests')
+            .update({
+              status: 'approved',
+              reviewed_by: employee.id,
+              reviewed_at: new Date().toISOString()
+            })
+            .eq('id', permId)
+          
+          // Update attendance log if exists for that date
+          const { data: attendanceLog } = await supabase
+            .from('attendance_logs')
+            .select('id, late_permission_minutes, early_leave_permission_minutes')
+            .eq('employee_id', permReq.employee_id)
+            .eq('date', permReq.request_date)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          
+          if (attendanceLog) {
+            if (permReq.permission_type === 'late_arrival') {
+              const newLateMinutes = (attendanceLog.late_permission_minutes || 0) + permReq.requested_minutes
+              await supabase.from('attendance_logs')
+                .update({ late_permission_minutes: newLateMinutes })
+                .eq('id', attendanceLog.id)
+              
+              // Delete any auto-generated late deduction for this log
+              await supabase.from('salary_adjustments')
+                .delete()
+                .eq('attendance_log_id', attendanceLog.id)
+                .eq('is_auto_generated', true)
+                .ilike('description', '%خصم تأخير%')
+            } else {
+              const newEarlyMinutes = (attendanceLog.early_leave_permission_minutes || 0) + permReq.requested_minutes
+              await supabase.from('attendance_logs')
+                .update({ early_leave_permission_minutes: newEarlyMinutes })
+                .eq('id', attendanceLog.id)
+            }
+          }
+          
+          const permTypeText = permReq.permission_type === 'late_arrival' ? 'إذن تأخير' : 'إذن انصراف مبكر'
+          
+          // Notify employee
+          const empData = permReq.employees as any
+          if (empData?.telegram_chat_id) {
+            await sendMessage(botToken, parseInt(empData.telegram_chat_id),
+              `✅ <b>تمت الموافقة على طلبك!</b>\n\n` +
+              `📋 ${permTypeText}\n` +
+              `📅 التاريخ: ${permReq.request_date}\n` +
+              `⏱️ المدة: ${permReq.requested_minutes} دقيقة\n\n` +
+              `👤 الموافق: ${employee.full_name}`
+            )
+          }
+          
+          await sendAndLogMessage(
+            `✅ تمت الموافقة على ${permTypeText}\n` +
+            `👤 ${empData?.full_name}\n` +
+            `📅 ${permReq.request_date}\n` +
+            `⏱️ ${permReq.requested_minutes} دقيقة`
+          )
+          break
+        }
+        
+        case callbackData.match(/^reject_perm_(.+)$/)?.input: {
+          const permId = callbackData.replace('reject_perm_', '')
+          
+          // Check if this manager can reject
+          if (!managerPermissions?.can_approve_leaves) {
+            await sendAndLogMessage('❌ ليس لديك صلاحية رفض الأذونات')
+            break
+          }
+          
+          // Get permission request
+          const { data: permReq } = await supabase
+            .from('permission_requests')
+            .select('*, employees(full_name, telegram_chat_id)')
+            .eq('id', permId)
+            .single()
+          
+          if (!permReq) {
+            await sendAndLogMessage('❌ لم يتم العثور على الطلب')
+            break
+          }
+          
+          if (permReq.status !== 'pending') {
+            await sendAndLogMessage('⚠️ تم التعامل مع هذا الطلب مسبقاً')
+            break
+          }
+          
+          // Reject the request
+          await supabase
+            .from('permission_requests')
+            .update({
+              status: 'rejected',
+              reviewed_by: employee.id,
+              reviewed_at: new Date().toISOString()
+            })
+            .eq('id', permId)
+          
+          const permTypeText = permReq.permission_type === 'late_arrival' ? 'إذن تأخير' : 'إذن انصراف مبكر'
+          
+          // Notify employee
+          const empData = permReq.employees as any
+          if (empData?.telegram_chat_id) {
+            await sendMessage(botToken, parseInt(empData.telegram_chat_id),
+              `❌ <b>تم رفض طلبك</b>\n\n` +
+              `📋 ${permTypeText}\n` +
+              `📅 التاريخ: ${permReq.request_date}\n` +
+              `⏱️ المدة: ${permReq.requested_minutes} دقيقة\n\n` +
+              `👤 الرافض: ${employee.full_name}`
+            )
+          }
+          
+          await sendAndLogMessage(
+            `❌ تم رفض ${permTypeText}\n` +
+            `👤 ${empData?.full_name}\n` +
+            `📅 ${permReq.request_date}`
+          )
+          break
+        }
 
         case 'leave_emergency': {
           // Ask for the day - today or another day using date picker buttons
@@ -4360,6 +4625,62 @@ async function notifyManagersLeaveRequest(
     }
   } catch (error) {
     console.error('Error notifying managers about leave request:', error)
+  }
+}
+
+// Notify managers about permission request (late arrival / early departure) with approval/rejection buttons
+async function notifyManagersPermissionRequest(
+  supabase: any,
+  botToken: string,
+  employeeId: string,
+  employeeName: string,
+  companyId: string,
+  permissionType: 'late_arrival' | 'early_departure',
+  permissionDate: string,
+  requestedMinutes: number,
+  permissionRequestId: string
+) {
+  try {
+    const { data: managers, error } = await supabase
+      .rpc('get_employee_managers', { emp_id: employeeId })
+    
+    if (error) {
+      console.error('Error getting managers for permission request:', error)
+      return
+    }
+    
+    if (!managers || managers.length === 0) {
+      console.log('No managers found for employee:', employeeId)
+      return
+    }
+    
+    const permTypeText = permissionType === 'late_arrival' ? 'إذن تأخير' : 'إذن انصراف مبكر'
+    const emoji = permissionType === 'late_arrival' ? '⏰' : '🚪'
+    
+    const message = `${emoji} <b>طلب ${permTypeText}</b>\n\n` +
+      `👤 الموظف: ${employeeName}\n` +
+      `📅 التاريخ: ${permissionDate}\n` +
+      `⏱️ المدة المطلوبة: ${requestedMinutes} دقيقة\n\n` +
+      `⚡ اختر قرارك:`
+    
+    // Approval/rejection buttons
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '✅ موافقة', callback_data: `approve_perm_${permissionRequestId}` },
+          { text: '❌ رفض', callback_data: `reject_perm_${permissionRequestId}` }
+        ]
+      ]
+    }
+    
+    for (const manager of managers) {
+      if (manager.manager_telegram_chat_id) {
+        await sendMessage(botToken, parseInt(manager.manager_telegram_chat_id), message, keyboard)
+        console.log(`Notified manager ${manager.manager_name} about ${employeeName}'s permission request`)
+      }
+    }
+  } catch (error) {
+    console.error('Error notifying managers about permission request:', error)
   }
 }
 
