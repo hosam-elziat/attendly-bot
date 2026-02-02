@@ -5871,18 +5871,19 @@ async function processDirectCheckIn(
   let latePermissionMinutes = 0
   let permissionSource = ''
   
-  // Source 1: Approved permission_requests for late arrival today
-  const { data: approvedPermRequest } = await supabase
+  // Source 1: Approved permission_requests for late arrival today (get the most recent one)
+  const { data: approvedPermRequests } = await supabase
     .from('permission_requests')
     .select('minutes')
     .eq('employee_id', employee.id)
     .eq('request_date', today)
     .eq('permission_type', 'late_arrival')
     .eq('status', 'approved')
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+    .limit(1)
   
-  if (approvedPermRequest) {
-    latePermissionMinutes = approvedPermRequest.minutes || 0
+  if (approvedPermRequests && approvedPermRequests.length > 0) {
+    latePermissionMinutes = approvedPermRequests[0].minutes || 0
     permissionSource = 'إذن تأخير معتمد'
     console.log(`Approved permission request found: ${latePermissionMinutes} mins`)
   }
