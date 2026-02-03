@@ -797,6 +797,45 @@ export type Database = {
           },
         ]
       }
+      business_owners: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_owners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_owners_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           absence_without_permission_deduction: number | null

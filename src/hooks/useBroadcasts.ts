@@ -11,7 +11,7 @@ interface Broadcast {
   image_url: string | null;
   audio_url: string | null;
   target_type: string;
-  target_filter: { plans?: string[]; company_ids?: string[] } | null;
+  target_filter: { plans?: string[]; company_ids?: string[]; employee_ids?: string[] } | null;
   status: string;
   sent_at: string | null;
   total_recipients: number;
@@ -39,8 +39,8 @@ interface CreateBroadcastInput {
   message_text: string;
   image_url?: string;
   audio_url?: string;
-  target_type: 'all' | 'subscription' | 'custom';
-  target_filter?: { plans?: string[]; company_ids?: string[] };
+  target_type: 'all' | 'subscription' | 'custom' | 'all_employees' | 'company_employees' | 'specific_employees';
+  target_filter?: { plans?: string[]; company_ids?: string[]; employee_ids?: string[] };
   notes?: string;
 }
 

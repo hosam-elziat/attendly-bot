@@ -49,6 +49,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import CompanySelector from '@/components/super-admin/CompanySelector';
+import EmployeeSelector from '@/components/super-admin/EmployeeSelector';
 
 const SUBSCRIPTION_PLANS = [
   { id: 'trial', label: 'تجريبي' },
@@ -67,9 +68,11 @@ const SuperAdminBroadcasts = () => {
 
   const [formData, setFormData] = useState({
     message_text: '',
-    target_type: 'all' as 'all' | 'subscription' | 'custom',
+    target_type: 'all' as 'all' | 'subscription' | 'custom' | 'all_employees' | 'company_employees' | 'specific_employees',
     selected_plans: [] as string[],
     selected_company_ids: [] as string[],
+    selected_employee_ids: [] as string[],
+    selected_company_for_employees: '',
     notes: '',
   });
   const [imageUrl, setImageUrl] = useState('');
@@ -107,21 +110,37 @@ const SuperAdminBroadcasts = () => {
       return;
     }
 
+    let targetFilter: { plans?: string[]; company_ids?: string[]; employee_ids?: string[] } | undefined;
+    
+    if (formData.target_type === 'subscription') {
+      targetFilter = { plans: formData.selected_plans };
+    } else if (formData.target_type === 'custom') {
+      targetFilter = { company_ids: formData.selected_company_ids };
+    } else if (formData.target_type === 'company_employees') {
+      targetFilter = { company_ids: [formData.selected_company_for_employees] };
+    } else if (formData.target_type === 'specific_employees') {
+      targetFilter = { employee_ids: formData.selected_employee_ids };
+    }
+
     await createBroadcast.mutateAsync({
       message_text: formData.message_text,
       image_url: imageUrl || undefined,
       audio_url: audioUrl || undefined,
       target_type: formData.target_type,
-      target_filter: formData.target_type === 'subscription' 
-        ? { plans: formData.selected_plans }
-        : formData.target_type === 'custom'
-        ? { company_ids: formData.selected_company_ids }
-        : undefined,
+      target_filter: targetFilter,
       notes: formData.notes || undefined,
     });
 
     setIsCreateOpen(false);
-    setFormData({ message_text: '', target_type: 'all', selected_plans: [], selected_company_ids: [], notes: '' });
+    setFormData({ 
+      message_text: '', 
+      target_type: 'all', 
+      selected_plans: [], 
+      selected_company_ids: [], 
+      selected_employee_ids: [],
+      selected_company_for_employees: '',
+      notes: '' 
+    });
     setImageUrl('');
     setAudioUrl('');
   };
@@ -152,12 +171,24 @@ const SuperAdminBroadcasts = () => {
   };
 
   const getTargetLabel = (broadcast: any) => {
-    if (broadcast.target_type === 'all') return 'جميع الشركات';
-    if (broadcast.target_type === 'subscription') {
-      const plans = broadcast.target_filter?.plans || [];
-      return `اشتراكات: ${plans.join(', ')}`;
+    switch (broadcast.target_type) {
+      case 'all':
+        return 'جميع أصحاب الشركات';
+      case 'subscription':
+        const plans = broadcast.target_filter?.plans || [];
+        return `اشتراكات: ${plans.join(', ')}`;
+      case 'custom':
+        return 'شركات محددة';
+      case 'all_employees':
+        return 'جميع الموظفين';
+      case 'company_employees':
+        return 'موظفي شركة';
+      case 'specific_employees':
+        const count = broadcast.target_filter?.employee_ids?.length || 0;
+        return `${count} موظف`;
+      default:
+        return 'مخصص';
     }
-    return 'مخصص';
   };
 
   return (
@@ -253,6 +284,7 @@ const SuperAdminBroadcasts = () => {
                 <div>
                   <Label className="text-slate-300">المستهدفون</Label>
                   <div className="mt-2 space-y-2">
+                    <p className="text-xs text-slate-500 mb-2">أصحاب الشركات (Business Owners)</p>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -261,7 +293,7 @@ const SuperAdminBroadcasts = () => {
                         onChange={() => setFormData({ ...formData, target_type: 'all' })}
                         className="text-primary"
                       />
-                      <span className="text-slate-300">جميع الشركات</span>
+                      <span className="text-slate-300">جميع أصحاب الشركات</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -282,6 +314,40 @@ const SuperAdminBroadcasts = () => {
                         className="text-primary"
                       />
                       <span className="text-slate-300">شركات محددة</span>
+                    </label>
+                    
+                    <div className="border-t border-slate-700 my-3 pt-3">
+                      <p className="text-xs text-slate-500 mb-2">الموظفين مباشرة</p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="target_type"
+                        checked={formData.target_type === 'all_employees'}
+                        onChange={() => setFormData({ ...formData, target_type: 'all_employees' })}
+                        className="text-primary"
+                      />
+                      <span className="text-slate-300">جميع الموظفين</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="target_type"
+                        checked={formData.target_type === 'company_employees'}
+                        onChange={() => setFormData({ ...formData, target_type: 'company_employees' })}
+                        className="text-primary"
+                      />
+                      <span className="text-slate-300">موظفي شركة محددة</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="target_type"
+                        checked={formData.target_type === 'specific_employees'}
+                        onChange={() => setFormData({ ...formData, target_type: 'specific_employees' })}
+                        className="text-primary"
+                      />
+                      <span className="text-slate-300">موظفين محددين</span>
                     </label>
                   </div>
 
@@ -316,6 +382,25 @@ const SuperAdminBroadcasts = () => {
                       <CompanySelector
                         selectedCompanyIds={formData.selected_company_ids}
                         onSelectionChange={(ids) => setFormData({ ...formData, selected_company_ids: ids })}
+                      />
+                    </div>
+                  )}
+
+                  {formData.target_type === 'company_employees' && (
+                    <div className="mt-3">
+                      <Label className="text-slate-400 text-sm mb-2 block">اختر الشركة</Label>
+                      <CompanySelector
+                        selectedCompanyIds={formData.selected_company_for_employees ? [formData.selected_company_for_employees] : []}
+                        onSelectionChange={(ids) => setFormData({ ...formData, selected_company_for_employees: ids[0] || '' })}
+                      />
+                    </div>
+                  )}
+
+                  {formData.target_type === 'specific_employees' && (
+                    <div className="mt-3">
+                      <EmployeeSelector
+                        selectedEmployeeIds={formData.selected_employee_ids}
+                        onSelectionChange={(ids) => setFormData({ ...formData, selected_employee_ids: ids })}
                       />
                     </div>
                   )}
