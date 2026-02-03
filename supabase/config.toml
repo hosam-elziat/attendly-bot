@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.announce-goal]
 verify_jwt = false
+
+[functions.send-broadcast]
+verify_jwt = false

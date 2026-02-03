@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_broadcasts: {
+        Row: {
+          audio_url: string | null
+          created_at: string
+          created_by: string | null
+          failed_sends: number | null
+          id: string
+          image_url: string | null
+          message_text: string
+          notes: string | null
+          sent_at: string | null
+          status: string
+          successful_sends: number | null
+          target_filter: Json | null
+          target_type: string
+          total_recipients: number | null
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          failed_sends?: number | null
+          id?: string
+          image_url?: string | null
+          message_text: string
+          notes?: string | null
+          sent_at?: string | null
+          status?: string
+          successful_sends?: number | null
+          target_filter?: Json | null
+          target_type?: string
+          total_recipients?: number | null
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          failed_sends?: number | null
+          id?: string
+          image_url?: string | null
+          message_text?: string
+          notes?: string | null
+          sent_at?: string | null
+          status?: string
+          successful_sends?: number | null
+          target_filter?: Json | null
+          target_type?: string
+          total_recipients?: number | null
+        }
+        Relationships: []
+      }
       approved_holidays: {
         Row: {
           approved_at: string | null
@@ -688,6 +739,64 @@ export type Database = {
           },
         ]
       }
+      broadcast_deliveries: {
+        Row: {
+          broadcast_id: string
+          company_id: string
+          created_at: string
+          employee_id: string | null
+          error_message: string | null
+          id: string
+          sent_at: string | null
+          status: string
+          telegram_chat_id: string | null
+        }
+        Insert: {
+          broadcast_id: string
+          company_id: string
+          created_at?: string
+          employee_id?: string | null
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          status?: string
+          telegram_chat_id?: string | null
+        }
+        Update: {
+          broadcast_id?: string
+          company_id?: string
+          created_at?: string
+          employee_id?: string | null
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          status?: string
+          telegram_chat_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_deliveries_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "admin_broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_deliveries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_deliveries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           absence_without_permission_deduction: number | null
@@ -699,6 +808,7 @@ export type Database = {
           biometric_otp_fallback: boolean | null
           biometric_verification_enabled: boolean | null
           break_duration_minutes: number | null
+          business_owner_id: string | null
           checkin_reminder_count: number | null
           checkin_reminder_interval_minutes: number | null
           checkout_reminder_count: number | null
@@ -754,6 +864,7 @@ export type Database = {
           biometric_otp_fallback?: boolean | null
           biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
+          business_owner_id?: string | null
           checkin_reminder_count?: number | null
           checkin_reminder_interval_minutes?: number | null
           checkout_reminder_count?: number | null
@@ -809,6 +920,7 @@ export type Database = {
           biometric_otp_fallback?: boolean | null
           biometric_verification_enabled?: boolean | null
           break_duration_minutes?: number | null
+          business_owner_id?: string | null
           checkin_reminder_count?: number | null
           checkin_reminder_interval_minutes?: number | null
           checkout_reminder_count?: number | null

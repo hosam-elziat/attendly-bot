@@ -14,7 +14,8 @@ import {
   Shield,
   Bot,
   Database,
-  ImageIcon
+  ImageIcon,
+  Megaphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
     { icon: Shield, label: 'التحكم بالميزات', path: '/super-admin/feature-flags' },
     { icon: UserCog, label: 'فريق العمل', path: '/super-admin/team' },
     { icon: Bot, label: 'بوتات التيليجرام', path: '/super-admin/telegram-bots' },
+    { icon: Megaphone, label: 'رسائل البث', path: '/super-admin/broadcasts' },
     { icon: ImageIcon, label: 'طلبات تغيير الصور', path: '/super-admin/photo-requests' },
     { icon: Database, label: 'النسخ الاحتياطي', path: '/super-admin/backups' },
     { icon: Database, label: 'لقطات الشركات', path: '/super-admin/snapshots' },
