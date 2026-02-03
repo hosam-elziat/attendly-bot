@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Switch } from '@/components/ui/switch';
@@ -6,16 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Crown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 
 interface BusinessOwnerToggleProps {
   employeeId: string;
@@ -25,93 +14,88 @@ interface BusinessOwnerToggleProps {
 
 const BusinessOwnerToggle = ({ employeeId, employeeUserId, companyId }: BusinessOwnerToggleProps) => {
   const queryClient = useQueryClient();
-  const [showWarning, setShowWarning] = useState(false);
 
-  // Get current business owner
-  const { data: company, isLoading } = useQuery({
-    queryKey: ['company-business-owner', companyId],
+  // Get all business owners for this company
+  const { data: businessOwners, isLoading } = useQuery({
+    queryKey: ['business-owners', companyId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('companies')
-        .select('business_owner_id')
-        .eq('id', companyId)
-        .single();
+        .from('business_owners')
+        .select('id, employee_id')
+        .eq('company_id', companyId);
       
       if (error) throw error;
-      return data;
+      return data || [];
     },
   });
 
-  // Get business owner employee info if exists
-  const { data: currentOwnerEmployee } = useQuery({
-    queryKey: ['business-owner-employee', companyId, company?.business_owner_id],
-    queryFn: async () => {
-      if (!company?.business_owner_id) return null;
-      
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, full_name')
-        .eq('company_id', companyId)
-        .eq('user_id', company.business_owner_id)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!company?.business_owner_id,
-  });
+  const isCurrentOwner = businessOwners?.some(bo => bo.employee_id === employeeId) || false;
+  const ownersCount = businessOwners?.length || 0;
 
-  const isCurrentOwner = employeeUserId && company?.business_owner_id === employeeUserId;
-
-  // Set business owner mutation
-  const setBusinessOwner = useMutation({
+  // Add business owner mutation
+  const addBusinessOwner = useMutation({
     mutationFn: async () => {
-      if (!employeeUserId) {
-        throw new Error('هذا الموظف ليس لديه حساب مستخدم');
-      }
-
       const { error } = await supabase
-        .from('companies')
-        .update({ business_owner_id: employeeUserId })
-        .eq('id', companyId);
+        .from('business_owners')
+        .insert({
+          company_id: companyId,
+          employee_id: employeeId,
+        });
 
       if (error) throw error;
+
+      // Also update legacy field if this is the first owner
+      if (ownersCount === 0 && employeeUserId) {
+        await supabase
+          .from('companies')
+          .update({ business_owner_id: employeeUserId })
+          .eq('id', companyId);
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['company-business-owner', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['business-owner-employee', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['business-owners', companyId] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success('تم تعيين مسؤول الأعمال بنجاح');
     },
     onError: (error) => {
-      console.error('Error setting business owner:', error);
-      toast.error(error instanceof Error ? error.message : 'فشل في تعيين مسؤول الأعمال');
+      console.error('Error adding business owner:', error);
+      toast.error('فشل في تعيين مسؤول الأعمال');
+    },
+  });
+
+  // Remove business owner mutation
+  const removeBusinessOwner = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('business_owners')
+        .delete()
+        .eq('company_id', companyId)
+        .eq('employee_id', employeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business-owners', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      toast.success('تم إزالة مسؤول الأعمال');
+    },
+    onError: (error) => {
+      console.error('Error removing business owner:', error);
+      toast.error('فشل في إزالة مسؤول الأعمال');
     },
   });
 
   const handleToggle = (checked: boolean) => {
     if (!checked) {
-      // Can't uncheck - must have at least one owner
-      toast.error('لا يمكن إزالة مسؤول الأعمال. يجب تعيين شخص آخر أولاً');
-      return;
-    }
-
-    if (!employeeUserId) {
-      toast.error('هذا الموظف ليس لديه حساب مستخدم. يجب أن يسجل دخوله أولاً');
-      return;
-    }
-
-    if (company?.business_owner_id && company.business_owner_id !== employeeUserId) {
-      // There's already another owner, show warning
-      setShowWarning(true);
+      // Cannot remove if only one owner
+      if (ownersCount <= 1) {
+        toast.error('لا يمكن إزالة آخر مسؤول أعمال. يجب أن يكون هناك مسؤول واحد على الأقل');
+        return;
+      }
+      removeBusinessOwner.mutate();
     } else {
-      setBusinessOwner.mutate();
+      addBusinessOwner.mutate();
     }
-  };
-
-  const confirmChange = () => {
-    setShowWarning(false);
-    setBusinessOwner.mutate();
   };
 
   if (isLoading) {
@@ -124,8 +108,12 @@ const BusinessOwnerToggle = ({ employeeId, employeeUserId, companyId }: Business
   }
 
   return (
-    <>
-      <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50 border">
+    <div className="space-y-3">
+      <div className={`flex items-center gap-3 p-4 rounded-lg border ${
+        isCurrentOwner 
+          ? 'bg-yellow-500/10 border-yellow-500/30' 
+          : 'bg-muted/50 border-border'
+      }`}>
         <Crown className={`w-5 h-5 ${isCurrentOwner ? 'text-yellow-500' : 'text-muted-foreground'}`} />
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -133,8 +121,9 @@ const BusinessOwnerToggle = ({ employeeId, employeeUserId, companyId }: Business
               مسؤول الأعمال (Business Owner)
             </Label>
             {isCurrentOwner && (
-              <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
-                المسؤول الحالي
+              <Badge className="bg-yellow-500 text-yellow-950 hover:bg-yellow-500">
+                <Crown className="w-3 h-3 me-1" />
+                مسؤول أعمال
               </Badge>
             )}
           </div>
@@ -144,43 +133,18 @@ const BusinessOwnerToggle = ({ employeeId, employeeUserId, companyId }: Business
         </div>
         <Switch
           id="business-owner-toggle"
-          checked={isCurrentOwner || false}
+          checked={isCurrentOwner}
           onCheckedChange={handleToggle}
-          disabled={setBusinessOwner.isPending || !employeeUserId}
+          disabled={addBusinessOwner.isPending || removeBusinessOwner.isPending}
         />
       </div>
 
-      {!employeeUserId && (
-        <p className="text-xs text-destructive mt-1">
-          ⚠️ هذا الموظف ليس لديه حساب مستخدم. لتعيينه كمسؤول أعمال، يجب أن يسجل دخوله أولاً.
+      {ownersCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          عدد مسؤولي الأعمال الحاليين: {ownersCount}
         </p>
       )}
-
-      <AlertDialog open={showWarning} onOpenChange={setShowWarning}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تغيير مسؤول الأعمال؟</AlertDialogTitle>
-            <AlertDialogDescription>
-              {currentOwnerEmployee ? (
-                <>
-                  المسؤول الحالي هو <strong>{currentOwnerEmployee.full_name}</strong>.
-                  <br />
-                  هل تريد تغييره إلى هذا الموظف؟ سيتم نقل جميع إشعارات الاشتراك والتحديثات إليه.
-                </>
-              ) : (
-                'هل أنت متأكد من تعيين هذا الموظف كمسؤول أعمال؟'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmChange}>
-              تأكيد التغيير
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    </div>
   );
 };
 
