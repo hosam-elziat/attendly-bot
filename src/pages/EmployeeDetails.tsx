@@ -51,6 +51,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, 
 import { ar } from 'date-fns/locale';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
+import BusinessOwnerToggle from '@/components/employees/BusinessOwnerToggle';
 
 import { useCompany } from '@/hooks/useCompany';
 import { toast } from 'sonner';
@@ -437,6 +438,15 @@ const EmployeeDetails = () => {
                       </div>
                     </div>
                   )}
+                  
+                  {/* Business Owner Toggle */}
+                  <div className="md:col-span-2 mt-4 pt-4 border-t">
+                    <BusinessOwnerToggle
+                      employeeId={employee.id}
+                      employeeUserId={employee.user_id || null}
+                      companyId={employee.company_id}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

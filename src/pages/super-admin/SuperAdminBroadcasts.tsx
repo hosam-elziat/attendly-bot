@@ -48,6 +48,7 @@ import {
   Clock,
   MessageSquare,
 } from 'lucide-react';
+import CompanySelector from '@/components/super-admin/CompanySelector';
 
 const SUBSCRIPTION_PLANS = [
   { id: 'trial', label: 'تجريبي' },
@@ -68,6 +69,7 @@ const SuperAdminBroadcasts = () => {
     message_text: '',
     target_type: 'all' as 'all' | 'subscription' | 'custom',
     selected_plans: [] as string[],
+    selected_company_ids: [] as string[],
     notes: '',
   });
   const [imageUrl, setImageUrl] = useState('');
@@ -112,12 +114,14 @@ const SuperAdminBroadcasts = () => {
       target_type: formData.target_type,
       target_filter: formData.target_type === 'subscription' 
         ? { plans: formData.selected_plans }
+        : formData.target_type === 'custom'
+        ? { company_ids: formData.selected_company_ids }
         : undefined,
       notes: formData.notes || undefined,
     });
 
     setIsCreateOpen(false);
-    setFormData({ message_text: '', target_type: 'all', selected_plans: [], notes: '' });
+    setFormData({ message_text: '', target_type: 'all', selected_plans: [], selected_company_ids: [], notes: '' });
     setImageUrl('');
     setAudioUrl('');
   };
@@ -269,6 +273,16 @@ const SuperAdminBroadcasts = () => {
                       />
                       <span className="text-slate-300">حسب الاشتراك</span>
                     </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="target_type"
+                        checked={formData.target_type === 'custom'}
+                        onChange={() => setFormData({ ...formData, target_type: 'custom' })}
+                        className="text-primary"
+                      />
+                      <span className="text-slate-300">شركات محددة</span>
+                    </label>
                   </div>
 
                   {formData.target_type === 'subscription' && (
@@ -294,6 +308,15 @@ const SuperAdminBroadcasts = () => {
                           <span className="text-slate-300">{plan.label}</span>
                         </label>
                       ))}
+                    </div>
+                  )}
+
+                  {formData.target_type === 'custom' && (
+                    <div className="mt-3">
+                      <CompanySelector
+                        selectedCompanyIds={formData.selected_company_ids}
+                        onSelectionChange={(ids) => setFormData({ ...formData, selected_company_ids: ids })}
+                      />
                     </div>
                   )}
                 </div>
