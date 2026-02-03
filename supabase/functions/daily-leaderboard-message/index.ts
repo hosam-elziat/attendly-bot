@@ -69,9 +69,14 @@ serve(async (req) => {
         // Get current month for leaderboard period
         const now = new Date();
         const monthPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Also check previous month in case no data yet for current month
+        const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+        const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const prevMonthPeriod = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
 
-        // Get top 3 from leaderboard
-        const { data: leaderboard, error: leaderboardError } = await supabase
+        // First try current month
+        let { data: leaderboard, error: leaderboardError } = await supabase
           .from('rewards_leaderboard')
           .select(`
             employee_id,
@@ -84,6 +89,26 @@ serve(async (req) => {
           .eq('period_value', monthPeriod)
           .order('rank', { ascending: true })
           .limit(3);
+
+        // If no data for current month, try previous month
+        if ((!leaderboard || leaderboard.length === 0) && !leaderboardError) {
+          const prevResult = await supabase
+            .from('rewards_leaderboard')
+            .select(`
+              employee_id,
+              total_points,
+              rank,
+              employee:employees!inner(full_name, telegram_chat_id)
+            `)
+            .eq('company_id', company.id)
+            .eq('period_type', 'monthly')
+            .eq('period_value', prevMonthPeriod)
+            .order('rank', { ascending: true })
+            .limit(3);
+          
+          leaderboard = prevResult.data;
+          leaderboardError = prevResult.error;
+        }
 
         if (leaderboardError) {
           console.error(`Error fetching leaderboard for company ${company.id}:`, leaderboardError);

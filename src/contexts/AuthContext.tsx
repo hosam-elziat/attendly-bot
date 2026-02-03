@@ -104,9 +104,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
-      // No existing company, create new one
+      // No existing company - check if company name was provided in user metadata (from OAuth)
+      const metaCompanyName = (authUser.user_metadata as any)?.company_name;
+      const defaultCompanyName = metaCompanyName && typeof metaCompanyName === 'string' && metaCompanyName.trim().length > 0
+        ? metaCompanyName.trim()
+        : `${getUserFullName(authUser)} Company`;
+
       const newCompanyId = crypto.randomUUID();
-      const defaultCompanyName = `${getUserFullName(authUser)} Company`;
 
       const { error: companyError } = await supabase
         .from('companies')
@@ -114,6 +118,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: newCompanyId,
           name: defaultCompanyName,
           owner_id: userId,
+          business_owner_id: userId,
           country_code: 'EG',
           timezone: 'Africa/Cairo',
           default_currency: 'EGP',
@@ -163,6 +168,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // If profile exists but is not linked to a company (older/broken accounts), create a company and link it.
     if (!companyId && profileRow && !roleRow) {
+      // First check if user already owns a company
+      const { data: existingCompany } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('owner_id', userId)
+        .maybeSingle();
+
+      if (existingCompany) {
+        // Link to existing company
+        const { data: updatedProfile, error: updateError } = await supabase
+          .from('profiles')
+          .update({ company_id: existingCompany.id })
+          .eq('user_id', userId)
+          .select('*')
+          .single();
+
+        if (updateError) throw updateError;
+
+        const { data: createdRole, error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: userId,
+            company_id: existingCompany.id,
+            role: 'owner',
+          })
+          .select('role, company_id')
+          .single();
+
+        if (roleError) throw roleError;
+
+        setProfile(updatedProfile as UserProfile);
+        setUserRole(createdRole as UserRole);
+        return;
+      }
+
       const newCompanyId = crypto.randomUUID();
       const defaultCompanyName = `${getUserFullName(authUser)} Company`;
 
@@ -172,6 +212,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: newCompanyId,
           name: defaultCompanyName,
           owner_id: userId,
+          business_owner_id: userId,
           country_code: 'EG',
           timezone: 'Africa/Cairo',
           default_currency: 'EGP',
@@ -294,6 +335,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           emailRedirectTo: redirectUrl,
           data: {
             full_name: fullName,
+            company_name: companyName, // Store company name in metadata for later use
           },
         },
       });
@@ -307,6 +349,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const userId = authData.user.id;
+      
+      // Check if user already has a company (prevent duplicates)
+      const { data: existingCompany } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('owner_id', userId)
+        .maybeSingle();
+
+      if (existingCompany) {
+        // Company already exists, just ensure profile and role exist
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (!existingProfile) {
+          await supabase.from('profiles').insert({
+            user_id: userId,
+            company_id: existingCompany.id,
+            full_name: fullName,
+            email,
+          });
+        }
+
+        const { data: existingRole } = await supabase
+          .from('user_roles')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (!existingRole) {
+          await supabase.from('user_roles').insert({
+            user_id: userId,
+            company_id: existingCompany.id,
+            role: 'owner',
+          });
+        }
+
+        return { error: null };
+      }
+
+      // Create new company
       const companyId = crypto.randomUUID();
 
       const { error: companyError } = await supabase
@@ -315,6 +400,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: companyId,
           name: companyName,
           owner_id: userId,
+          business_owner_id: userId, // Set business owner
           country_code: 'EG',
           timezone: 'Africa/Cairo',
           default_currency: 'EGP',
