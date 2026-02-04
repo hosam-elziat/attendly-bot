@@ -6,22 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface Company {
-  id: string;
-  name: string;
-  rewards_enabled: boolean;
-  telegram_bot_username: string | null;
-}
-
-interface LeaderboardEntry {
-  employee_id: string;
-  total_points: number;
-  employee: {
-    full_name: string;
-    telegram_chat_id: string | null;
-  };
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -32,16 +16,31 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Starting daily leaderboard message job...');
+    // Check if specific company_id is provided for testing
+    let targetCompanyId: string | null = null;
+    try {
+      const body = await req.json();
+      targetCompanyId = body.company_id || null;
+    } catch {
+      // No body or invalid JSON
+    }
 
-    // Get all companies with rewards enabled and Telegram bot connected
-    const { data: companies, error: companiesError } = await supabase
+    console.log('Starting daily leaderboard message job...', targetCompanyId ? `for company ${targetCompanyId}` : 'for all companies');
+
+    // Build query for companies
+    let companiesQuery = supabase
       .from('companies')
       .select('id, name, rewards_enabled, telegram_bot_username')
       .eq('rewards_enabled', true)
       .eq('telegram_bot_connected', true)
       .eq('is_deleted', false)
       .eq('is_suspended', false);
+
+    if (targetCompanyId) {
+      companiesQuery = companiesQuery.eq('id', targetCompanyId);
+    }
+
+    const { data: companies, error: companiesError } = await companiesQuery;
 
     if (companiesError) {
       console.error('Error fetching companies:', companiesError);
@@ -66,14 +65,14 @@ serve(async (req) => {
           continue;
         }
 
-        // Get top 3 employees by total points from wallets directly (most accurate)
+        // Get top 3 employees by total points from wallets directly
         const { data: topEmployees, error: walletsError } = await supabase
           .from('employee_wallets')
           .select(`
             employee_id,
             total_points,
             earned_points,
-            employee:employees!inner(full_name, telegram_chat_id, is_active)
+            employee:employees!inner(id, full_name, telegram_chat_id, is_active)
           `)
           .eq('company_id', company.id)
           .eq('employees.is_active', true)
@@ -129,7 +128,7 @@ serve(async (req) => {
         // Get all employees with telegram to send the message
         const { data: employees } = await supabase
           .from('employees')
-          .select('telegram_chat_id')
+          .select('id, telegram_chat_id')
           .eq('company_id', company.id)
           .eq('is_active', true)
           .not('telegram_chat_id', 'is', null);
@@ -139,7 +138,7 @@ serve(async (req) => {
           continue;
         }
 
-        // Send message to all employees
+        // Send message to all employees and log to telegram_messages
         let sentCount = 0;
         for (const emp of employees) {
           try {
@@ -154,7 +153,28 @@ serve(async (req) => {
             });
 
             if (response.ok) {
+              const result = await response.json();
               sentCount++;
+
+              // Log the outgoing message to telegram_messages table
+              await supabase
+                .from('telegram_messages')
+                .insert({
+                  company_id: company.id,
+                  employee_id: emp.id,
+                  telegram_chat_id: emp.telegram_chat_id,
+                  message_text: messageText.replace(/\*/g, ''), // Remove markdown for storage
+                  direction: 'outgoing',
+                  message_type: 'leaderboard',
+                  telegram_message_id: result.result?.message_id || null,
+                  metadata: {
+                    source: 'daily-leaderboard-message',
+                    top_employees: topEmployees.map((e: any) => ({
+                      name: e.employee?.full_name,
+                      points: e.total_points
+                    }))
+                  }
+                });
             }
           } catch (e) {
             console.error(`Error sending to ${emp.telegram_chat_id}:`, e);
