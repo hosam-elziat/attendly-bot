@@ -369,6 +369,7 @@ interface SessionData {
   permission_type?: 'late_arrival' | 'early_departure';
   permission_date?: string;
   permission_minutes?: number;
+  permission_reason?: string;
   // Manager action session data
   target_employee_id?: string;
   target_employee_name?: string;
@@ -1525,41 +1526,17 @@ serve(async (req) => {
             break
           }
           
-          // Insert permission request
-          const { data: permRequest, error: permError } = await supabase
-            .from('permission_requests')
-            .insert({
-              employee_id: employee.id,
-              company_id: companyId,
-              permission_type: permType,
-              request_date: permDate,
-              minutes: minutes,
-              status: 'pending'
-            })
-            .select()
-            .single()
+          // Ask for reason before submitting
+          await setSession('permission_reason', { 
+            ...session.data, 
+            permission_minutes: minutes 
+          })
           
-          if (permError) {
-            console.error('Failed to create permission request:', permError)
-            await sendAndLogMessage('❌ حدث خطأ أثناء إرسال الطلب', getEmployeeKeyboard(managerPermissions))
-            await deleteSession()
-            break
-          }
-          
-          // Notify managers
-          await notifyManagersPermissionRequest(
-            supabase, botToken, employee.id, employee.full_name, companyId,
-            permType, permDate, minutes, permRequest.id
-          )
-          
-          await deleteSession()
-          await sendAndLogMessage(
-            `✅ <b>تم إرسال طلبك للمدير</b>\n\n` +
-            `📋 ${permTypeText}\n` +
+          await sendMessage(botToken, chatId,
+            `📋 <b>${permTypeText}</b>\n` +
             `📅 التاريخ: ${permDate}\n` +
             `⏱️ المدة: ${minutes} دقيقة\n\n` +
-            `⏳ في انتظار موافقة المدير...`,
-            getEmployeeKeyboard(managerPermissions)
+            `📝 أرسل سبب طلب الإذن:`
           )
           break
         }
@@ -4303,6 +4280,65 @@ serve(async (req) => {
           return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
         }
         
+        // Handle permission request reason input
+        case 'permission_reason': {
+          const reason = text.trim()
+          if (!reason || reason.length < 3) {
+            await sendMessage(botToken, chatId, '❌ السبب قصير جداً (3 أحرف على الأقل)')
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          if (reason.length > 200) {
+            await sendMessage(botToken, chatId, '❌ السبب طويل جداً (200 حرف كحد أقصى)')
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          const permType = session.data.permission_type as 'late_arrival' | 'early_departure'
+          const permDate = session.data.permission_date || getLocalTime(companyTimezone).date
+          const permMinutes = session.data.permission_minutes || 30
+          const permTypeText = permType === 'late_arrival' ? 'إذن تأخير' : 'إذن انصراف مبكر'
+          
+          // Insert permission request with reason
+          const { data: permRequest, error: permError } = await supabase
+            .from('permission_requests')
+            .insert({
+              employee_id: employee.id,
+              company_id: companyId,
+              permission_type: permType,
+              request_date: permDate,
+              minutes: permMinutes,
+              reason: reason,
+              status: 'pending'
+            })
+            .select()
+            .single()
+          
+          if (permError) {
+            console.error('Failed to create permission request:', permError)
+            await sendMessage(botToken, chatId, '❌ حدث خطأ أثناء إرسال الطلب', getEmployeeKeyboard(managerPermissions))
+            await deleteSession()
+            return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+          }
+          
+          // Notify managers with reason
+          await notifyManagersPermissionRequest(
+            supabase, botToken, employee.id, employee.full_name, companyId,
+            permType, permDate, permMinutes, permRequest.id, reason
+          )
+          
+          await deleteSession()
+          await sendMessage(botToken, chatId, 
+            `✅ <b>تم إرسال طلبك للمدير</b>\n\n` +
+            `📋 ${permTypeText}\n` +
+            `📅 التاريخ: ${permDate}\n` +
+            `⏱️ المدة: ${permMinutes} دقيقة\n` +
+            `📝 السبب: ${reason}\n\n` +
+            `⏳ في انتظار موافقة المدير...`,
+            getEmployeeKeyboard(managerPermissions)
+          )
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+        
         // Handle secret message content input
         case 'secret_message_content': {
           // User sent the message text for secret message
@@ -4720,7 +4756,8 @@ async function notifyManagersPermissionRequest(
   permissionType: 'late_arrival' | 'early_departure',
   permissionDate: string,
   requestedMinutes: number,
-  permissionRequestId: string
+  permissionRequestId: string,
+  reason?: string
 ) {
   try {
     const { data: managers, error } = await supabase
@@ -4742,8 +4779,9 @@ async function notifyManagersPermissionRequest(
     const message = `${emoji} <b>طلب ${permTypeText}</b>\n\n` +
       `👤 الموظف: ${employeeName}\n` +
       `📅 التاريخ: ${permissionDate}\n` +
-      `⏱️ المدة المطلوبة: ${requestedMinutes} دقيقة\n\n` +
-      `⚡ اختر قرارك:`
+      `⏱️ المدة المطلوبة: ${requestedMinutes} دقيقة\n` +
+      (reason ? `📝 السبب: ${reason}\n` : '') +
+      `\n⚡ اختر قرارك:`
     
     // Approval/rejection buttons
     const keyboard = {
