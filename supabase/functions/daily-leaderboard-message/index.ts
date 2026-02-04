@@ -66,61 +66,32 @@ serve(async (req) => {
           continue;
         }
 
-        // Get current month for leaderboard period
-        const now = new Date();
-        const monthPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        
-        // Also check previous month in case no data yet for current month
-        const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-        const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-        const prevMonthPeriod = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-
-        // First try current month
-        let { data: leaderboard, error: leaderboardError } = await supabase
-          .from('rewards_leaderboard')
+        // Get top 3 employees by total points from wallets directly (most accurate)
+        const { data: topEmployees, error: walletsError } = await supabase
+          .from('employee_wallets')
           .select(`
             employee_id,
             total_points,
-            rank,
-            employee:employees!inner(full_name, telegram_chat_id)
+            earned_points,
+            employee:employees!inner(full_name, telegram_chat_id, is_active)
           `)
           .eq('company_id', company.id)
-          .eq('period_type', 'monthly')
-          .eq('period_value', monthPeriod)
-          .order('rank', { ascending: true })
+          .eq('employees.is_active', true)
+          .gt('total_points', 0)
+          .order('total_points', { ascending: false })
           .limit(3);
 
-        // If no data for current month, try previous month
-        if ((!leaderboard || leaderboard.length === 0) && !leaderboardError) {
-          const prevResult = await supabase
-            .from('rewards_leaderboard')
-            .select(`
-              employee_id,
-              total_points,
-              rank,
-              employee:employees!inner(full_name, telegram_chat_id)
-            `)
-            .eq('company_id', company.id)
-            .eq('period_type', 'monthly')
-            .eq('period_value', prevMonthPeriod)
-            .order('rank', { ascending: true })
-            .limit(3);
-          
-          leaderboard = prevResult.data;
-          leaderboardError = prevResult.error;
-        }
-
-        if (leaderboardError) {
-          console.error(`Error fetching leaderboard for company ${company.id}:`, leaderboardError);
+        if (walletsError) {
+          console.error(`Error fetching wallets for company ${company.id}:`, walletsError);
           continue;
         }
 
-        if (!leaderboard || leaderboard.length === 0) {
-          console.log(`No leaderboard data for company ${company.id}`);
+        if (!topEmployees || topEmployees.length === 0) {
+          console.log(`No employees with points for company ${company.id}`);
           continue;
         }
 
-        // Get random motivational message
+        // Get random motivational message in Egyptian Arabic
         const { data: messages } = await supabase
           .from('motivational_messages')
           .select('message_ar')
@@ -128,24 +99,32 @@ serve(async (req) => {
           .eq('is_active', true)
           .or(`company_id.is.null,company_id.eq.${company.id}`);
 
+        const egyptianMotivations = [
+          '🔥 المنافسة ولعت يا جماعة!',
+          '💪 شد حيلك وخش المنافسة!',
+          '🚀 مين هيبقى رقم واحد النهارده؟',
+          '⭐ الشطار بيجمعوا نقط!',
+          '🏆 المركز الأول مستنيك!',
+        ];
+
         const randomMessage = messages && messages.length > 0
           ? messages[Math.floor(Math.random() * messages.length)].message_ar
-          : '🔥 المنافسة مستمرة!';
+          : egyptianMotivations[Math.floor(Math.random() * egyptianMotivations.length)];
 
-        // Build the leaderboard message
+        // Build the leaderboard message in Egyptian Arabic
         const medals = ['🥇', '🥈', '🥉'];
-        let messageText = `🌅 *صباح الخير!*\n\n${randomMessage}\n\n`;
-        messageText += `📊 *ترتيب المتصدرين هذا الشهر:*\n\n`;
+        let messageText = `🌅 *صباح الفل يا أبطال!*\n\n${randomMessage}\n\n`;
+        messageText += `📊 *أعلى ٣ في النقط:*\n\n`;
 
-        leaderboard.forEach((entry: any, index: number) => {
+        topEmployees.forEach((entry: any, index: number) => {
           const medal = medals[index] || `${index + 1}.`;
           const name = entry.employee?.full_name || 'موظف';
           const points = entry.total_points || 0;
           messageText += `${medal} *${name}*\n`;
-          messageText += `   └ ${points.toLocaleString()} نقطة\n\n`;
+          messageText += `   └ عنده ${points.toLocaleString()} نقطة\n\n`;
         });
 
-        messageText += `\n💪 *استمر في التميز وكن من المتصدرين!*`;
+        messageText += `\n💪 *كمّل شغل وخد نقط أكتر!*`;
 
         // Get all employees with telegram to send the message
         const { data: employees } = await supabase
@@ -186,7 +165,7 @@ serve(async (req) => {
           company_id: company.id,
           company_name: company.name,
           employees_notified: sentCount,
-          leaderboard_size: leaderboard.length
+          top_employees_count: topEmployees.length
         });
 
         console.log(`Sent leaderboard to ${sentCount} employees in company ${company.name}`);
