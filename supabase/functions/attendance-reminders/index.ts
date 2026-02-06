@@ -232,8 +232,48 @@ serve(async (req) => {
         checkoutReminderTimes.push(endMinutes + (i * checkoutReminderInterval))
       }
       
-      // Absence check time based on auto_absent_after_hours
-      const absenceCheckMinutes = startMinutes + (autoAbsentAfterHours * 60)
+      // ========== CHECK FOR LATE PERMISSION - ADJUST ABSENCE TIME ==========
+      let latePermissionMinutes = 0
+      
+      // Get approved late arrival permission for today
+      const { data: approvedPermRequests } = await supabase
+        .from('permission_requests')
+        .select('minutes')
+        .eq('employee_id', emp.id)
+        .eq('request_date', today)
+        .eq('permission_type', 'late_arrival')
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
+      
+      if (approvedPermRequests && approvedPermRequests.length > 0) {
+        latePermissionMinutes = approvedPermRequests[0].minutes || 0
+        console.log(`Employee ${emp.full_name} has approved late permission: ${latePermissionMinutes} mins`)
+      }
+      
+      // Also check flex-time from inventory/rewards
+      const { data: latePermissionUsage } = await supabase
+        .from('inventory_usage_logs')
+        .select('effect_applied')
+        .eq('employee_id', emp.id)
+        .eq('used_for_date', today)
+        .filter('effect_applied->>type', 'eq', 'late_permission')
+      
+      if (latePermissionUsage && latePermissionUsage.length > 0) {
+        const flexMinutes = latePermissionUsage.reduce((sum: number, log: any) => {
+          const minutes = log.effect_applied?.minutes || 60
+          return sum + minutes
+        }, 0)
+        latePermissionMinutes += flexMinutes
+        console.log(`Employee ${emp.full_name} has flex-time late permission: ${flexMinutes} mins (total: ${latePermissionMinutes})`)
+      }
+      
+      // Cap late permission at 120 minutes (2 hours)
+      const effectiveLatePermission = Math.min(latePermissionMinutes, 120)
+      
+      // Absence check time based on auto_absent_after_hours + late permission
+      // If employee has late permission, add that to the absence check time
+      const absenceCheckMinutes = startMinutes + (autoAbsentAfterHours * 60) + effectiveLatePermission
 
       console.log(`Processing ${emp.full_name}: start=${workStartTime.substring(0,5)} (${startMinutes}), current=${currentMinutes}, checkin reminders at: ${checkinReminderTimes.join(', ')}, checkout at: ${checkoutReminderTimes.join(', ')}`)
 
