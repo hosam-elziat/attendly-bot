@@ -1696,13 +1696,16 @@ export type Database = {
           leave_balance: number | null
           level3_verification_mode: string | null
           monthly_late_balance_minutes: number | null
+          monthly_permission_hours_limit: number | null
           national_id: string | null
           notes: string | null
+          permission_hours_reset_month: string | null
           phone: string | null
           position_id: string | null
           salary_type: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id: string | null
           updated_at: string
+          used_permission_hours_this_month: number | null
           user_id: string | null
           weekend_days: string[] | null
           work_end_time: string | null
@@ -1734,13 +1737,16 @@ export type Database = {
           leave_balance?: number | null
           level3_verification_mode?: string | null
           monthly_late_balance_minutes?: number | null
+          monthly_permission_hours_limit?: number | null
           national_id?: string | null
           notes?: string | null
+          permission_hours_reset_month?: string | null
           phone?: string | null
           position_id?: string | null
           salary_type?: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id?: string | null
           updated_at?: string
+          used_permission_hours_this_month?: number | null
           user_id?: string | null
           weekend_days?: string[] | null
           work_end_time?: string | null
@@ -1772,13 +1778,16 @@ export type Database = {
           leave_balance?: number | null
           level3_verification_mode?: string | null
           monthly_late_balance_minutes?: number | null
+          monthly_permission_hours_limit?: number | null
           national_id?: string | null
           notes?: string | null
+          permission_hours_reset_month?: string | null
           phone?: string | null
           position_id?: string | null
           salary_type?: Database["public"]["Enums"]["salary_type"] | null
           telegram_chat_id?: string | null
           updated_at?: string
+          used_permission_hours_this_month?: number | null
           user_id?: string | null
           weekend_days?: string[] | null
           work_end_time?: string | null

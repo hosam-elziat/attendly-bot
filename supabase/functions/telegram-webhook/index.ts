@@ -1377,6 +1377,7 @@ serve(async (req) => {
           // Request late arrival permission
           const localTime = getLocalTime(companyTimezone)
           const today = localTime.date
+          const currentMonth = today.substring(0, 7) // YYYY-MM
           
           // Check if employee already has a permission request for today (any type)
           const { data: existingPermToday } = await supabase
@@ -1396,6 +1397,45 @@ serve(async (req) => {
               `⏱️ المدة: ${existingPermToday.minutes} دقيقة\n` +
               `📊 الحالة: ${statusText}\n\n` +
               `⚠️ يُسمح بطلب إذن واحد فقط في اليوم`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            break
+          }
+          
+          // ========== CHECK MONTHLY PERMISSION HOURS LIMIT ==========
+          // Get employee's permission hours limit and used hours
+          const { data: empPermData } = await supabase
+            .from('employees')
+            .select('monthly_permission_hours_limit, used_permission_hours_this_month, permission_hours_reset_month')
+            .eq('id', employee.id)
+            .single()
+          
+          const monthlyLimit = empPermData?.monthly_permission_hours_limit ?? 4 // default 4 hours
+          let usedHours = empPermData?.used_permission_hours_this_month ?? 0
+          const resetMonth = empPermData?.permission_hours_reset_month
+          
+          // Reset used hours if it's a new month
+          if (resetMonth !== currentMonth) {
+            usedHours = 0
+            await supabase
+              .from('employees')
+              .update({
+                used_permission_hours_this_month: 0,
+                permission_hours_reset_month: currentMonth
+              })
+              .eq('id', employee.id)
+          }
+          
+          const remainingMinutes = (monthlyLimit * 60) - (usedHours * 60)
+          
+          if (remainingMinutes <= 0) {
+            await sendAndLogMessage(
+              `❌ <b>خلص رصيد ساعات الإذن الشهرية</b>\n\n` +
+              `📊 الحد الشهري: ${monthlyLimit} ساعة\n` +
+              `✅ تم استخدام: ${usedHours} ساعة\n` +
+              `⚠️ الرصيد المتبقي: 0 ساعة\n\n` +
+              `💡 يتجدد الرصيد مع بداية الشهر الجديد\n` +
+              `📞 تواصل مع الإدارة للحصول على إذن استثنائي`,
               getEmployeeKeyboard(managerPermissions)
             )
             break
@@ -1420,24 +1460,33 @@ serve(async (req) => {
             ? `\n\n💡 <i>لديك ساعة إذن من المقتنيات - يمكنك استخدامها من قائمة "مقتنياتي"</i>`
             : ''
           
+          const remainingHoursDisplay = Math.floor(remainingMinutes / 60)
+          const remainingMinsDisplay = remainingMinutes % 60
+          const remainingText = remainingHoursDisplay > 0 
+            ? `${remainingHoursDisplay} ساعة${remainingMinsDisplay > 0 ? ` و ${remainingMinsDisplay} دقيقة` : ''}`
+            : `${remainingMinsDisplay} دقيقة`
+          
+          // Build available duration buttons based on remaining minutes
+          const durationButtons: any[][] = []
+          if (remainingMinutes >= 30) {
+            const row1 = [{ text: '30 دقيقة', callback_data: 'perm_minutes_30' }]
+            if (remainingMinutes >= 60) row1.push({ text: '60 دقيقة', callback_data: 'perm_minutes_60' })
+            durationButtons.push(row1)
+          }
+          if (remainingMinutes >= 90) {
+            const row2 = [{ text: '90 دقيقة', callback_data: 'perm_minutes_90' }]
+            if (remainingMinutes >= 120) row2.push({ text: '120 دقيقة', callback_data: 'perm_minutes_120' })
+            durationButtons.push(row2)
+          }
+          durationButtons.push([{ text: '❌ إلغاء', callback_data: 'cancel_leave' }])
+          
           await sendAndLogMessage(
             `⏰ <b>طلب إذن تأخير</b>\n\n` +
             `📅 التاريخ: ${today}\n` +
-            `🕐 موعد العمل: ${employee.work_start_time || companyDefaults.work_start_time}\n\n` +
+            `🕐 موعد العمل: ${employee.work_start_time || companyDefaults.work_start_time}\n` +
+            `📊 رصيدك المتبقي: ${remainingText}\n\n` +
             `كم دقيقة تريد التأخير؟${flexTimeNote}`,
-            {
-              inline_keyboard: [
-                [
-                  { text: '30 دقيقة', callback_data: 'perm_minutes_30' },
-                  { text: '60 دقيقة', callback_data: 'perm_minutes_60' }
-                ],
-                [
-                  { text: '90 دقيقة', callback_data: 'perm_minutes_90' },
-                  { text: '120 دقيقة', callback_data: 'perm_minutes_120' }
-                ],
-                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
-              ]
-            }
+            { inline_keyboard: durationButtons }
           )
           break
         }
@@ -1446,6 +1495,7 @@ serve(async (req) => {
           // Request early departure permission
           const localTime = getLocalTime(companyTimezone)
           const today = localTime.date
+          const currentMonth = today.substring(0, 7) // YYYY-MM
           
           // Check if employee already has a permission request for today (any type)
           const { data: existingPermToday } = await supabase
@@ -1470,25 +1520,72 @@ serve(async (req) => {
             break
           }
           
+          // ========== CHECK MONTHLY PERMISSION HOURS LIMIT ==========
+          const { data: empPermDataEarly } = await supabase
+            .from('employees')
+            .select('monthly_permission_hours_limit, used_permission_hours_this_month, permission_hours_reset_month')
+            .eq('id', employee.id)
+            .single()
+          
+          const monthlyLimitEarly = empPermDataEarly?.monthly_permission_hours_limit ?? 4
+          let usedHoursEarly = empPermDataEarly?.used_permission_hours_this_month ?? 0
+          const resetMonthEarly = empPermDataEarly?.permission_hours_reset_month
+          
+          // Reset used hours if it's a new month
+          if (resetMonthEarly !== currentMonth) {
+            usedHoursEarly = 0
+            await supabase
+              .from('employees')
+              .update({
+                used_permission_hours_this_month: 0,
+                permission_hours_reset_month: currentMonth
+              })
+              .eq('id', employee.id)
+          }
+          
+          const remainingMinutesEarly = (monthlyLimitEarly * 60) - (usedHoursEarly * 60)
+          
+          if (remainingMinutesEarly <= 0) {
+            await sendAndLogMessage(
+              `❌ <b>خلص رصيد ساعات الإذن الشهرية</b>\n\n` +
+              `📊 الحد الشهري: ${monthlyLimitEarly} ساعة\n` +
+              `✅ تم استخدام: ${usedHoursEarly} ساعة\n` +
+              `⚠️ الرصيد المتبقي: 0 ساعة\n\n` +
+              `💡 يتجدد الرصيد مع بداية الشهر الجديد\n` +
+              `📞 تواصل مع الإدارة للحصول على إذن استثنائي`,
+              getEmployeeKeyboard(managerPermissions)
+            )
+            break
+          }
+          
+          const remainingHoursDisplayEarly = Math.floor(remainingMinutesEarly / 60)
+          const remainingMinsDisplayEarly = remainingMinutesEarly % 60
+          const remainingTextEarly = remainingHoursDisplayEarly > 0 
+            ? `${remainingHoursDisplayEarly} ساعة${remainingMinsDisplayEarly > 0 ? ` و ${remainingMinsDisplayEarly} دقيقة` : ''}`
+            : `${remainingMinsDisplayEarly} دقيقة`
+          
+          // Build available duration buttons based on remaining minutes
+          const durationButtonsEarly: any[][] = []
+          if (remainingMinutesEarly >= 30) {
+            const row1 = [{ text: '30 دقيقة', callback_data: 'perm_minutes_30' }]
+            if (remainingMinutesEarly >= 60) row1.push({ text: '60 دقيقة', callback_data: 'perm_minutes_60' })
+            durationButtonsEarly.push(row1)
+          }
+          if (remainingMinutesEarly >= 90) {
+            const row2 = [{ text: '90 دقيقة', callback_data: 'perm_minutes_90' }]
+            if (remainingMinutesEarly >= 120) row2.push({ text: '120 دقيقة', callback_data: 'perm_minutes_120' })
+            durationButtonsEarly.push(row2)
+          }
+          durationButtonsEarly.push([{ text: '❌ إلغاء', callback_data: 'cancel_leave' }])
+          
           await setSession('permission_early_minutes', { permission_type: 'early_departure', permission_date: today })
           await sendAndLogMessage(
             `🚪 <b>طلب إذن انصراف مبكر</b>\n\n` +
             `📅 التاريخ: ${today}\n` +
-            `🕐 موعد الانصراف: ${employee.work_end_time || companyDefaults.work_end_time}\n\n` +
+            `🕐 موعد الانصراف: ${employee.work_end_time || companyDefaults.work_end_time}\n` +
+            `📊 رصيدك المتبقي: ${remainingTextEarly}\n\n` +
             `كم دقيقة تريد الانصراف قبل الموعد؟`,
-            {
-              inline_keyboard: [
-                [
-                  { text: '30 دقيقة', callback_data: 'perm_minutes_30' },
-                  { text: '60 دقيقة', callback_data: 'perm_minutes_60' }
-                ],
-                [
-                  { text: '90 دقيقة', callback_data: 'perm_minutes_90' },
-                  { text: '120 دقيقة', callback_data: 'perm_minutes_120' }
-                ],
-                [{ text: '❌ إلغاء', callback_data: 'cancel_leave' }]
-              ]
-            }
+            { inline_keyboard: durationButtonsEarly }
           )
           break
         }
@@ -1577,6 +1674,28 @@ serve(async (req) => {
               reviewed_at: new Date().toISOString()
             })
             .eq('id', permId)
+          
+          // ========== UPDATE EMPLOYEE'S USED PERMISSION HOURS ==========
+          const permMinutesUsed = permReq.minutes || 0
+          const permHoursUsed = permMinutesUsed / 60
+          
+          // Get current used hours
+          const { data: empPermUsage } = await supabase
+            .from('employees')
+            .select('used_permission_hours_this_month')
+            .eq('id', permReq.employee_id)
+            .single()
+          
+          const currentUsed = empPermUsage?.used_permission_hours_this_month ?? 0
+          const newUsed = currentUsed + permHoursUsed
+          
+          // Update employee's used permission hours
+          await supabase
+            .from('employees')
+            .update({ used_permission_hours_this_month: newUsed })
+            .eq('id', permReq.employee_id)
+          
+          console.log(`Updated used permission hours for employee ${permReq.employee_id}: ${currentUsed} + ${permHoursUsed} = ${newUsed}`)
           
           // Update attendance log if exists for that date
           const { data: attendanceLog } = await supabase
