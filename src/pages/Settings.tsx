@@ -53,6 +53,7 @@ const Settings = () => {
   // Attendance policy states
   const [dailyLateAllowance, setDailyLateAllowance] = useState(15);
   const [monthlyLateAllowance, setMonthlyLateAllowance] = useState(60);
+  const [defaultMonthlyPermissionHours, setDefaultMonthlyPermissionHours] = useState(4);
   const [lateUnder15Deduction, setLateUnder15Deduction] = useState(0.25);
   const [late15To30Deduction, setLate15To30Deduction] = useState(0.5);
   const [lateOver30Deduction, setLateOver30Deduction] = useState(1);
@@ -104,6 +105,7 @@ const Settings = () => {
       // Attendance policy
       setDailyLateAllowance((company as any).daily_late_allowance_minutes || 15);
       setMonthlyLateAllowance((company as any).monthly_late_allowance_minutes || 60);
+      setDefaultMonthlyPermissionHours((company as any).default_monthly_permission_hours || 4);
       setLateUnder15Deduction((company as any).late_under_15_deduction || 0.25);
       setLate15To30Deduction((company as any).late_15_to_30_deduction || 0.5);
       setLateOver30Deduction((company as any).late_over_30_deduction || 1);
@@ -292,6 +294,7 @@ const Settings = () => {
         .update({
           daily_late_allowance_minutes: dailyLateAllowance,
           monthly_late_allowance_minutes: monthlyLateAllowance,
+          default_monthly_permission_hours: defaultMonthlyPermissionHours,
           late_under_15_deduction: lateUnder15Deduction,
           late_15_to_30_deduction: late15To30Deduction,
           late_over_30_deduction: lateOver30Deduction,
@@ -709,6 +712,17 @@ const Settings = () => {
                       onChange={setMonthlyLateAllowance}
                     />
                     <p className="text-xs text-muted-foreground">رصيد التأخيرات الشهري للموظف</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="monthly-permission-hours">ساعات الإذن الشهرية المسموحة</Label>
+                    <NumberInput 
+                      id="monthly-permission-hours" 
+                      min={0}
+                      max={24}
+                      value={defaultMonthlyPermissionHours}
+                      onChange={setDefaultMonthlyPermissionHours}
+                    />
+                    <p className="text-xs text-muted-foreground">الحد الأقصى لساعات الإذن (تأخير/انصراف مبكر) شهرياً للموظف</p>
                   </div>
                 </div>
               </div>
