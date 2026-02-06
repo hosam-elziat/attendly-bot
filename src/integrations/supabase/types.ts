@@ -858,6 +858,7 @@ export type Database = {
           created_at: string
           daily_late_allowance_minutes: number | null
           default_currency: string | null
+          default_monthly_permission_hours: number | null
           default_weekend_days: string[] | null
           deleted_at: string | null
           deleted_by: string | null
@@ -914,6 +915,7 @@ export type Database = {
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
+          default_monthly_permission_hours?: number | null
           default_weekend_days?: string[] | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -970,6 +972,7 @@ export type Database = {
           created_at?: string
           daily_late_allowance_minutes?: number | null
           default_currency?: string | null
+          default_monthly_permission_hours?: number | null
           default_weekend_days?: string[] | null
           deleted_at?: string | null
           deleted_by?: string | null
