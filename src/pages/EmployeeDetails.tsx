@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmployees, Employee, useUpdateEmployee } from '@/hooks/useEmployees';
-import { useAttendance } from '@/hooks/useAttendance';
+import { useEmployeeAttendance, EmployeeFilterPeriod } from '@/hooks/useEmployeeAttendance';
 import { useEmployeeSalaryStats, SalaryFilterPeriod } from '@/hooks/useEmployeeSalaryStats';
 import { useEmployeeAdjustments } from '@/hooks/useSalaryAdjustments';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ import {
   Save,
   Hourglass
 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, differenceInMinutes, parseISO, isWithinInterval } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
@@ -105,14 +105,13 @@ export const CURRENCIES = [
   { code: 'EUR', name: 'يورو', symbol: '€' },
 ];
 
-type FilterPeriod = 'week' | 'month' | 'year';
+type FilterPeriod = EmployeeFilterPeriod;
 
 const EmployeeDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, direction } = useLanguage();
   const { data: employees = [], refetch: refetchEmployees } = useEmployees();
-  const { data: attendanceLogs = [] } = useAttendance();
   const { data: company } = useCompany();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('month');
   const [salaryPeriod, setSalaryPeriod] = useState<SalaryFilterPeriod>('this_month');
@@ -147,70 +146,23 @@ const EmployeeDetails = () => {
 
   const currency = CURRENCIES.find(c => c.code === (employee?.currency || 'SAR')) || CURRENCIES[0];
 
-  // Calculate date range based on filter
-  const dateRange = useMemo(() => {
-    const now = new Date();
-    switch (filterPeriod) {
-      case 'week':
-        return { start: startOfWeek(now, { weekStartsOn: 0 }), end: endOfWeek(now, { weekStartsOn: 0 }) };
-      case 'month':
-        return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'year':
-        return { start: startOfYear(now), end: endOfYear(now) };
-    }
-  }, [filterPeriod]);
+  // Use dedicated employee attendance hook for real stats
+  const { data: attendanceData } = useEmployeeAttendance(id, filterPeriod, employee ? {
+    work_start_time: employee.work_start_time,
+    work_end_time: employee.work_end_time,
+    weekend_days: employee.weekend_days,
+  } : undefined);
 
-  // Filter attendance logs for this employee within date range
-  const employeeAttendance = useMemo(() => {
-    if (!employee) return [];
-    return attendanceLogs.filter(log => {
-      if (log.employee_id !== employee.id) return false;
-      const logDate = parseISO(log.date);
-      return isWithinInterval(logDate, { start: dateRange.start, end: dateRange.end });
-    });
-  }, [attendanceLogs, employee, dateRange]);
+  const stats = useMemo(() => ({
+    presentDays: attendanceData?.presentDays ?? 0,
+    expectedDays: attendanceData?.expectedDays ?? 0,
+    absentDays: attendanceData?.absentDays ?? 0,
+    totalHours: attendanceData?.totalHours ?? 0,
+    commitmentRate: attendanceData?.commitmentRate ?? 100,
+    lateArrivals: attendanceData?.lateArrivals ?? 0,
+  }), [attendanceData]);
 
-  // Calculate statistics
-  const stats = useMemo(() => {
-    const totalDays = employeeAttendance.length;
-    const presentDays = employeeAttendance.filter(log => log.status === 'checked_out' || log.status === 'checked_in').length;
-    const absentDays = Math.max(0, getExpectedWorkDays(dateRange.start, dateRange.end, employee?.weekend_days || []) - presentDays);
-    
-    // Calculate total hours
-    let totalMinutes = 0;
-    employeeAttendance.forEach(log => {
-      if (log.check_in_time && log.check_out_time) {
-        const checkIn = parseISO(log.check_in_time);
-        const checkOut = parseISO(log.check_out_time);
-        totalMinutes += differenceInMinutes(checkOut, checkIn);
-      }
-    });
-    const totalHours = Math.round(totalMinutes / 60 * 10) / 10;
-
-    // Calculate commitment rate
-    const expectedDays = getExpectedWorkDays(dateRange.start, dateRange.end, employee?.weekend_days || []);
-    const commitmentRate = expectedDays > 0 ? Math.round((presentDays / expectedDays) * 100) : 100;
-
-    // Calculate late arrivals
-    const lateArrivals = employeeAttendance.filter(log => {
-      if (!log.check_in_time || !employee?.work_start_time) return false;
-      const checkInTime = parseISO(log.check_in_time);
-      const [hours, minutes] = employee.work_start_time.split(':').map(Number);
-      const expectedStart = new Date(checkInTime);
-      expectedStart.setHours(hours, minutes, 0, 0);
-      return checkInTime > expectedStart;
-    }).length;
-
-    return {
-      totalDays,
-      presentDays,
-      absentDays,
-      totalHours,
-      commitmentRate,
-      lateArrivals,
-      expectedDays,
-    };
-  }, [employeeAttendance, dateRange, employee]);
+  const employeeAttendance = attendanceData?.logs ?? [];
 
   if (!employee) {
     return (
@@ -704,22 +656,5 @@ const EmployeeDetails = () => {
     </DashboardLayout>
   );
 };
-
-// Helper function to calculate expected work days
-function getExpectedWorkDays(start: Date, end: Date, weekendDays: string[]): number {
-  let count = 0;
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const current = new Date(start);
-  
-  while (current <= end) {
-    const dayName = dayNames[current.getDay()];
-    if (!weekendDays.includes(dayName)) {
-      count++;
-    }
-    current.setDate(current.getDate() + 1);
-  }
-  
-  return count;
-}
 
 export default EmployeeDetails;
