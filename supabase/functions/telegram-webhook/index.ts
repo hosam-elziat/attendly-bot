@@ -2060,7 +2060,8 @@ serve(async (req) => {
 
         case 'my_status':
           let statusMsg = `👤 ${employee.full_name}\n\n`
-          statusMsg += `📊 رصيد الإجازات: ${employee.leave_balance || 0} يوم\n\n`
+          statusMsg += `📊 رصيد الإجازات الاعتيادية: ${employee.leave_balance ?? companyDefaults.annual_leave_days} يوم\n`
+          statusMsg += `🚨 رصيد الإجازات الطارئة: ${employee.emergency_leave_balance ?? companyDefaults.emergency_leave_days} يوم\n\n`
           
           if (attendance) {
             const statusEmoji = attendance.status === 'checked_in' ? '🟢'
@@ -6796,10 +6797,27 @@ async function processCheckout(
   const isFreelancer = empDetails?.is_freelancer === true
   
   // Calculate time difference (skip all policy calculations for freelancers)
-  if (workEndTime && !isNightShift && !isFreelancer) {
-    const [endH, endM] = workEndTime.split(':').map(Number)
-    const [checkH, checkM] = checkOutTime.split(':').map(Number)
-    const timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
+  if (workEndTime && !isFreelancer) {
+    let timeDiff = 0
+    
+    if (isNightShift && attendance.check_in_time) {
+      // Night shift: calculate overtime based on total hours worked vs expected hours
+      const checkInDate = new Date(attendance.check_in_time)
+      const checkOutDate = new Date()
+      const totalMinutesWorked = Math.round((checkOutDate.getTime() - checkInDate.getTime()) / 60000)
+      
+      // Calculate expected work hours from work_start_time to work_end_time
+      const [startH, startM] = (employee.work_start_time || companyDefaults.work_start_time).split(':').map(Number)
+      const [endH, endM] = workEndTime.split(':').map(Number)
+      let expectedMinutes = (endH * 60 + endM) - (startH * 60 + startM)
+      if (expectedMinutes <= 0) expectedMinutes += 24 * 60 // Night shift spans midnight
+      
+      timeDiff = totalMinutesWorked - expectedMinutes
+    } else if (!isNightShift) {
+      const [endH, endM] = workEndTime.split(':').map(Number)
+      const [checkH, checkM] = checkOutTime.split(':').map(Number)
+      timeDiff = (checkH * 60 + checkM) - (endH * 60 + endM)
+    }
     
     if (timeDiff > 0 && attendance.check_in_time) {
       // Overtime
@@ -6842,8 +6860,8 @@ async function processCheckout(
         overtimeMessage = `\n\n⏰ <b>وقت إضافي:</b> ${overtimeHours > 0 ? `${overtimeHours} ساعة و ` : ''}${overtimeMins} دقيقة`
         overtimeInfo = { minutes: overtimeMinutes }
       }
-    } else if (timeDiff < 0) {
-      // Early departure
+    } else if (timeDiff < 0 && !isNightShift) {
+      // Early departure (only for non-night-shift)
       const earlyMinutes = Math.abs(timeDiff)
       const earlyDepartureGrace = companyPolicies?.early_departure_grace_minutes ?? 5
       
