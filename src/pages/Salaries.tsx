@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,6 +6,7 @@ import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { 
   Table, 
   TableBody, 
@@ -22,12 +23,13 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, Download, TrendingUp, TrendingDown, Minus, Edit, Loader2, ListOrdered, FileSpreadsheet } from 'lucide-react';
+import { DollarSign, Download, TrendingUp, TrendingDown, Minus, Edit, Loader2, ListOrdered, FileSpreadsheet, Search, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfMonth } from 'date-fns';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import { useSalaryAdjustments } from '@/hooks/useSalaryAdjustments';
+import { useSalaryPayments } from '@/hooks/useSalaryPayments';
 import { exportSalaryReport } from '@/lib/exportUtils';
 import { toast } from 'sonner';
 
@@ -57,9 +59,13 @@ const Salaries = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Use the adjustments hook
   const { data: adjustments = [], isLoading: adjustmentsLoading, refetch: refetchAdjustments } = useSalaryAdjustments(selectedMonth);
+  
+  // Use the salary payments hook
+  const { paidMap, togglePaid } = useSalaryPayments(selectedMonth);
 
   const fetchSalaryData = async () => {
     if (!effectiveCompanyId) return;
@@ -121,7 +127,9 @@ const Salaries = () => {
           if (log.check_in_time && log.check_out_time) {
             const checkIn = new Date(log.check_in_time);
             const checkOut = new Date(log.check_out_time);
-            const mins = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60) - 60; // subtract 1hr break
+            const rawMins = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60);
+            // Freelancers: no break subtraction (paid for raw hours, matching telegram-webhook)
+            const mins = isFreelancer ? rawMins : rawMins - 60;
             workedMinutes += Math.max(0, mins);
           }
         }
@@ -159,23 +167,28 @@ const Salaries = () => {
     refetchAdjustments();
   }, [effectiveCompanyId, selectedMonth]);
 
+  // Filter employees by search query
+  const filteredEmployees = useMemo(() => {
+    if (!searchQuery.trim()) return employees;
+    const query = searchQuery.trim().toLowerCase();
+    return employees.filter(e => e.full_name.toLowerCase().includes(query));
+  }, [employees, searchQuery]);
+
   // For freelancers: net salary = hourly_earnings + manual_bonus - deductions
   // For regular: net salary = base_salary + total_bonus - total_deduction
-  const totalPayroll = employees.reduce((sum, e) => {
+  const totalPayroll = filteredEmployees.reduce((sum, e) => {
     if (e.is_freelancer) {
-      // Freelancer: hourly earnings (from attendance) + manual bonuses - deductions
       return sum + (e.hourly_earnings + e.manual_bonus - e.total_deduction);
     }
     return sum + ((e.base_salary || 0) + e.total_bonus - e.total_deduction);
   }, 0);
-  // For stats: show manual bonuses for freelancers, total for regular
-  const totalBonuses = employees.reduce((sum, e) => {
+  const totalBonuses = filteredEmployees.reduce((sum, e) => {
     if (e.is_freelancer) {
       return sum + e.manual_bonus;
     }
     return sum + e.total_bonus;
   }, 0);
-  const totalDeductions = employees.reduce((sum, e) => sum + e.total_deduction, 0);
+  const totalDeductions = filteredEmployees.reduce((sum, e) => sum + e.total_deduction, 0);
 
   const handleEditClick = (employee: EmployeeWithSalary) => {
     setSelectedEmployee({ id: employee.id, name: employee.full_name });
@@ -187,13 +200,17 @@ const Salaries = () => {
     fetchSalaryData();
   };
 
-  const getStatusBadge = (workDays: number) => {
-    if (workDays >= 20) {
-      return <Badge className="bg-success hover:bg-success/90">{t('salaries.paid') || 'مكتمل'}</Badge>;
-    } else if (workDays >= 10) {
-      return <Badge className="bg-warning hover:bg-warning/90">{t('salaries.processing') || 'جاري'}</Badge>;
+  const getStatusBadge = (employeeId: string) => {
+    const isPaid = paidMap.get(employeeId) === true;
+    if (isPaid) {
+      return <Badge className="bg-success hover:bg-success/90">{language === 'ar' ? 'مدفوع' : 'Paid'}</Badge>;
     }
-    return <Badge variant="outline">{t('salaries.pending') || 'معلق'}</Badge>;
+    return <Badge variant="outline">{language === 'ar' ? 'غير مدفوع' : 'Unpaid'}</Badge>;
+  };
+
+  const handleTogglePaid = (employeeId: string) => {
+    const currentlyPaid = paidMap.get(employeeId) === true;
+    togglePaid.mutate({ employeeId, isPaid: !currentlyPaid });
   };
 
   const months = Array.from({ length: 12 }, (_, i) => {
@@ -321,6 +338,15 @@ const Salaries = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="relative flex-1">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={language === 'ar' ? 'بحث عن موظف...' : 'Search employee...'}
+                    className="ps-9"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -374,7 +400,7 @@ const Salaries = () => {
                     <>
                     {/* Mobile Cards View */}
                     <div className="block sm:hidden p-3 space-y-3">
-                      {employees.map((employee) => {
+                      {filteredEmployees.map((employee) => {
                         // Freelancer: net = hourly_earnings + manual_bonus - deduction
                         const netSalary = employee.is_freelancer 
                           ? (employee.hourly_earnings + employee.manual_bonus - employee.total_deduction)
@@ -458,8 +484,22 @@ const Salaries = () => {
                                 </div>
                               </div>
                               <div className="flex items-center justify-between mt-3 pt-2 border-t">
-                                <span className="text-xs text-muted-foreground">{t('salaries.netSalary')}</span>
-                                <span className="font-bold text-foreground">{netSalary.toLocaleString()} {employee.currency || 'EGP'}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">{t('salaries.netSalary')}</span>
+                                  {getStatusBadge(employee.id)}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-foreground">{netSalary.toLocaleString()} {employee.currency || 'EGP'}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => handleTogglePaid(employee.id)}
+                                    disabled={togglePaid.isPending}
+                                  >
+                                    <CheckCircle2 className={`w-4 h-4 ${paidMap.get(employee.id) ? 'text-success' : 'text-muted-foreground'}`} />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -497,7 +537,7 @@ const Salaries = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {employees.map((employee) => {
+                        {filteredEmployees.map((employee) => {
                           // Freelancer: net = hourly_earnings + manual_bonus - deduction
                           const netSalary = employee.is_freelancer 
                             ? (employee.hourly_earnings + employee.manual_bonus - employee.total_deduction)
@@ -574,16 +614,28 @@ const Salaries = () => {
                                   <TableCell className="text-right font-bold text-foreground">
                                     {netSalary.toLocaleString()} {employee.currency || 'EGP'}
                                   </TableCell>
-                                  <TableCell className="text-right">{getStatusBadge(employee.work_days)}</TableCell>
+                                  <TableCell className="text-right">{getStatusBadge(employee.id)}</TableCell>
                                   <TableCell className="text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleEditClick(employee)}
-                                      className="text-primary hover:text-primary/80"
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </Button>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleTogglePaid(employee.id)}
+                                        disabled={togglePaid.isPending}
+                                        className="h-8 w-8 p-0"
+                                        title={language === 'ar' ? 'تبديل حالة الدفع' : 'Toggle paid status'}
+                                      >
+                                        <CheckCircle2 className={`w-4 h-4 ${paidMap.get(employee.id) ? 'text-success' : 'text-muted-foreground'}`} />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditClick(employee)}
+                                        className="text-primary hover:text-primary/80"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </>
                               ) : (
@@ -656,16 +708,28 @@ const Salaries = () => {
                                   <TableCell className="font-bold text-foreground">
                                     {netSalary.toLocaleString()} {employee.currency || 'EGP'}
                                   </TableCell>
-                                  <TableCell>{getStatusBadge(employee.work_days)}</TableCell>
+                                  <TableCell>{getStatusBadge(employee.id)}</TableCell>
                                   <TableCell>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleEditClick(employee)}
-                                      className="text-primary hover:text-primary/80"
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleTogglePaid(employee.id)}
+                                        disabled={togglePaid.isPending}
+                                        className="h-8 w-8 p-0"
+                                        title={language === 'ar' ? 'تبديل حالة الدفع' : 'Toggle paid status'}
+                                      >
+                                        <CheckCircle2 className={`w-4 h-4 ${paidMap.get(employee.id) ? 'text-success' : 'text-muted-foreground'}`} />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditClick(employee)}
+                                        className="text-primary hover:text-primary/80"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </>
                               )}

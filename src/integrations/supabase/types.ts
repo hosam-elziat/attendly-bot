@@ -3534,6 +3534,60 @@ export type Database = {
           },
         ]
       }
+      salary_payments: {
+        Row: {
+          company_id: string
+          created_at: string
+          employee_id: string
+          id: string
+          is_paid: boolean
+          month: string
+          paid_at: string | null
+          paid_by: string | null
+          paid_by_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          is_paid?: boolean
+          month: string
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_by_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          is_paid?: boolean
+          month?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_by_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_payments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "salary_payments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       salary_records: {
         Row: {
           base_salary: number | null

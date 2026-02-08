@@ -142,7 +142,10 @@ export const useEmployeeSalaryStats = (
         workDays++;
         const checkIn = parseISO(log.check_in_time);
         const checkOut = parseISO(log.check_out_time);
-        const workedMinutes = differenceInMinutes(checkOut, checkIn) - breakMinutes;
+        // Freelancers: no break subtraction (paid for raw hours worked)
+        const workedMinutes = isFreelancer
+          ? differenceInMinutes(checkOut, checkIn)
+          : differenceInMinutes(checkOut, checkIn) - breakMinutes;
         totalWorkedMinutes += Math.max(0, workedMinutes);
 
         // For freelancers, skip late/overtime calculations - they're paid purely by hours
