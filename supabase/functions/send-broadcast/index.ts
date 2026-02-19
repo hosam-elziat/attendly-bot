@@ -249,6 +249,22 @@ async function sendToBusinessOwners(
             status: 'sent',
             sent_at: new Date().toISOString(),
           });
+
+          // Log to telegram_messages for chat history
+          try {
+            await supabase.from('telegram_messages').insert({
+              company_id: company.id,
+              employee_id: employeeId,
+              telegram_chat_id: employee.telegram_chat_id,
+              message_text: broadcast.message_text?.replace(/\*/g, '') || '',
+              direction: 'outgoing',
+              message_type: 'broadcast',
+              metadata: { source: 'send-broadcast', broadcast_id: broadcastId }
+            });
+          } catch (logError) {
+            console.error('Failed to log broadcast message:', logError);
+          }
+
           successCount++;
           console.log(`Sent broadcast to business owner in company ${company.name}`);
         } else {
@@ -372,6 +388,22 @@ async function sendToEmployees(
             status: 'sent',
             sent_at: new Date().toISOString(),
           });
+
+          // Log to telegram_messages for chat history
+          try {
+            await supabase.from('telegram_messages').insert({
+              company_id: companyId,
+              employee_id: emp.id,
+              telegram_chat_id: emp.telegram_chat_id,
+              message_text: broadcast.message_text?.replace(/\*/g, '') || '',
+              direction: 'outgoing',
+              message_type: 'broadcast',
+              metadata: { source: 'send-broadcast', broadcast_id: broadcastId }
+            });
+          } catch (logError) {
+            console.error('Failed to log broadcast message:', logError);
+          }
+
           successCount++;
           console.log(`Sent broadcast to employee ${emp.full_name}`);
         } else {

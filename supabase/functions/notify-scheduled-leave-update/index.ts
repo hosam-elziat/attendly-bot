@@ -68,13 +68,15 @@ serve(async (req) => {
     }
 
     // Get employees to notify based on target type
-    let employeesToNotify: { telegram_chat_id: string; full_name: string }[] = [];
+    let employeesToNotify: { id: string; telegram_chat_id: string; full_name: string; company_id?: string }[] = [];
+
+    const companyId = leaveData.company_id;
 
     if (leaveData.target_type === 'company') {
       // Notify all employees with telegram
       const { data: employees } = await supabase
         .from('employees')
-        .select('telegram_chat_id, full_name')
+        .select('id, telegram_chat_id, full_name, company_id')
         .eq('company_id', leaveData.company_id)
         .eq('is_active', true)
         .not('telegram_chat_id', 'is', null);
@@ -84,7 +86,7 @@ serve(async (req) => {
       // Notify employees in that position
       const { data: employees } = await supabase
         .from('employees')
-        .select('telegram_chat_id, full_name')
+        .select('id, telegram_chat_id, full_name, company_id')
         .eq('company_id', leaveData.company_id)
         .eq('position_id', leaveData.target_id)
         .eq('is_active', true)
@@ -95,7 +97,7 @@ serve(async (req) => {
       // Notify specific employee
       const { data: employee } = await supabase
         .from('employees')
-        .select('telegram_chat_id, full_name')
+        .select('id, telegram_chat_id, full_name, company_id')
         .eq('id', leaveData.target_id)
         .single();
 
@@ -133,6 +135,28 @@ ${leaveData.reason ? `📝 السبب: ${leaveData.reason}` : ''}`;
             parse_mode: 'Markdown',
           }),
         });
+
+        let telegramMessageId = null;
+        if (response.ok) {
+          const result = await response.json();
+          telegramMessageId = result.result?.message_id;
+        }
+
+        // Log to telegram_messages for chat history
+        try {
+          await supabase.from('telegram_messages').insert({
+            company_id: employee.company_id || companyId,
+            employee_id: employee.id,
+            telegram_chat_id: employee.telegram_chat_id,
+            message_text: message.replace(/\*/g, ''),
+            direction: 'outgoing',
+            message_type: 'notification',
+            telegram_message_id: telegramMessageId,
+            metadata: { source: 'notify-scheduled-leave-update', action }
+          });
+        } catch (logError) {
+          console.error('Failed to log message:', logError);
+        }
 
         if (!response.ok) {
           console.error(`Failed to send to ${employee.full_name}:`, await response.text());

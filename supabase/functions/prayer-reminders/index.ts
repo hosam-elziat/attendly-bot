@@ -165,7 +165,10 @@ async function sendTelegramMessage(botToken: string, chatId: string, text: strin
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
     })
-    return await res.json()
+    if (res.ok) {
+      return await res.json()
+    }
+    return null
   } catch (err) {
     console.error('Failed to send telegram message:', err)
     return null
@@ -292,7 +295,7 @@ serve(async (req) => {
 
           const { data: employees } = await supabase
             .from('employees')
-            .select('telegram_chat_id')
+            .select('id, telegram_chat_id')
             .eq('company_id', company.id)
             .eq('is_active', true)
             .not('telegram_chat_id', 'is', null)
@@ -304,7 +307,24 @@ serve(async (req) => {
 
           for (const emp of employees) {
             if (emp.telegram_chat_id) {
-              await sendTelegramMessage(bot.bot_token, emp.telegram_chat_id, message)
+              const result = await sendTelegramMessage(bot.bot_token, emp.telegram_chat_id, message)
+              
+              // Log to telegram_messages for chat history
+              try {
+                await supabase.from('telegram_messages').insert({
+                  company_id: company.id,
+                  employee_id: emp.id,
+                  telegram_chat_id: emp.telegram_chat_id,
+                  message_text: message.replace(/<[^>]*>/g, ''),
+                  direction: 'outgoing',
+                  message_type: 'prayer_reminder',
+                  telegram_message_id: result?.result?.message_id || null,
+                  metadata: { source: 'prayer-reminders', prayer }
+                })
+              } catch (logError) {
+                console.error('Failed to log prayer message:', logError)
+              }
+              
               totalSent++
             }
           }

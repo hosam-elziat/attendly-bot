@@ -179,6 +179,32 @@ serve(async (req) => {
       )
     }
 
+    // Log to telegram_messages - find employee by telegram_chat_id
+    try {
+      const { data: empData } = await supabase
+        .from('employees')
+        .select('id, company_id')
+        .eq('telegram_chat_id', telegram_chat_id)
+        .eq('company_id', profile.company_id)
+        .maybeSingle()
+
+      if (empData) {
+        const tgResult = await telegramResponse.clone().json().catch(() => null)
+        await supabase.from('telegram_messages').insert({
+          company_id: empData.company_id,
+          employee_id: empData.id,
+          telegram_chat_id: telegram_chat_id,
+          message_text: message,
+          direction: 'outgoing',
+          message_type: 'notification',
+          telegram_message_id: tgResult?.result?.message_id || null,
+          metadata: { source: 'notify-join-request', action, keyboard: reply_markup || null }
+        })
+      }
+    } catch (logError) {
+      console.error('Failed to log join request message:', logError)
+    }
+
     return new Response(
       JSON.stringify({ success: true, message: 'Notification sent successfully' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

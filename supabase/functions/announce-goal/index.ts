@@ -49,7 +49,7 @@ serve(async (req) => {
     // Get all active employees with Telegram
     const { data: employees } = await supabase
       .from('employees')
-      .select('telegram_chat_id')
+      .select('id, telegram_chat_id')
       .eq('company_id', company_id)
       .eq('is_active', true)
       .not('telegram_chat_id', 'is', null);
@@ -120,7 +120,24 @@ serve(async (req) => {
         });
 
         if (response.ok) {
+          const result = await response.json();
           sentCount++;
+
+          // Log to telegram_messages for chat history
+          try {
+            await supabase.from('telegram_messages').insert({
+              company_id: company_id,
+              employee_id: emp.id,
+              telegram_chat_id: emp.telegram_chat_id,
+              message_text: messageText.replace(/\*/g, ''),
+              direction: 'outgoing',
+              message_type: 'goal_announcement',
+              telegram_message_id: result.result?.message_id || null,
+              metadata: { source: 'announce-goal', goal_id }
+            });
+          } catch (logError) {
+            console.error('Failed to log goal message:', logError);
+          }
         }
       } catch (e) {
         console.error(`Error sending to ${emp.telegram_chat_id}:`, e);
