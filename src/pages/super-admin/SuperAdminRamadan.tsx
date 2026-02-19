@@ -48,6 +48,7 @@ const SuperAdminRamadan = () => {
   // Prayer test state
   const [testCountry, setTestCountry] = useState('EG');
   const [testEmployeeId, setTestEmployeeId] = useState('');
+  const [testPrayer, setTestPrayer] = useState('dhuhr');
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [prayerTestResult, setPrayerTestResult] = useState<any>(null);
   const [prayerTestLoading, setPrayerTestLoading] = useState(false);
@@ -261,6 +262,7 @@ const SuperAdminRamadan = () => {
           test_mode: true,
           employee_id: testEmployeeId || undefined,
           country_code: testCountry,
+          prayer: testEmployeeId ? testPrayer : undefined,
         },
       });
       if (error) throw error;
@@ -448,6 +450,35 @@ const SuperAdminRamadan = () => {
                   </div>
                 </div>
 
+                {/* Prayer selector for test */}
+                {testEmployeeId && (
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">اختر الصلاة للتذكير</Label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { id: 'fajr', label: 'الفجر', emoji: '🌅' },
+                        { id: 'dhuhr', label: 'الظهر', emoji: '☀️' },
+                        { id: 'asr', label: 'العصر', emoji: '🌤️' },
+                        { id: 'maghrib', label: 'المغرب', emoji: '🌇' },
+                        { id: 'isha', label: 'العشاء', emoji: '🌙' },
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => setTestPrayer(p.id)}
+                          className={`p-3 rounded-lg text-center transition-colors border ${
+                            testPrayer === p.id
+                              ? 'bg-primary/20 border-primary text-white'
+                              : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          }`}
+                        >
+                          <span className="text-xl block">{p.emoji}</span>
+                          <span className="text-xs block mt-1">{p.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   <Button
                     onClick={testPrayerForEmployee}
@@ -455,7 +486,7 @@ const SuperAdminRamadan = () => {
                     className="gap-2"
                   >
                     {prayerTestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-                    {testEmployeeId ? 'جلب المواقيت وإرسال اختبار' : 'جلب مواقيت الصلاة فقط'}
+                    {testEmployeeId ? `إرسال تذكير ${testPrayer === 'fajr' ? 'الفجر' : testPrayer === 'dhuhr' ? 'الظهر' : testPrayer === 'asr' ? 'العصر' : testPrayer === 'maghrib' ? 'المغرب' : 'العشاء'}` : 'جلب مواقيت الصلاة فقط'}
                   </Button>
                   {testEmployeeId && (
                     <Button variant="ghost" onClick={() => setTestEmployeeId('')} className="text-slate-400">
