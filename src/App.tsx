@@ -67,6 +67,7 @@ const SuperAdminRevenue = lazy(() => import("./pages/super-admin/SuperAdminReven
 const SuperAdminSnapshots = lazy(() => import("./pages/super-admin/SuperAdminSnapshots"));
 const SuperAdminDiscountCodes = lazy(() => import("./pages/super-admin/SuperAdminDiscountCodes"));
 const SuperAdminBroadcasts = lazy(() => import("./pages/super-admin/SuperAdminBroadcasts"));
+const SuperAdminRamadan = lazy(() => import("./pages/super-admin/SuperAdminRamadan"));
 
 const queryClient = new QueryClient();
 
@@ -189,6 +190,9 @@ const App = () => (
                     } />
                     <Route path="/super-admin/broadcasts" element={
                       <SuperAdminProtectedRoute><SuperAdminBroadcasts /></SuperAdminProtectedRoute>
+                    } />
+                    <Route path="/super-admin/ramadan" element={
+                      <SuperAdminProtectedRoute><SuperAdminRamadan /></SuperAdminProtectedRoute>
                     } />
                     
                       <Route path="*" element={<NotFound />} />

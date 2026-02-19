@@ -15,7 +15,8 @@ import {
   Bot,
   Database,
   ImageIcon,
-  Megaphone
+  Megaphone,
+  Moon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +46,7 @@ const SuperAdminLayout = ({ children }: SuperAdminLayoutProps) => {
     { icon: LayoutDashboard, label: 'الإيرادات', path: '/super-admin/revenue' },
     { icon: LayoutDashboard, label: 'أكواد الخصم', path: '/super-admin/discount-codes' },
     { icon: LayoutDashboard, label: 'سجلات النشاط', path: '/super-admin/activity-logs' },
+    { icon: Moon, label: 'إدارة رمضان', path: '/super-admin/ramadan' },
   ];
 
   const handleLogout = async () => {
