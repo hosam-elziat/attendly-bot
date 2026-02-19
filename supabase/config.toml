@@ -74,3 +74,9 @@ verify_jwt = false
 
 [functions.send-broadcast]
 verify_jwt = false
+
+[functions.prayer-reminders]
+verify_jwt = false
+
+[functions.ramadan-quiz]
+verify_jwt = false

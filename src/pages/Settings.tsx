@@ -24,6 +24,8 @@ import {
 import { Globe, Moon, Sun, Clock, Building, Loader2, Calendar, Banknote, Scale, AlertTriangle, Timer, MapPin, UserPlus, ShieldCheck, Bell, BellRing, UserX, LogOut } from 'lucide-react';
 import AttendanceVerificationSettings from '@/components/settings/AttendanceVerificationSettings';
 import CompanyLocationsManager from '@/components/settings/CompanyLocationsManager';
+import PrayerReminderSettings from '@/components/settings/PrayerReminderSettings';
+import RamadanQuizSettings from '@/components/settings/RamadanQuizSettings';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1075,6 +1077,24 @@ const Settings = () => {
           transition={{ duration: 0.4, delay: 0.8 }}
         >
           <CompanyLocationsManager />
+        </motion.div>
+
+        {/* Prayer Reminder Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.9 }}
+        >
+          <PrayerReminderSettings company={company} onRefetch={refetch} />
+        </motion.div>
+
+        {/* Ramadan Quiz Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 1.0 }}
+        >
+          <RamadanQuizSettings company={company} onRefetch={refetch} />
         </motion.div>
       </div>
     </DashboardLayout>
