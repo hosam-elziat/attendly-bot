@@ -66,15 +66,42 @@ function getRandomMotivation(prayer: string): string {
   return motivations[Math.floor(Math.random() * motivations.length)]
 }
 
+function isRamadan(): boolean {
+  // Approximate Ramadan 2025: Feb 28 - Mar 30, 2026: Feb 18 - Mar 19
+  // For accuracy, we check a broad window. Admins control via enabled flag anyway.
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const day = now.getDate()
+  const year = now.getFullYear()
+  
+  if (year === 2025) return (month === 2 && day >= 28) || month === 3
+  if (year === 2026) return (month === 2 && day >= 17) || (month === 3 && day <= 20)
+  if (year === 2027) return (month === 2 && day >= 7) || (month === 3 && day <= 9)
+  return month === 3 // fallback
+}
+
 function buildPrayerMessage(prayer: string, prayerTime: string): string {
   const emoji = PRAYER_EMOJIS[prayer] || '🕌'
   const prayerName = PRAYER_NAMES[prayer] || prayer
   const motivation = getRandomMotivation(prayer)
   
-  return `${emoji} <b>تذكير بصلاة ${prayerName}</b>\n\n` +
+  let message = `${emoji} <b>تذكير بصلاة ${prayerName}</b>\n\n` +
     `🕐 موعد الأذان: ${prayerTime}\n\n` +
     `${motivation}\n\n` +
     `🤲 حان وقت صلاة ${prayerName}، لا تنسَ ذكر الله`
+
+  // Special Ramadan Maghrib message
+  if (prayer === 'maghrib' && isRamadan()) {
+    const iftarMessages = [
+      '\n\n🌙✨ <b>نتمنى لك صياماً مقبولاً وإفطاراً هنيئاً!</b>\n🍽️ اللهم لك صمت وعلى رزقك أفطرت',
+      '\n\n🌙✨ <b>مبارك عليك الإفطار!</b>\n🤲 اللهم إنك عفو تحب العفو فاعف عنا',
+      '\n\n🌙✨ <b>هنيئاً لك الإفطار، تقبّل الله صيامك!</b>\n🍽️ ذهب الظمأ وابتلّت العروق وثبت الأجر إن شاء الله',
+      '\n\n🌙✨ <b>أسأل الله أن يتقبل صيامك وقيامك!</b>\n🕊️ اللهم اجعلنا من عتقائك من النار في هذا الشهر',
+    ]
+    message += iftarMessages[Math.floor(Math.random() * iftarMessages.length)]
+  }
+
+  return message
 }
 
 const CITY_MAP: Record<string, { city: string; country: string }> = {
