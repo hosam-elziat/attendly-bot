@@ -23,13 +23,18 @@ async function sendTelegramMessage(botToken: string, chatId: string, text: strin
     if (keyboard) {
       body.reply_markup = JSON.stringify(keyboard)
     }
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
+    if (res.ok) {
+      return await res.json()
+    }
+    return null
   } catch (err) {
     console.error('Failed to send telegram message:', err)
+    return null
   }
 }
 
@@ -148,7 +153,7 @@ async function sendQuizToCompany(supabase: any, company: any, question: any, tod
   // Get all active employees with telegram
   const { data: employees } = await supabase
     .from('employees')
-    .select('telegram_chat_id')
+    .select('id, telegram_chat_id')
     .eq('company_id', company.id)
     .eq('is_active', true)
     .not('telegram_chat_id', 'is', null)
@@ -180,7 +185,23 @@ async function sendQuizToCompany(supabase: any, company: any, question: any, tod
 
   for (const emp of employees) {
     if (emp.telegram_chat_id) {
-      await sendTelegramMessage(bot.bot_token, emp.telegram_chat_id, quizMessage, keyboard)
+      const result = await sendTelegramMessage(bot.bot_token, emp.telegram_chat_id, quizMessage, keyboard)
+      
+      // Log to telegram_messages for chat history
+      try {
+        await supabase.from('telegram_messages').insert({
+          company_id: company.id,
+          employee_id: emp.id,
+          telegram_chat_id: emp.telegram_chat_id,
+          message_text: quizMessage.replace(/<[^>]*>/g, ''),
+          direction: 'outgoing',
+          message_type: 'quiz',
+          telegram_message_id: result?.result?.message_id || null,
+          metadata: { source: 'ramadan-quiz', keyboard, quiz_id: dailyQuiz.id, question_id: question.id }
+        })
+      } catch (logError) {
+        console.error('Failed to log quiz message:', logError)
+      }
     }
   }
 }

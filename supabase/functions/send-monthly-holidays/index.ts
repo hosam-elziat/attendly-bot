@@ -88,16 +88,18 @@ serve(async (req) => {
 
       // Determine who should receive the approval request
       let reviewerChatId: string | null = null;
+      let reviewerData: any = null;
 
       if (company.join_request_reviewer_type === 'specific_employee' && company.join_request_reviewer_id) {
-        // Get specific reviewer's telegram chat ID
+        // Get specific reviewer's telegram chat ID and id
         const { data: reviewer } = await supabase
           .from('employees')
-          .select('telegram_chat_id')
+          .select('id, telegram_chat_id, company_id')
           .eq('id', company.join_request_reviewer_id)
           .single();
         
         reviewerChatId = reviewer?.telegram_chat_id;
+        reviewerData = reviewer;
       } else {
         // Send to owner (get from profiles)
         const { data: ownerProfile } = await supabase
@@ -110,12 +112,13 @@ serve(async (req) => {
           // Try to find owner's employee record
           const { data: ownerEmployee } = await supabase
             .from('employees')
-            .select('telegram_chat_id')
+            .select('id, telegram_chat_id, company_id')
             .eq('user_id', company.owner_id)
             .eq('company_id', company.id)
             .single();
 
           reviewerChatId = ownerEmployee?.telegram_chat_id;
+          reviewerData = ownerEmployee;
         }
       }
 
@@ -146,7 +149,7 @@ serve(async (req) => {
 
       // Send message to reviewer
       try {
-        await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
+        const res = await fetch(`https://api.telegram.org/bot${bot.bot_token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -155,6 +158,26 @@ serve(async (req) => {
             parse_mode: 'HTML',
           }),
         });
+
+        if (res.ok && reviewerData) {
+          const result = await res.json();
+          // Log to telegram_messages for chat history
+          try {
+            await supabase.from('telegram_messages').insert({
+              company_id: reviewerData.company_id || company.id,
+              employee_id: reviewerData.id,
+              telegram_chat_id: reviewerChatId,
+              message_text: message.replace(/<[^>]*>/g, ''),
+              direction: 'outgoing',
+              message_type: 'notification',
+              telegram_message_id: result.result?.message_id || null,
+              metadata: { source: 'send-monthly-holidays' }
+            });
+          } catch (logError) {
+            console.error('Failed to log monthly holidays message:', logError);
+          }
+        }
+
         processedCount++;
       } catch (error) {
         console.error(`Failed to send to company ${company.name}:`, error);
