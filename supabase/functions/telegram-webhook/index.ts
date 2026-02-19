@@ -959,6 +959,124 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
       }
 
+      // ========== RAMADAN QUIZ ANSWER HANDLER ==========
+      if (callbackData.startsWith('quiz_answer_')) {
+        const parts = callbackData.replace('quiz_answer_', '').split('_')
+        const dailyQuizId = parts[0]
+        const selectedOption = parts[1]
+
+        // Check if already answered
+        const { data: existingAnswer } = await supabase
+          .from('ramadan_quiz_answers')
+          .select('id')
+          .eq('daily_quiz_id', dailyQuizId)
+          .eq('employee_id', employee.id)
+          .maybeSingle()
+
+        if (existingAnswer) {
+          await sendMessage(botToken, chatId, '⚠️ لقد أجبت على هذا السؤال من قبل!', getEmployeeKeyboard(managerPermissions))
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        // Get the quiz and question
+        const { data: dailyQuiz } = await supabase
+          .from('ramadan_daily_quiz')
+          .select('*, question:ramadan_quiz_questions(*)')
+          .eq('id', dailyQuizId)
+          .single()
+
+        if (!dailyQuiz || !dailyQuiz.is_active) {
+          await sendMessage(botToken, chatId, '⚠️ هذا السؤال لم يعد متاحاً', getEmployeeKeyboard(managerPermissions))
+          return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+        }
+
+        const question = dailyQuiz.question
+        const isCorrect = selectedOption === question.correct_option
+        
+        // Count correct answers so far
+        const { count: correctCount } = await supabase
+          .from('ramadan_quiz_answers')
+          .select('*', { count: 'exact', head: true })
+          .eq('daily_quiz_id', dailyQuizId)
+          .eq('is_correct', true)
+
+        let pointsAwarded = 0
+        let answerRank = (correctCount || 0) + 1
+
+        if (isCorrect) {
+          if (!dailyQuiz.first_correct_employee_id) {
+            // First correct answer - 100 points
+            pointsAwarded = 100
+            await supabase
+              .from('ramadan_daily_quiz')
+              .update({ first_correct_employee_id: employee.id })
+              .eq('id', dailyQuizId)
+          } else if (!dailyQuiz.second_correct_employee_id) {
+            // Second correct answer - 50 points
+            pointsAwarded = 50
+            await supabase
+              .from('ramadan_daily_quiz')
+              .update({ second_correct_employee_id: employee.id })
+              .eq('id', dailyQuizId)
+          } else {
+            // Other correct answers - 50 points
+            pointsAwarded = 50
+          }
+
+          // Award points
+          if (pointsAwarded > 0) {
+            await supabase.rpc('award_points', {
+              p_employee_id: employee.id,
+              p_company_id: companyId,
+              p_points: pointsAwarded,
+              p_event_type: 'ramadan_quiz',
+              p_source: 'ramadan_quiz',
+              p_description: `مسابقة رمضان - إجابة صحيحة (المركز ${answerRank})`,
+            })
+          }
+        }
+
+        // Save answer
+        await supabase.from('ramadan_quiz_answers').insert({
+          daily_quiz_id: dailyQuizId,
+          employee_id: employee.id,
+          company_id: companyId,
+          selected_option: selectedOption,
+          is_correct: isCorrect,
+          points_awarded: pointsAwarded,
+          answer_rank: isCorrect ? answerRank : null,
+        })
+
+        const optionLabels: Record<string, string> = { a: 'أ', b: 'ب', c: 'ج', d: 'د' }
+        const correctLabel = optionLabels[question.correct_option]
+        const correctText = question[`option_${question.correct_option}`]
+
+        if (isCorrect) {
+          let rankMsg = ''
+          if (answerRank === 1) rankMsg = '🥇 أنت أول من أجاب صح!'
+          else if (answerRank === 2) rankMsg = '🥈 أنت ثاني من أجاب صح!'
+          else rankMsg = `✨ ترتيبك: #${answerRank}`
+
+          await sendMessage(botToken, chatId,
+            `✅ <b>إجابة صحيحة!</b> 🎉\n\n` +
+            `${rankMsg}\n` +
+            `⭐ +${pointsAwarded} نقطة\n\n` +
+            `✅ الإجابة: (${correctLabel}) ${correctText}`,
+            getEmployeeKeyboard(managerPermissions)
+          )
+        } else {
+          await sendMessage(botToken, chatId,
+            `❌ <b>إجابة خاطئة</b>\n\n` +
+            `الإجابة الصحيحة: (${correctLabel}) ${correctText}\n\n` +
+            `💪 حاول المرة الجاية!`,
+            getEmployeeKeyboard(managerPermissions)
+          )
+        }
+
+        return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders })
+      }
+      // ========== END RAMADAN QUIZ ==========
+
       switch (callbackData) {
         case 'check_in':
           // FIRST: Check if employee is marked as absent today - CANNOT check in

@@ -883,6 +883,11 @@ export type Database = {
           overtime_multiplier: number | null
           owner_id: string
           phone: string | null
+          prayer_reminder_minutes_before: number | null
+          prayer_reminders_enabled: boolean | null
+          prayer_reminders_prayers: string[] | null
+          ramadan_quiz_auto_in_ramadan: boolean | null
+          ramadan_quiz_enabled: boolean | null
           rewards_enabled: boolean | null
           suspended_at: string | null
           suspended_by: string | null
@@ -940,6 +945,11 @@ export type Database = {
           overtime_multiplier?: number | null
           owner_id: string
           phone?: string | null
+          prayer_reminder_minutes_before?: number | null
+          prayer_reminders_enabled?: boolean | null
+          prayer_reminders_prayers?: string[] | null
+          ramadan_quiz_auto_in_ramadan?: boolean | null
+          ramadan_quiz_enabled?: boolean | null
           rewards_enabled?: boolean | null
           suspended_at?: string | null
           suspended_by?: string | null
@@ -997,6 +1007,11 @@ export type Database = {
           overtime_multiplier?: number | null
           owner_id?: string
           phone?: string | null
+          prayer_reminder_minutes_before?: number | null
+          prayer_reminders_enabled?: boolean | null
+          prayer_reminders_prayers?: string[] | null
+          ramadan_quiz_auto_in_ramadan?: boolean | null
+          ramadan_quiz_enabled?: boolean | null
           rewards_enabled?: boolean | null
           suspended_at?: string | null
           suspended_by?: string | null
@@ -2956,6 +2971,171 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ramadan_daily_quiz: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          first_correct_employee_id: string | null
+          id: string
+          is_active: boolean | null
+          question_id: string
+          quiz_date: string
+          second_correct_employee_id: string | null
+          sent_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          first_correct_employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          question_id: string
+          quiz_date?: string
+          second_correct_employee_id?: string | null
+          sent_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          first_correct_employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          question_id?: string
+          quiz_date?: string
+          second_correct_employee_id?: string | null
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ramadan_daily_quiz_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ramadan_daily_quiz_first_correct_employee_id_fkey"
+            columns: ["first_correct_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ramadan_daily_quiz_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "ramadan_quiz_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ramadan_daily_quiz_second_correct_employee_id_fkey"
+            columns: ["second_correct_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ramadan_quiz_answers: {
+        Row: {
+          answer_rank: number | null
+          answered_at: string | null
+          company_id: string
+          daily_quiz_id: string
+          employee_id: string
+          id: string
+          is_correct: boolean
+          points_awarded: number | null
+          selected_option: string
+        }
+        Insert: {
+          answer_rank?: number | null
+          answered_at?: string | null
+          company_id: string
+          daily_quiz_id: string
+          employee_id: string
+          id?: string
+          is_correct: boolean
+          points_awarded?: number | null
+          selected_option: string
+        }
+        Update: {
+          answer_rank?: number | null
+          answered_at?: string | null
+          company_id?: string
+          daily_quiz_id?: string
+          employee_id?: string
+          id?: string
+          is_correct?: boolean
+          points_awarded?: number | null
+          selected_option?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ramadan_quiz_answers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ramadan_quiz_answers_daily_quiz_id_fkey"
+            columns: ["daily_quiz_id"]
+            isOneToOne: false
+            referencedRelation: "ramadan_daily_quiz"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ramadan_quiz_answers_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ramadan_quiz_questions: {
+        Row: {
+          category: string | null
+          correct_option: string
+          created_at: string | null
+          day_number: number | null
+          difficulty: string | null
+          id: string
+          option_a: string
+          option_b: string
+          option_c: string
+          option_d: string
+          question_text: string
+        }
+        Insert: {
+          category?: string | null
+          correct_option: string
+          created_at?: string | null
+          day_number?: number | null
+          difficulty?: string | null
+          id?: string
+          option_a: string
+          option_b: string
+          option_c: string
+          option_d: string
+          question_text: string
+        }
+        Update: {
+          category?: string | null
+          correct_option?: string
+          created_at?: string | null
+          day_number?: number | null
+          difficulty?: string | null
+          id?: string
+          option_a?: string
+          option_b?: string
+          option_c?: string
+          option_d?: string
+          question_text?: string
+        }
+        Relationships: []
       }
       rate_limits: {
         Row: {
