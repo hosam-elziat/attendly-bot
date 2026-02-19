@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Plus, Pencil, Trash2, Send, RefreshCw, Search, Moon, Clock } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Send, RefreshCw, Search, Moon, Clock, MapPin, User } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface QuizQuestion {
   id: string;
@@ -43,6 +44,13 @@ const SuperAdminRamadan = () => {
     category: 'دينية',
   });
   const [bulkLoading, setBulkLoading] = useState<string | null>(null);
+  
+  // Prayer test state
+  const [testCountry, setTestCountry] = useState('EG');
+  const [testEmployeeId, setTestEmployeeId] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [prayerTestResult, setPrayerTestResult] = useState<any>(null);
+  const [prayerTestLoading, setPrayerTestLoading] = useState(false);
 
   // Fetch questions
   const { data: questions = [], isLoading: loadingQuestions } = useQuery({
@@ -70,6 +78,27 @@ const SuperAdminRamadan = () => {
       return data;
     },
   });
+
+  // Fetch employees with telegram
+  const { data: allEmployees = [] } = useQuery({
+    queryKey: ['sa-employees-telegram'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, full_name, email, telegram_chat_id, company:companies(id, name, country_code)')
+        .eq('is_active', true)
+        .not('telegram_chat_id', 'is', null)
+        .order('full_name')
+        .limit(500);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const filteredEmployees = allEmployees.filter((emp: any) =>
+    emp.full_name?.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+    (emp.company as any)?.name?.toLowerCase().includes(employeeSearch.toLowerCase())
+  );
 
   const filteredQuestions = useMemo(() => {
     if (!search.trim()) return questions;
@@ -222,17 +251,29 @@ const SuperAdminRamadan = () => {
     }
   };
 
-  // Test prayer reminders
-  const testPrayer = async () => {
-    setBulkLoading('prayer-test');
+  // Test prayer reminders - specific employee
+  const testPrayerForEmployee = async () => {
+    setPrayerTestLoading(true);
+    setPrayerTestResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke('prayer-reminders');
+      const { data, error } = await supabase.functions.invoke('prayer-reminders', {
+        body: {
+          test_mode: true,
+          employee_id: testEmployeeId || undefined,
+          country_code: testCountry,
+        },
+      });
       if (error) throw error;
-      toast.success(`تم اختبار تذكير الصلاة - ${data?.remindersSent || 0} تذكير`);
+      setPrayerTestResult(data);
+      if (data?.sent?.ok) {
+        toast.success('تم إرسال اختبار تذكير الصلاة بنجاح');
+      } else if (data?.prayer_times) {
+        toast.success('تم جلب مواقيت الصلاة');
+      }
     } catch (e: any) {
       toast.error('فشل: ' + e.message);
     } finally {
-      setBulkLoading(null);
+      setPrayerTestLoading(false);
     }
   };
 
@@ -302,10 +343,6 @@ const SuperAdminRamadan = () => {
                 {bulkLoading === 'test' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 إرسال سؤال تجريبي
               </Button>
-              <Button onClick={testPrayer} disabled={!!bulkLoading} variant="secondary" className="gap-2">
-                {bulkLoading === 'prayer-test' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-                اختبار تذكير الصلاة
-              </Button>
               <Button onClick={regenerateQuestions} disabled={!!bulkLoading} variant="destructive" className="gap-2">
                 {bulkLoading === 'regen' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 إعادة إنشاء الأسئلة
@@ -314,11 +351,156 @@ const SuperAdminRamadan = () => {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="questions" className="w-full">
+        <Tabs defaultValue="prayer-test" className="w-full">
           <TabsList className="bg-slate-900 border border-slate-800">
+            <TabsTrigger value="prayer-test">🕌 اختبار الصلاة</TabsTrigger>
             <TabsTrigger value="questions">📝 الأسئلة ({questions.length})</TabsTrigger>
             <TabsTrigger value="companies">🏢 حالة الشركات</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="prayer-test" className="space-y-4">
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <MapPin className="w-5 h-5" /> اختبار مواقيت الصلاة وإرسال تذكير
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  اختر الدولة لعرض مواقيت الصلاة، واختر موظف لإرسال رسالة اختبارية
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Country selector */}
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">اختر الدولة</Label>
+                    <Select value={testCountry} onValueChange={setTestCountry}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EG">🇪🇬 مصر</SelectItem>
+                        <SelectItem value="SA">🇸🇦 السعودية</SelectItem>
+                        <SelectItem value="AE">🇦🇪 الإمارات</SelectItem>
+                        <SelectItem value="KW">🇰🇼 الكويت</SelectItem>
+                        <SelectItem value="QA">🇶🇦 قطر</SelectItem>
+                        <SelectItem value="BH">🇧🇭 البحرين</SelectItem>
+                        <SelectItem value="OM">🇴🇲 عمان</SelectItem>
+                        <SelectItem value="JO">🇯🇴 الأردن</SelectItem>
+                        <SelectItem value="LB">🇱🇧 لبنان</SelectItem>
+                        <SelectItem value="IQ">🇮🇶 العراق</SelectItem>
+                        <SelectItem value="SY">🇸🇾 سوريا</SelectItem>
+                        <SelectItem value="PS">🇵🇸 فلسطين</SelectItem>
+                        <SelectItem value="YE">🇾🇪 اليمن</SelectItem>
+                        <SelectItem value="LY">🇱🇾 ليبيا</SelectItem>
+                        <SelectItem value="TN">🇹🇳 تونس</SelectItem>
+                        <SelectItem value="DZ">🇩🇿 الجزائر</SelectItem>
+                        <SelectItem value="MA">🇲🇦 المغرب</SelectItem>
+                        <SelectItem value="SD">🇸🇩 السودان</SelectItem>
+                        <SelectItem value="TR">🇹🇷 تركيا</SelectItem>
+                        <SelectItem value="PK">🇵🇰 باكستان</SelectItem>
+                        <SelectItem value="MY">🇲🇾 ماليزيا</SelectItem>
+                        <SelectItem value="ID">🇮🇩 إندونيسيا</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Employee selector */}
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">اختر موظف لإرسال اختبار (اختياري)</Label>
+                    <div className="relative">
+                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        value={employeeSearch}
+                        onChange={(e) => setEmployeeSearch(e.target.value)}
+                        placeholder="ابحث عن موظف..."
+                        className="ps-9 bg-slate-800 border-slate-700 text-white"
+                      />
+                    </div>
+                    <ScrollArea className="h-[200px] bg-slate-800 rounded-lg border border-slate-700">
+                      <div className="p-2 space-y-1">
+                        {filteredEmployees.slice(0, 50).map((emp: any) => (
+                          <div
+                            key={emp.id}
+                            onClick={() => {
+                              setTestEmployeeId(emp.id);
+                              setTestCountry((emp.company as any)?.country_code || testCountry);
+                            }}
+                            className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                              testEmployeeId === emp.id
+                                ? 'bg-primary/20 border border-primary/40'
+                                : 'hover:bg-slate-700'
+                            }`}
+                          >
+                            <User className="w-4 h-4 text-slate-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{emp.full_name}</p>
+                              <p className="text-xs text-slate-400 truncate">{(emp.company as any)?.name} • {(emp.company as any)?.country_code || '-'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    {testEmployeeId && (
+                      <p className="text-xs text-green-400">
+                        ✅ تم اختيار: {allEmployees.find((e: any) => e.id === testEmployeeId)?.full_name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={testPrayerForEmployee}
+                    disabled={prayerTestLoading}
+                    className="gap-2"
+                  >
+                    {prayerTestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+                    {testEmployeeId ? 'جلب المواقيت وإرسال اختبار' : 'جلب مواقيت الصلاة فقط'}
+                  </Button>
+                  {testEmployeeId && (
+                    <Button variant="ghost" onClick={() => setTestEmployeeId('')} className="text-slate-400">
+                      إلغاء اختيار الموظف
+                    </Button>
+                  )}
+                </div>
+
+                {/* Prayer times result */}
+                {prayerTestResult?.prayer_times && (
+                  <Card className="bg-slate-800 border-slate-700">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-white text-lg">
+                        🕌 مواقيت الصلاة - {testCountry}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                        {Object.entries(prayerTestResult.prayer_times).map(([key, time]: [string, any]) => {
+                          const names: Record<string, string> = { fajr: 'الفجر', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
+                          const emojis: Record<string, string> = { fajr: '🌅', dhuhr: '☀️', asr: '🌤️', maghrib: '🌇', isha: '🌙' };
+                          return (
+                            <div key={key} className="bg-slate-900 rounded-lg p-3 text-center">
+                              <p className="text-2xl">{emojis[key]}</p>
+                              <p className="text-sm text-slate-300 mt-1">{names[key]}</p>
+                              <p className="text-lg font-bold text-white mt-1">{time}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {prayerTestResult.sent && (
+                        <div className={`mt-4 p-3 rounded-lg ${prayerTestResult.sent.ok ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                          {prayerTestResult.sent.ok ? (
+                            <p className="text-green-400 text-sm">✅ تم إرسال رسالة الاختبار بنجاح عبر التيليجرام</p>
+                          ) : (
+                            <p className="text-red-400 text-sm">❌ {prayerTestResult.sent.error || 'فشل الإرسال'}</p>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="questions" className="space-y-4">
             <div className="flex items-center gap-3">

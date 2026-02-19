@@ -6,7 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Prayer names in Arabic
 const PRAYER_NAMES: Record<string, string> = {
   fajr: 'الفجر',
   dhuhr: 'الظهر',
@@ -23,54 +22,45 @@ const PRAYER_EMOJIS: Record<string, string> = {
   isha: '🌙',
 }
 
+const CITY_MAP: Record<string, { city: string; country: string }> = {
+  'EG': { city: 'Cairo', country: 'Egypt' },
+  'SA': { city: 'Riyadh', country: 'Saudi Arabia' },
+  'AE': { city: 'Dubai', country: 'UAE' },
+  'KW': { city: 'Kuwait City', country: 'Kuwait' },
+  'QA': { city: 'Doha', country: 'Qatar' },
+  'BH': { city: 'Manama', country: 'Bahrain' },
+  'OM': { city: 'Muscat', country: 'Oman' },
+  'JO': { city: 'Amman', country: 'Jordan' },
+  'LB': { city: 'Beirut', country: 'Lebanon' },
+  'IQ': { city: 'Baghdad', country: 'Iraq' },
+  'SY': { city: 'Damascus', country: 'Syria' },
+  'PS': { city: 'Jerusalem', country: 'Palestine' },
+  'YE': { city: 'Sanaa', country: 'Yemen' },
+  'LY': { city: 'Tripoli', country: 'Libya' },
+  'TN': { city: 'Tunis', country: 'Tunisia' },
+  'DZ': { city: 'Algiers', country: 'Algeria' },
+  'MA': { city: 'Rabat', country: 'Morocco' },
+  'SD': { city: 'Khartoum', country: 'Sudan' },
+  'TR': { city: 'Istanbul', country: 'Turkey' },
+  'PK': { city: 'Islamabad', country: 'Pakistan' },
+  'MY': { city: 'Kuala Lumpur', country: 'Malaysia' },
+  'ID': { city: 'Jakarta', country: 'Indonesia' },
+}
+
 async function getPrayerTimes(countryCode: string, date: Date): Promise<Record<string, string> | null> {
   try {
-    // Use Aladhan API for prayer times
     const day = date.getDate()
     const month = date.getMonth() + 1
     const year = date.getFullYear()
-    
-    // Map country codes to major cities for more accurate times
-    const cityMap: Record<string, { city: string; country: string }> = {
-      'EG': { city: 'Cairo', country: 'Egypt' },
-      'SA': { city: 'Riyadh', country: 'Saudi Arabia' },
-      'AE': { city: 'Dubai', country: 'UAE' },
-      'KW': { city: 'Kuwait City', country: 'Kuwait' },
-      'QA': { city: 'Doha', country: 'Qatar' },
-      'BH': { city: 'Manama', country: 'Bahrain' },
-      'OM': { city: 'Muscat', country: 'Oman' },
-      'JO': { city: 'Amman', country: 'Jordan' },
-      'LB': { city: 'Beirut', country: 'Lebanon' },
-      'IQ': { city: 'Baghdad', country: 'Iraq' },
-      'SY': { city: 'Damascus', country: 'Syria' },
-      'PS': { city: 'Jerusalem', country: 'Palestine' },
-      'YE': { city: 'Sanaa', country: 'Yemen' },
-      'LY': { city: 'Tripoli', country: 'Libya' },
-      'TN': { city: 'Tunis', country: 'Tunisia' },
-      'DZ': { city: 'Algiers', country: 'Algeria' },
-      'MA': { city: 'Rabat', country: 'Morocco' },
-      'SD': { city: 'Khartoum', country: 'Sudan' },
-      'MR': { city: 'Nouakchott', country: 'Mauritania' },
-      'SO': { city: 'Mogadishu', country: 'Somalia' },
-      'DJ': { city: 'Djibouti', country: 'Djibouti' },
-      'KM': { city: 'Moroni', country: 'Comoros' },
-      'TR': { city: 'Istanbul', country: 'Turkey' },
-      'PK': { city: 'Islamabad', country: 'Pakistan' },
-      'MY': { city: 'Kuala Lumpur', country: 'Malaysia' },
-      'ID': { city: 'Jakarta', country: 'Indonesia' },
-    }
-    
-    const location = cityMap[countryCode] || { city: 'Mecca', country: 'Saudi Arabia' }
+    const location = CITY_MAP[countryCode] || { city: 'Mecca', country: 'Saudi Arabia' }
     
     const resp = await fetch(
       `https://api.aladhan.com/v1/timingsByCity/${day}-${month}-${year}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=5`
     )
     
     if (!resp.ok) return null
-    
     const data = await resp.json()
     const timings = data?.data?.timings
-    
     if (!timings) return null
     
     return {
@@ -88,17 +78,16 @@ async function getPrayerTimes(countryCode: string, date: Date): Promise<Record<s
 
 async function sendTelegramMessage(botToken: string, chatId: string, text: string) {
   try {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-      }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
     })
+    const result = await res.json()
+    return result
   } catch (err) {
     console.error('Failed to send telegram message:', err)
+    return null
   }
 }
 
@@ -113,7 +102,76 @@ serve(async (req) => {
   )
 
   try {
-    // Get all companies with prayer reminders enabled
+    let body: any = {}
+    try { body = await req.json() } catch {}
+
+    const testMode = body.test_mode === true
+    const testEmployeeId = body.employee_id
+    const testCountryCode = body.country_code
+
+    // TEST MODE: fetch prayer times for a country and send to a specific employee
+    if (testMode) {
+      const countryCode = testCountryCode || 'EG'
+      const now = new Date()
+      const prayerTimes = await getPrayerTimes(countryCode, now)
+      
+      if (!prayerTimes) {
+        return new Response(JSON.stringify({ ok: false, error: 'Failed to fetch prayer times', country: countryCode }), { headers: corsHeaders })
+      }
+
+      // If employee_id provided, send a test message
+      let sentResult = null
+      if (testEmployeeId) {
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('telegram_chat_id, company_id, full_name')
+          .eq('id', testEmployeeId)
+          .single()
+
+        if (emp?.telegram_chat_id) {
+          // Get bot token for this employee's company
+          const { data: bot } = await supabase
+            .from('telegram_bots')
+            .select('bot_token')
+            .eq('assigned_company_id', emp.company_id)
+            .single()
+
+          if (bot?.bot_token) {
+            // Find next prayer
+            const location = CITY_MAP[countryCode] || { city: 'Mecca', country: 'Saudi Arabia' }
+            const timezone = countryCode === 'EG' ? 'Africa/Cairo' : countryCode === 'SA' ? 'Asia/Riyadh' : 'Africa/Cairo'
+            
+            // Send all prayer times as test
+            let message = `🕌 <b>اختبار تذكير الصلاة</b>\n`
+            message += `📍 ${location.city}, ${location.country}\n\n`
+            
+            for (const [key, time] of Object.entries(prayerTimes)) {
+              const emoji = PRAYER_EMOJIS[key] || '🕌'
+              const name = PRAYER_NAMES[key] || key
+              message += `${emoji} ${name}: <b>${time}</b>\n`
+            }
+            
+            message += `\n✅ هذه رسالة اختبارية`
+
+            sentResult = await sendTelegramMessage(bot.bot_token, emp.telegram_chat_id, message)
+          } else {
+            sentResult = { error: 'No bot token found for company' }
+          }
+        } else {
+          sentResult = { error: 'Employee has no telegram_chat_id' }
+        }
+      }
+
+      return new Response(JSON.stringify({
+        ok: true,
+        test_mode: true,
+        country: countryCode,
+        prayer_times: prayerTimes,
+        sent: sentResult,
+      }), { headers: corsHeaders })
+    }
+
+    // NORMAL MODE: check prayer times and send reminders
     const { data: companies, error } = await supabase
       .from('companies')
       .select('id, name, country_code, prayer_reminders_enabled, prayer_reminders_prayers, prayer_reminder_minutes_before, timezone')
@@ -132,7 +190,6 @@ serve(async (req) => {
       const minutesBefore = company.prayer_reminder_minutes_before || 10
       const enabledPrayers = company.prayer_reminders_prayers || ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']
 
-      // Get current time in company timezone
       const now = new Date()
       const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone: timezone,
@@ -145,11 +202,9 @@ serve(async (req) => {
       const currentMinute = parseInt(getValue('minute'))
       const currentTotalMinutes = currentHour * 60 + currentMinute
 
-      // Get prayer times for today
       const prayerTimes = await getPrayerTimes(countryCode, now)
       if (!prayerTimes) continue
 
-      // Check which prayer is coming up
       for (const prayer of enabledPrayers) {
         const prayerTime = prayerTimes[prayer]
         if (!prayerTime) continue
@@ -158,9 +213,7 @@ serve(async (req) => {
         const prayerTotalMinutes = pH * 60 + pM
         const diffMinutes = prayerTotalMinutes - currentTotalMinutes
 
-        // Send reminder if within the window (e.g., 10 minutes before)
         if (diffMinutes >= 0 && diffMinutes <= minutesBefore) {
-          // Get bot for this company
           const { data: bot } = await supabase
             .from('telegram_bots')
             .select('bot_token')
@@ -169,7 +222,6 @@ serve(async (req) => {
 
           if (!bot?.bot_token) continue
 
-          // Get all active employees with telegram
           const { data: employees } = await supabase
             .from('employees')
             .select('telegram_chat_id')
