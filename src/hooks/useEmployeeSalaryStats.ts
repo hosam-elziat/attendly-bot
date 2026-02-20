@@ -192,21 +192,21 @@ export const useEmployeeSalaryStats = (
       overtimeAmount = overtimeHours * regularHourlyRate * overtimeMultiplier;
     }
 
-    // Calculate late deductions (not for freelancers)
+    // Calculate late deductions display (informational, from actual attendance data)
+    // Note: real deductions are tracked in salary_adjustments (is_auto_generated=true)
     let lateDeductionAmount = 0;
     if (!isFreelancer && company) {
       const regularHourlyRate = salaryType === 'monthly' 
         ? baseSalary / 30 / (expectedDailyMinutes / 60)
         : baseSalary / (expectedDailyMinutes / 60);
-      // Simplified: deduct based on late minutes
       lateDeductionAmount = (totalLateMinutes / 60) * regularHourlyRate * 0.5;
     }
 
-    // Sum adjustments (bonuses/deductions from manager apply to everyone including freelancers)
+    // Sum adjustments from salary_adjustments table (source of truth for bonuses/deductions)
     const totalBonuses = adjustments.reduce((sum, adj) => sum + Number(adj.bonus || 0), 0);
-    const totalAdjDeductions = adjustments.reduce((sum, adj) => sum + Number(adj.deduction || 0), 0);
+    const totalDeductions = adjustments.reduce((sum, adj) => sum + Number(adj.deduction || 0), 0);
 
-    const totalDeductions = lateDeductionAmount + totalAdjDeductions;
+    // Net salary: earned + overtime + bonuses - deductions (all from salary_adjustments)
     const netSalary = earnedSalary + overtimeAmount + totalBonuses - totalDeductions;
     const deductionPercentage = earnedSalary > 0 ? (totalDeductions / earnedSalary) * 100 : 0;
 

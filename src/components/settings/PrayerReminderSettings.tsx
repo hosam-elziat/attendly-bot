@@ -4,7 +4,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { NumberInput } from '@/components/ui/number-input';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -25,14 +24,12 @@ const PRAYERS = [
 const PrayerReminderSettings = ({ company, onRefetch }: PrayerReminderSettingsProps) => {
   const [enabled, setEnabled] = useState(false);
   const [selectedPrayers, setSelectedPrayers] = useState<string[]>(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']);
-  const [minutesBefore, setMinutesBefore] = useState(10);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (company) {
       setEnabled((company as any).prayer_reminders_enabled || false);
       setSelectedPrayers((company as any).prayer_reminders_prayers || ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']);
-      setMinutesBefore((company as any).prayer_reminder_minutes_before || 10);
     }
   }, [company]);
 
@@ -53,7 +50,6 @@ const PrayerReminderSettings = ({ company, onRefetch }: PrayerReminderSettingsPr
         .update({
           prayer_reminders_enabled: enabled,
           prayer_reminders_prayers: selectedPrayers,
-          prayer_reminder_minutes_before: minutesBefore,
         } as any)
         .eq('id', company.id);
 
@@ -84,7 +80,7 @@ const PrayerReminderSettings = ({ company, onRefetch }: PrayerReminderSettingsPr
             id="prayer-toggle"
             checked={enabled}
             onCheckedChange={setEnabled}
-            className="data-[state=checked]:bg-green-500"
+            className="data-[state=checked]:bg-success"
           />
         </div>
 
@@ -115,14 +111,8 @@ const PrayerReminderSettings = ({ company, onRefetch }: PrayerReminderSettingsPr
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>التذكير قبل الأذان بـ (دقائق)</Label>
-              <NumberInput
-                min={1}
-                max={30}
-                value={minutesBefore}
-                onChange={setMinutesBefore}
-              />
+            <div className="p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
+              🕐 سيتم إرسال التذكير عند حلول وقت الأذان بالضبط
             </div>
           </>
         )}

@@ -47,7 +47,7 @@ import {
   Save,
   Hourglass
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, differenceInMinutes } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import AdjustmentsList from '@/components/salaries/AdjustmentsList';
 import EditDeductionDialog from '@/components/salaries/EditDeductionDialog';
@@ -415,23 +415,43 @@ const EmployeeDetails = () => {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {employeeAttendance.map((log) => (
-                        <div key={log.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                          <div>
-                            <p className="font-medium">{format(parseISO(log.date), 'EEEE، d MMMM', { locale: ar })}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {log.check_in_time ? format(parseISO(log.check_in_time), 'HH:mm') : '—'} 
-                              {' → '} 
-                              {log.check_out_time ? format(parseISO(log.check_out_time), 'HH:mm') : '—'}
-                            </p>
+                      {employeeAttendance.map((log) => {
+                        const getStatusBadge = (status: string | null) => {
+                          switch (status) {
+                            case 'checked_in':
+                              return <Badge className="bg-primary text-primary-foreground">{t('attendance.checkedIn')}</Badge>;
+                            case 'checked_out':
+                              return <Badge className="bg-success text-success-foreground">{t('attendance.checkedOut')}</Badge>;
+                            case 'on_break':
+                              return <Badge className="bg-warning text-warning-foreground">{t('attendance.onBreak')}</Badge>;
+                            case 'absent':
+                              return <Badge variant="destructive">غائب</Badge>;
+                            default:
+                              return <Badge variant="secondary">{status || '—'}</Badge>;
+                          }
+                        };
+                        const workedMinutes = log.check_in_time && log.check_out_time
+                          ? Math.round(differenceInMinutes(parseISO(log.check_out_time), parseISO(log.check_in_time)))
+                          : null;
+                        const workedHours = workedMinutes !== null
+                          ? `${Math.floor(workedMinutes / 60)}ساعة ${workedMinutes % 60}د`
+                          : null;
+                        return (
+                          <div key={log.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                            <div>
+                              <p className="font-medium">{format(parseISO(log.date), 'EEEE، d MMMM', { locale: ar })}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {log.check_in_time ? format(parseISO(log.check_in_time), 'HH:mm') : '—'}
+                                {' → '}
+                                {log.check_out_time ? format(parseISO(log.check_out_time), 'HH:mm') : '—'}
+                                {workedHours && <span className="ms-2 text-xs text-primary">({workedHours})</span>}
+                              </p>
+                              {log.notes && <p className="text-xs text-muted-foreground mt-1">{log.notes}</p>}
+                            </div>
+                            {getStatusBadge(log.status)}
                           </div>
-                          <Badge variant={log.status === 'checked_out' ? 'default' : 'secondary'}>
-                            {log.status === 'checked_in' ? t('attendance.checkedIn') : 
-                             log.status === 'checked_out' ? t('attendance.checkedOut') : 
-                             log.status === 'on_break' ? t('attendance.onBreak') : log.status}
-                          </Badge>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
