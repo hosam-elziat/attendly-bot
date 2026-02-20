@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -55,12 +55,16 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
   const [checkOutTime, setCheckOutTime] = useState('');
   const [status, setStatus] = useState('');
 
-  const handleOpen = (isOpen: boolean) => {
-    if (isOpen && record) {
+  // Sync state whenever dialog opens or record changes
+  useEffect(() => {
+    if (open && record) {
       setCheckInTime(extractEgyptTime(record.check_in_time));
       setCheckOutTime(extractEgyptTime(record.check_out_time));
       setStatus(record.status || 'checked_in');
     }
+  }, [open, record]);
+
+  const handleOpen = (isOpen: boolean) => {
     onOpenChange(isOpen);
   };
 
