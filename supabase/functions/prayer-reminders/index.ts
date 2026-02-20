@@ -257,7 +257,6 @@ serve(async (req) => {
     for (const company of companies) {
       const countryCode = company.country_code || 'EG'
       const timezone = company.timezone || 'Africa/Cairo'
-      const minutesBefore = company.prayer_reminder_minutes_before || 10
       const enabledPrayers = company.prayer_reminders_prayers || ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']
 
       const now = new Date()
@@ -281,10 +280,9 @@ serve(async (req) => {
 
         const [pH, pM] = prayerTime.split(':').map(Number)
         const prayerTotalMinutes = pH * 60 + pM
-        const diffMinutes = prayerTotalMinutes - currentTotalMinutes
 
-        // Send reminder only for THIS specific prayer when it's within the window
-        if (diffMinutes >= 0 && diffMinutes <= minutesBefore) {
+        // Send reminder only at the exact prayer minute (window of 1 minute)
+        if (prayerTotalMinutes === currentTotalMinutes) {
           const { data: bot } = await supabase
             .from('telegram_bots')
             .select('bot_token')
