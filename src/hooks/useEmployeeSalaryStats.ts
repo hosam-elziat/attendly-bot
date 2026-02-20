@@ -138,14 +138,24 @@ export const useEmployeeSalaryStats = (
     let totalOvertimeMinutes = 0;
 
     attendanceLogs.forEach(log => {
+      // Skip absent logs entirely - they don't count as work days
+      if (log.status === 'absent') return;
+
       if (log.check_in_time && log.check_out_time) {
-        workDays++;
         const checkIn = parseISO(log.check_in_time);
         const checkOut = parseISO(log.check_out_time);
+
+        // Cap checkout to same-day end to avoid next-day overflow
+        const sameDayEnd = new Date(checkIn);
+        sameDayEnd.setHours(23, 59, 59, 999);
+        const effectiveCheckOut = checkOut > sameDayEnd ? sameDayEnd : checkOut;
+
+        workDays++;
+
         // Freelancers: no break subtraction (paid for raw hours worked)
         const workedMinutes = isFreelancer
-          ? differenceInMinutes(checkOut, checkIn)
-          : differenceInMinutes(checkOut, checkIn) - breakMinutes;
+          ? differenceInMinutes(effectiveCheckOut, checkIn)
+          : differenceInMinutes(effectiveCheckOut, checkIn) - breakMinutes;
         totalWorkedMinutes += Math.max(0, workedMinutes);
 
         // For freelancers, skip late/overtime calculations - they're paid purely by hours
@@ -163,7 +173,10 @@ export const useEmployeeSalaryStats = (
           }
         }
       } else if (log.check_in_time) {
-        workDays++;
+        // Only count as work day if still checked in (not yet checked out)
+        if (log.status === 'checked_in' || log.status === 'on_break') {
+          workDays++;
+        }
       }
     });
 
