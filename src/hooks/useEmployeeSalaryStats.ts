@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSuperAdminCompanyAccess } from '@/hooks/useSuperAdminCompanyAccess';
 import { useCompany } from './useCompany';
-import { startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, differenceInMinutes, subMonths } from 'date-fns';
+import { startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, differenceInMinutes, subMonths, format } from 'date-fns';
 
 export type SalaryFilterPeriod = 'this_month' | 'last_month' | 'this_year' | 'all_time';
 
@@ -67,8 +67,8 @@ export const useEmployeeSalaryStats = (
         .select('*')
         .eq('employee_id', employeeId)
         .eq('company_id', effectiveCompanyId)
-        .gte('date', dateRange.start.toISOString().split('T')[0])
-        .lte('date', dateRange.end.toISOString().split('T')[0]);
+        .gte('date', format(dateRange.start, 'yyyy-MM-dd'))
+        .lte('date', format(dateRange.end, 'yyyy-MM-dd'));
       
       if (error) throw error;
       return data || [];
@@ -87,8 +87,8 @@ export const useEmployeeSalaryStats = (
         .select('*')
         .eq('employee_id', employeeId)
         .eq('company_id', effectiveCompanyId)
-        .gte('month', dateRange.start.toISOString().split('T')[0])
-        .lte('month', dateRange.end.toISOString().split('T')[0]);
+        .gte('month', format(dateRange.start, 'yyyy-MM-dd'))
+        .lte('month', format(dateRange.end, 'yyyy-MM-dd'));
       
       if (error) throw error;
       return data || [];
