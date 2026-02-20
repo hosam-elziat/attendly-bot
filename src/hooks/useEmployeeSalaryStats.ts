@@ -194,9 +194,10 @@ export const useEmployeeSalaryStats = (
       earnedSalary = baseSalary * workDays;
     }
 
-    // Calculate overtime amount (not for freelancers - they're already paid for all hours)
-    let overtimeAmount = 0;
+    // Calculate overtime hours for display purposes only (informational)
+    // Actual overtime bonuses come from salary_adjustments table (source of truth)
     let overtimeHours = 0;
+    let overtimeAmount = 0; // Kept for display only, NOT added to netSalary
     if (!isFreelancer) {
       const regularHourlyRate = salaryType === 'monthly' 
         ? baseSalary / 30 / (expectedDailyMinutes / 60)
@@ -205,8 +206,8 @@ export const useEmployeeSalaryStats = (
       overtimeAmount = overtimeHours * regularHourlyRate * overtimeMultiplier;
     }
 
-    // Calculate late deductions display (informational, from actual attendance data)
-    // Note: real deductions are tracked in salary_adjustments (is_auto_generated=true)
+    // Calculate late deductions display (informational only)
+    // Real deductions are tracked in salary_adjustments (is_auto_generated=true)
     let lateDeductionAmount = 0;
     if (!isFreelancer && company) {
       const regularHourlyRate = salaryType === 'monthly' 
@@ -219,8 +220,9 @@ export const useEmployeeSalaryStats = (
     const totalBonuses = adjustments.reduce((sum, adj) => sum + Number(adj.bonus || 0), 0);
     const totalDeductions = adjustments.reduce((sum, adj) => sum + Number(adj.deduction || 0), 0);
 
-    // Net salary: earned + overtime + bonuses - deductions (all from salary_adjustments)
-    const netSalary = earnedSalary + overtimeAmount + totalBonuses - totalDeductions;
+    // Net salary: earned + bonuses - deductions (all from salary_adjustments only)
+    // Overtime is already recorded as a bonus in salary_adjustments, so we don't add it again here
+    const netSalary = earnedSalary + totalBonuses - totalDeductions;
     const deductionPercentage = earnedSalary > 0 ? (totalDeductions / earnedSalary) * 100 : 0;
 
     return {
