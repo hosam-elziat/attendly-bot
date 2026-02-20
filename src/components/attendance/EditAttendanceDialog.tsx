@@ -1,17 +1,29 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TimePicker } from '@/components/ui/time-picker';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Clock } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { format } from 'date-fns';
 import { useLogAction } from '@/hooks/useAuditLogs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompany } from '@/hooks/useCompany';
+
+// Extract HH:mm in Egypt timezone (UTC+2)
+const extractEgyptTime = (timestamp: string | null): string => {
+  if (!timestamp) return '';
+  // Parse the ISO string and shift to Egypt timezone (UTC+2)
+  const date = new Date(timestamp);
+  const egyptOffset = 2 * 60; // +2 hours in minutes
+  const localOffset = date.getTimezoneOffset(); // in minutes (negative for +TZ)
+  const egyptDate = new Date(date.getTime() + (egyptOffset + localOffset) * 60 * 1000);
+  const hh = egyptDate.getHours().toString().padStart(2, '0');
+  const mm = egyptDate.getMinutes().toString().padStart(2, '0');
+  return `${hh}:${mm}`;
+};
 
 interface AttendanceRecord {
   id: string;
@@ -43,23 +55,10 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
   const [checkOutTime, setCheckOutTime] = useState('');
   const [status, setStatus] = useState('');
 
-  // Extract time in HH:mm format without timezone conversion issues
-  const extractTimeFromTimestamp = (timestamp: string | null): string => {
-    if (!timestamp) return '';
-    // Parse the time part directly from the ISO string to avoid timezone shifts
-    const match = timestamp.match(/T(\d{2}):(\d{2})/);
-    if (match) {
-      return `${match[1]}:${match[2]}`;
-    }
-    // Fallback: use Date parsing
-    const date = new Date(timestamp);
-    return format(date, "HH:mm");
-  };
-
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && record) {
-      setCheckInTime(extractTimeFromTimestamp(record.check_in_time));
-      setCheckOutTime(extractTimeFromTimestamp(record.check_out_time));
+      setCheckInTime(extractEgyptTime(record.check_in_time));
+      setCheckOutTime(extractEgyptTime(record.check_out_time));
       setStatus(record.status || 'checked_in');
     }
     onOpenChange(isOpen);
@@ -80,16 +79,8 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         status: status as "checked_in" | "on_break" | "checked_out" | "absent",
       };
 
-      // Get local timezone offset to preserve the intended time
-      const getTimezoneOffset = () => {
-        const offset = new Date().getTimezoneOffset();
-        const sign = offset <= 0 ? '+' : '-';
-        const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-        const minutes = String(Math.abs(offset) % 60).padStart(2, '0');
-        return `${sign}${hours}:${minutes}`;
-      };
-
-      const tzOffset = getTimezoneOffset();
+      // Egypt timezone is always UTC+2
+      const egyptTzOffset = '+02:00';
       const oldCheckInTime = record.check_in_time;
       const oldCheckOutTime = record.check_out_time;
       let newCheckInTimeFormatted = '';
@@ -101,13 +92,13 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
         updates.check_out_time = null;
       } else {
         if (checkInTime) {
-          // Include timezone offset to ensure correct time is stored
-          newCheckInTimeFormatted = `${recordDate}T${checkInTime}:00${tzOffset}`;
+          // Store with Egypt timezone offset so DB stores correct UTC
+          newCheckInTimeFormatted = `${recordDate}T${checkInTime}:00${egyptTzOffset}`;
           updates.check_in_time = newCheckInTimeFormatted;
         }
 
         if (checkOutTime) {
-          newCheckOutTimeFormatted = `${recordDate}T${checkOutTime}:00${tzOffset}`;
+          newCheckOutTimeFormatted = `${recordDate}T${checkOutTime}:00${egyptTzOffset}`;
           updates.check_out_time = newCheckOutTimeFormatted;
         }
       }
@@ -303,21 +294,21 @@ const EditAttendanceDialog = ({ open, onOpenChange, record, onSuccess }: EditAtt
             </div>
 
             {!isAbsent && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4" dir="ltr">
                 <div className="space-y-2">
-                  <Label>{language === 'ar' ? 'وقت الحضور' : 'Check-in Time'}</Label>
-                  <Input
-                    type="time"
+                  <Label className="block text-right" dir="rtl">{language === 'ar' ? 'وقت الحضور' : 'Check-in Time'}</Label>
+                  <TimePicker
                     value={checkInTime}
-                    onChange={(e) => setCheckInTime(e.target.value)}
+                    onChange={setCheckInTime}
+                    placeholder={language === 'ar' ? 'وقت الحضور' : 'Check-in time'}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>{language === 'ar' ? 'وقت الانصراف' : 'Check-out Time'}</Label>
-                  <Input
-                    type="time"
+                  <Label className="block text-right" dir="rtl">{language === 'ar' ? 'وقت الانصراف' : 'Check-out Time'}</Label>
+                  <TimePicker
                     value={checkOutTime}
-                    onChange={(e) => setCheckOutTime(e.target.value)}
+                    onChange={setCheckOutTime}
+                    placeholder={language === 'ar' ? 'وقت الانصراف' : 'Check-out time'}
                   />
                 </div>
               </div>
