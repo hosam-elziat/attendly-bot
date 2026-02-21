@@ -252,6 +252,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, message: 'No companies with prayer reminders' }), { headers: corsHeaders })
     }
 
+    console.log(`Found ${companies.length} companies with prayer reminders enabled`)
     let totalSent = 0
 
     for (const company of companies) {
@@ -281,8 +282,25 @@ serve(async (req) => {
         const [pH, pM] = prayerTime.split(':').map(Number)
         const prayerTotalMinutes = pH * 60 + pM
 
-        // Send reminder only at the exact prayer minute (window of 1 minute)
-        if (prayerTotalMinutes === currentTotalMinutes) {
+        // Send reminder within a 5-minute window (cron runs every 5 min)
+        const diff = currentTotalMinutes - prayerTotalMinutes
+        if (diff >= 0 && diff < 5) {
+          // Deduplicate: check if we already sent this prayer reminder today
+          const today = new Date().toISOString().split('T')[0]
+          const { data: alreadySent } = await supabase
+            .from('telegram_messages')
+            .select('id')
+            .eq('company_id', company.id)
+            .eq('message_type', 'prayer_reminder')
+            .gte('created_at', `${today}T00:00:00`)
+            .eq('metadata->>prayer', prayer)
+            .limit(1)
+
+          if (alreadySent && alreadySent.length > 0) {
+            console.log(`Prayer ${prayer} already sent today for company ${company.name}, skipping`)
+            continue
+          }
+
           const { data: bot } = await supabase
             .from('telegram_bots')
             .select('bot_token')
